@@ -34,9 +34,5 @@ echo -e "\033[1;32m----- commit to github remote repository -----\033[0m"
 git push github master
 echo ""
 
-echo -e "\033[1;32m----- commit to aliyun remote repository -----\033[0m"
-git push aliyun master
-echo ""
-
 echo -e "\033[1;32m----- check status -----\033[0m"
 git status

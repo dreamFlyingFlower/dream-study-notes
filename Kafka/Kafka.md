@@ -24,8 +24,6 @@
 
 
 
-
-
 # 组件
 
 
@@ -53,7 +51,7 @@
 
 
 * 分区,是主题下的逻辑概念,一个Topic可以有多个分区
-* 每个分区都是一个有序的,不可变的消息序列,后续的新消息会不停的往后面添加
+* 每个分区都是一个有序的,不可变的消息序列,后续的新消息会不停的往后面添加,消费则是从头部开始
 * 同一个Topic中的分区中的消息不一定顺序相同,多个分区之间消息顺序没有关系
 * 分区中的每个消息都会被分配一个id(即offset),作为区分消息的唯一标识
 * 分区中消息是存储在日志中,且严格有序的.该日志对应磁盘上个一个目录
@@ -90,6 +88,7 @@
 * 消费者组最重要的功能是实现单播和广播
 * 一个消费者组能确保其订阅的Topic的每个分区只被组内的一个消费者消费
 * 如果不同的消费者组订阅了同一个Topic,他们之间是互不影响的
+* Consumer从Partition中消费消息是顺序的,默认从头开始消费
 
 
 
@@ -109,6 +108,75 @@
 
 
 
+# 客户端
+
+
+
+## AdminClient API
+
+
+
+* 允许管理和检测Topic,Broker以及其他kafka对象
+
+
+
+## Producer API
+
+
+
+* 发布消息到1个或多个Topic
+
+
+
+## Consumer API
+
+
+
+* 订阅一个或多个Topic,并处理产生的消息
+
+
+
+## Streams API
+
+
+
+* 高效地将输入流转换到输出流
+
+
+
+## Connector API
+
+
+
+* 从一些源系统或应用程序中拉取数据到Kafka
+
+
+
+# 安装
+
+
+
+# 配置文件
+
+
+
+
+
+
+
+# Shell命令
+
+
+
+* 启动: bin/kafka-server-start.sh config/server.properties &
+* 停止: bin/kafka-server-stop.sh
+* 创建Topic: bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic jiangzh-topic
+* 查看已经创建的Topic信息: bin/kafka-topics.sh --list --zookeeper localhost:2181
+* 发送消息: bin/kafka-console-producer.sh --broker-list 192.168.220.128:9092 --topic jiangzh-topic
+* 接收消息: bin/kafka-console-consumer.sh --bootstrap-server 192.168.220.128:9092 --topic jiangzh-topic --from-beginning
+
+
+
 # 消息重复消费
 
 * 比如A服务消费了MQ中的消息,A刚要回复MQ时挂了,而MQ没有等到A的回复,那MQ就认为该消息还没被消费
@@ -120,16 +188,6 @@
 # 消息丢失
 
 
-
-## RabbitMQ
-
-* 生产者使用confirm机制
-* MQ对数据持久化
-* 消费者需要手动进行ACK机制确认
-
-
-
-## Kafka
 
 
 

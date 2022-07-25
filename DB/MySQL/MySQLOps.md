@@ -66,17 +66,27 @@ yum install mysql-server
 ```
 
 * 安装成功之后会自动将mysql用户和mysql用户组添加到mysql中
+
+```shell
+groupadd mysql
+useradd mysql
+useradd -g mysql mysql
+```
+
 * 设置mysql权限
 
 ```shell
-chown mysql:mysql -R /var/lib/mysql
+# 最后的参数是mysql即将安装的目录,可自定义
+chown mysql:mysql -R /app/software/mysql
 ```
 
 * 初始化mysql
 
 ```shell
-mysqld --initialize # 初始化完成之后会生成密码,该密码在/var/log/mysqld.log中
-grep "password" /var/log/mysqld.log # 查找安装时的默认密码
+ # 初始化完成之后会生成密码,该密码在/var/log/mysqld.log中
+mysqld --initialize
+/var/log/mysqld.log # 查找安装时的默认密码
+grep "password"
 ```
 
 * 启动mysql,并设置开机启动
@@ -92,7 +102,7 @@ systemctl daemon-reload # 重新加载mysql的配置文件
 ```shell
 # Job for mysqld.service failed because the control process exited with error code. See "systemctl status mysqld.service" and "journalctl -xe" for details
 # 解决办法
-chown mysql:mysql -R /var/lib/mysql
+chown mysql:mysql -R /app/software/mysql
 # 之后再启动mysql
 service mysqld start
 service mysqld status # 查看mysql状态
@@ -116,6 +126,8 @@ mysqladmin -u root password "密码" # 从10那步的日志中找
 
 ### 压缩包安装
 
+
+
 1. 进入[mysql下载页](https://dev.mysql.com/downloads/mysql/),选择linux-Generic,选择下载版本**Linux - Generic (glibc 2.12) (x86, 64-bit), TAR**(根据需求选择),点击download进入下载页
 
 2. 页面跳转之后会需要登录,可以不登陆,直接点击左下方的No thanks,just start download或者直接右键点击该文件,复制连接地址
@@ -137,16 +149,22 @@ mysqladmin -u root password "密码" # 从10那步的日志中找
 6. 新建mysql的用户和用户组,新建mysql的数据目录和日志目录
 
    ```shell
-   groupadd mysql # 创建mysql用户组
-   useradd mysql # 创建mysql用户
-   chmod -R 755 /app/mysql # 给文件赋权
-   mkdir -p /app/mysql/data /app/mysql/logs # 创建数据和日志目录
+   # 创建mysql用户组
+   groupadd mysql 
+   # 创建mysql用户
+   useradd mysql
+   # 将mysql用户添加到mysql用户组
+   useradd -g mysql mysql
+   # 给文件赋权
+   chmod -R 755 /app/software/mysql
+    # 创建数据和日志目录
+   mkdir -p /app/software/mysql/data /app/software/mysql/logs
    ```
 
-7. 进入/app/mysql/bin中执行以下命令
+7. 进入/app/software/mysql/bin中执行以下命令
 
    ```mysql
-   mysqld --initalize --user=root --basedir=/app/mysql --datadir=/app/mysql/data
+   mysqld --initalize --user=root --basedir=/app/software/mysql --datadir=/app/mysql/software/data
    # 若是包依赖找不到的错误,安装指定依赖即可
    # 初始化时会在屏幕上显示root密码,若是没有注意,可以在日志文件中查找
    # cat /var/log/mysql |grep password
@@ -156,9 +174,9 @@ mysqladmin -u root password "密码" # 从10那步的日志中找
 
    ```shell
    vi /etc/profile
-   export PATH=/app/mysql/bin:$PATH
+   export PATH=/app/software/mysql/bin:$PATH
    source /etc/profile
-   cp /app/mysql/support-files/mysql.server  /etc/init.d/mysqld
+   cp /app/software/mysql/support-files/mysql.server  /etc/init.d/mysqld
    chkconfig --add mysqld # 或者chkconfig mysql on
    vi /etc/init.d/mysqld # 价格datadir和basedir的目录改成自己的
    ```
@@ -227,6 +245,54 @@ mysqladmin -u root password "密码" # 从10那步的日志中找
   export CFLAGS CXX CXXFLAGS
   cmake . [PARAMETERS]
   make -j & make install
+  
+  # 仅参考
+  cmake -DCMAKE_INSTALL_PREFIX=/app/software/mysql \
+  -DMYSQL_UNIX_ADDR=/tmp/mysqld.sock \
+  -DDEFAULT_CHARSET=utf8 \
+  -DDEFAULT_COLLATION=utf8_general_ci \
+  -DWITH_EXTRA_CHARSETS:STRING=utf8,gbk \
+  -DWITH_MYISAM_STORAGE_ENGINE=1 \
+  -DWITH_INNOBASE_STORAGE_ENGINE=1 \
+  -DWITH_MEMORY_STORAGE_ENGINE=1 \
+  -DWITH_READLINE=1 \
+  -DENABLED_LOCAL_INFILE=1 \
+  -DMYSQL_DATADIR=/data/mysql \
+  -DMYSQL_USER=mysql \
+  -DMYSQL_TCP_PORT=3306
+  # make
+  # make install
+  ```
+
+
+
+#### 配置
+
+
+
+* 复制配置文件:`cp /app/software/mysql/support-files/my-medium.cnf /etc/my.cnf`
+
+* 初始化数据库,执行前需赋给scripts/mysql_install_db文件执行权限
+
+  ```shell
+  chmod 755 /app/software/mysql/scripts/mysql_install_db
+  scripts/mysql_install_db --user=mysql --basedir=/app/software/mysql/ --datadir=/app/software/mysql/mysql/
+  ```
+
+* 设置mysqld的开机启动
+
+  ```shell
+  cp /app/software/mysql/support-files/mysql.server /etc/init.d/mysql
+  chmod 755 /etc/init.d/mysql
+  chkconfig mysql on
+  ```
+
+* 为MySQL配置环境变量
+
+  ```shell
+  export PATH=/usr/local/mysql/bin:$PATH
+  alias mysql_start="mysqld_safe &"
+  alias mysql_stop="mysqladmin –u root -p shutdown
   ```
 
 

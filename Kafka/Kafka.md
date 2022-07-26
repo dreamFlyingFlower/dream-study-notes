@@ -160,7 +160,11 @@
 
 
 
-
+* broker.id: brokerId,只能是数字,集群中唯一
+* listeners: Kafka监听地址
+* log.dirs: 日志目录
+* zookeeper.connect: zookeeper集群地址
+* zookeeper.connection.timeout.ms: zookeeper连接超时时间
 
 
 
@@ -178,6 +182,8 @@
 
 
 # 消息重复消费
+
+
 
 * 比如A服务消费了MQ中的消息,A刚要回复MQ时挂了,而MQ没有等到A的回复,那MQ就认为该消息还没被消费
 * 当A服务重启的时候,发现上次消费了的消息还在,继续消费,此时就发生了重复消费
@@ -200,3 +206,22 @@
 # 数据积压
 
 * 临时增加queue数量
+
+
+
+# 节点故障处理
+
+
+
+* Kafka基本不会因为节点故障而丢失数据,因为有集群做保证
+* Kafka的语义担保也很大程度上避免数据丢失
+* Kafka会对消息进行集群内平衡,减少消息在某些节点热度过高
+
+
+
+# Leader选举
+
+
+
+* Kafka并没有采用多数投票来选举leader,而是在每个节点中维护一组Leader数据的副本(ISR,一个列表)
+* Kafka会在ISR中选择一个速度比较快的设为Leader

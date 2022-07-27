@@ -1079,6 +1079,22 @@ explan select * from (select t3.id from t3 where t3.name='') s1,t2 where s1.id=t
 
 
 
+# 字段优化
+
+
+
+* 字段类型优先级 整型 > date,time > enum,char>varchar > blob
+* 够用就行,不要慷慨 (如smallint,varchar(N)),大的字段浪费内存,影响速度,以varchar(10) ,varchar(300)存储的内容相同, 但在表联查时,varchar(300)要花更多内存
+* 尽量避免用NULL().NULL不利于索引,要用特殊的字节来标注.在磁盘上占据的空间其实更大
+* Enum列的说明
+  * enum列在内部是用整型来储存的
+  * enum列与enum列相关联速度最快
+  * enum列比(var)char 的弱势---在碰到与char关联时,要转化. 要花时间
+  * 优势在于,当char非常长时,enum依然是整型固定长度.当查询的数据量越大时,enum的优势越明显
+  * enum与char/varchar关联 ,因为要转化,速度要比enum->enum,char->char要慢,但有时也这样用-----就是在数据量特别大时,可以节省IO
+
+
+
 # SQL优化
 
 
@@ -1166,6 +1182,7 @@ select distinct(t1.c) c,sum(t1.c) num from t1 inner join t2 on t1.a=t2.a where t
 * 每个InnoDB表都需要一个聚簇索引,该聚簇索引可以帮助表优化增删改查操作
 * 在InnDB存储引擎中,每个辅助索引的每条记录都包含主键,也包含非聚簇索引指定的列.MySQL使用辅助索引的主键值来检索聚簇索引,因此应该尽可能将主键缩短,否则辅助索引占用空间会更大
 * 逻辑上聚簇索引是主键和数据存在一起,而辅助索引是辅助索引列数据值和主键索引值列存一起
+* 聚簇索引中,N行形成一个页,如果碰到不规则数据插入时,会造成频繁的页分裂
 
 
 
@@ -1243,6 +1260,7 @@ select distinct(t1.c) c,sum(t1.c) num from t1 inner join t2 on t1.a=t2.a where t
 * 要先查找hashcode值,然后通过hashcode查找索引键值,相当于要2次查找
 * 不支持范围查找
 * 可能会产生hash冲突
+* 无法利用左前缀索引
 
 
 
@@ -1411,6 +1429,8 @@ select distinct(t1.c) c,sum(t1.c) num from t1 inner join t2 on t1.a=t2.a where t
   select * from t1 right join t2 on t1.col1=t2.col1;
   ```
 
+* 对于左前缀不易区分的列 ,如 url列`http://www.baidu.com`,`http://www.zixue.it`,列的前11个字符都是一样的,不易区分, 可以把列内容倒过来存储,并建立索引,这样左前缀区分度大
+
 
 
 
@@ -1540,6 +1560,8 @@ select * from user t1 join class t2 on t1.userid = t2.userid;
 
 
 # 其他优化
+
+
 
 * 当单表数据超过700W(根据数据库不同而不同)时,sql优化已达到极致,此时应增加缓存,读写分离,分库分表
 
@@ -1860,46 +1882,28 @@ PARTITION BY RANGE(YEAR(createtime)){
 
   ```shell
   # 观察MySQL进程状态
-  mysql -h127.0.0.1 -uroot -p123456 -e 'show processlist\G'|grep State:|sort|uniq -c|sort -rn
+  #!/bin/bash
+  while true
+  do
+  	mysql -uroot -p123456 -e 'show processlist\G'|grep State:|uniq -c|sort -rn
+  	echo '---'
+  	sleep 1
+  done
   ```
 
-  * converting HEAP to MyISAM:查询结果太大时,把结果放在磁盘
-  * create tmp table:创建临时表(如group时储存中间结果)
-  * Copying to tmp table on disk:把内存临时表复制到磁盘
-  * locked:被其他查询锁住
+  * converting HEAP to MyISAM:查询结果太大时,把结果放在磁盘(语句写的不好,取数据太多)
+  * create tmp table:创建临时表(如group时储存中间结果,说明索引建的不好)
+  * Copying to tmp table on disk:把内存临时表复制到磁盘 (索引不好,表字段选的不好)
+  * locked:被其他查询锁住 (一般在使用事务时易发生,互联网应用不常发生)
   * logging slow query:记录慢查询
-
-* profilling分析语句以及explain SQL语句
-
-  ```mysql
-  # 会分析最近使用的10条SQL
-  show profiles;
-  # 通过上一条语句查询到ID,再分析单条语句的执行情况
-  show profiles for query id;
-  ```
 
 * 如果语句等待时间过长,则调优服务器参数,如缓冲区,线程数等
 
 * 如果语句执行过长,则优化SQL,优化表,优化关联查询,优化索引等
 
-* 产生临时表的情况:
-
-  * group by 的列没有索引,必产生内部临时表
-  * group by 的列和order by 的列不同时,或多表联查时,group/order by使用的不是第一张表的列
-  * distinct 和 order by 一起使用时
-  * 开启了 SQL_SMALL_RESULT 选项
-  * union合并查询时会用到临时表
-  * 某些视图会用到临时表,如使用temptable方式建立,或使用union或聚合查询的视图
-
-* 什么情况下临时表写到磁盘上:
-
-  * 取出的列含有text/blob类型时 ---内存表储存不了text/blob类型
-  * 在group by 或distinct的列中存在>512字节的string列
-  * select 中含有>512字节的string列,同时又使用了union或union all语句
 
 
-
-# Show processlist
+## Show processlist
 
 
 
@@ -1935,6 +1939,90 @@ PARTITION BY RANGE(YEAR(createtime)){
 * Waiting for tables:该线程得到通知,数据表结构已经被修改了,需要重新打开数据表以取得新的结构.为了能够重新打开数据表,必须等到所有其他线程关闭这个表.以下几种情况下会产生这个通知:FLUSH TABLES tbl_name, ALTER TABLE, RENAME TABLE, REPAIR TABLE, ANALYZE TABLE,或OPTIMIZE TABLE
 * waiting for handler insert:INSERT DELAYED已处理完所有待处理的插入操作,正在等待新的请求
 * 大部分状态操作很快,只要有一个线程保持同一个状态好几秒,就可能是有问题发生了,需要检查
+
+
+
+## show profiles
+
+
+
+* 使用`show profiles`可以观察到具体语句的执行步骤.若未开启该参数,需要先开启
+
+* profilling分析语句以及explain SQL语句
+
+  ```mysql
+  # 会分析最近使用的10条SQL
+  show profiles;
+  # 通过上一条语句查询到ID,再分析单条语句的执行情况
+  show profiles for query id;
+  ```
+
+* 如果语句等待时间过长,则调优服务器参数,如缓冲区,线程数等
+
+  ```mysql
+  mysql> show profiles;
+  +----------+------------+----------------------------------------------------------+
+  | Query_ID | Duration   | Query                                                    |
+  +----------+------------+----------------------------------------------------------+
+  |        1 | 0.00034225 | select cat_id,avg(shop_price) from goods group by cat_id |
+  +----------+------------+----------------------------------------------------------+
+  
+  1 row in set (0.00 sec)
+  
+  mysql> show profile for query 1;
+  +----------------------+----------+
+  | Status               | Duration |
+  +----------------------+----------+
+  | starting             | 0.000058 |
+  | checking permissions | 0.000008 |
+  ...  
+  ...
+  
+  | Sorting result       | 0.000004 |
+  | Sending data         | 0.000120 |
+  | end                  | 0.000005 |
+  | query end            | 0.000006 |
+  | closing tables       | 0.000008 |
+  | freeing items        | 0.000023 |
+  | logging slow query   | 0.000003 |
+  | cleaning up          | 0.000004 |
+  +----------------------+----------+
+  ```
+
+
+
+## 临时表
+
+
+
+* 在处理请求的某些场景中,服务器创建内部临时表.即表以MEMORY引擎在内存中处理,或以MyISAM引擎储存在磁盘上处理.如果表过大,服务器可能会把内存中的临时表转存在磁盘上.
+
+* 用户不能直接控制服务器内部用内存还是磁盘存储临时表
+
+* 临时表在如下几种情况被创建:
+
+  * 如果group by 的列没有索引,必产生内部临时表
+  * 如果order by 与group by为不同列时,或多表联查时order by ,group by包含的列不是第一张表的列,将会产生临时表
+  * distinct 与order by 一起使用可能会产生临时表
+  * 如果开启了SQL_SMALL_RESULT,MySQL会使用内存临时表,除非查询中有一些必须要把临时表建立在磁盘上
+  * union合并查询时会用到临时表
+  * 某些视图会用到临时表,如使用temptable方式建立,或使用union或聚合查询的视图
+
+* 想确定查询是否需要临时表,可以用EXPLAIN查询计划,并查看Extra列,看是否有Using temporary
+
+* 如果一开始在内存中产生的临时表变大,会自动转化为磁盘临时表.内存中临时表的最大值为tmp_table_size和max_heap_size中较小值.这和create table时显示指定的内存表不一样:这些表只受max_heap_table_size系统参数影响
+
+* 当服务器创建内部临时表(无论在内存还是在磁盘),create_tmp_tables变量都会增加
+
+* 如果创建了在磁盘上内部临时表(无论是初始创建还是由in-memory转化),create_tmp_disk_tables 变量都会增加
+
+* 一些情况下限制了内存临时表的使用,而使用磁盘临时表,在使用了内存临时表的情况下,以下情况会写到磁盘上:
+
+  * 取出的列含有text/blob类型时 ---内存表储存不了text/blob类型
+
+  * 在group by 或distinct的列中存在>512字节的string列
+
+  * select 中含有>512字节的string列,同时又使用了union或union all语句
 
 
 

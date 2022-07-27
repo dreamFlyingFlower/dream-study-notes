@@ -1782,3 +1782,20 @@ net {
 docker run -p 3306:3306 --name mysql-master -v /app/mysql/master/log:/var/log/mysql -v /app/mysql/master/data:/var/lib/mysql -v /app/mysql/master/conf:/etc/mysql -e MYSQL_ROOT_PASSWORD=root -d mysql
 ```
 
+
+# 性能优化
+
+
+
+## 负载过高
+
+
+
+* 情形:服务器出现长时间负载过高 /周期性负载过大,或偶尔卡住
+* 思路:
+	* 发生该情况的服务器是周期性的变化还是偶尔问题
+	* 是服务器整体性能的问题, 还是某单条语句的问题
+	* 具体到单条语句, 这条语句是在等待上花的时间,还是查询上花的时间
+	* 唯一的办法-----监测并观察服务器的状态:`show status;show processlist;`
+* 减少无关请求(业务逻辑层面,其实是最有效的手段)
+* 如果请求数是一定的,不可减少的,则要尽量让请求数平稳,不要有剧烈波动,比如秒杀时段请求数过高.使用缓存或队列改变尽量减少波动.缓存需要注意击穿,雪崩等

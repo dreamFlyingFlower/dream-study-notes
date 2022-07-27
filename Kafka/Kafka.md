@@ -160,11 +160,47 @@
 
 
 
+## Server.properties
+
+
+
 * broker.id: brokerId,只能是数字,集群中唯一
 * listeners: Kafka监听地址
-* log.dirs: 日志目录
-* zookeeper.connect: zookeeper集群地址
+* log.dirs: kafka存放数据的路径,可以是多个,逗号分割.每当创建新的partition时,都会选择在包含最少partitions的路径下选择
+* zookeeper.connect: zookeeper集群地址,多个用逗号分割
 * zookeeper.connection.timeout.ms: zookeeper连接超时时间
+* message.max.bytes: server可以接收的消息最大尺寸.producer和consumer的该属性必须相同
+* num.network.threads: server用来处理网络请求的网络线程数
+* num.io.threads: server用来处理请求的IO线程数,该值至少等于硬盘的个数
+* background.threads: 用于后台处理的线程数,例如文件删除
+* queued.max.requests: 在网络线程停止读取新请求之前,可以排队等待IO线程处理的最大请求数
+* host.name: broker的hostname.如果hostname已经设置,broker将只会绑定到该地址;如果不设置,将绑定到所有接口
+* advertised.host.name: 如果设置,则将作为broker的hostname发往producer,consumer以及其他broker
+* advertised.port: 该端口将给予producer,consumer以及其他broker,会在建立连接时用到.它仅在实际端口和server需要绑定的端口不一样时才需要设置
+* socket.send.buffer.bytes: SO_SNDBUFF缓存大小,server进行socket连接所用
+* socket.receive.buffer.bytes: SO_RCVBUFF缓存大小,server进行socket连接时所用
+* socket.request.max.bytes: server允许的最大请求尺寸,避免server溢出,应该小于java heap size
+* num.partitions: 如果创建topic时没有给出划分partitions个数,该数字将是topic下partitions数据的默认值
+* log.segement.bytes: topic partition的日志存放在某个目录下诸多文件中,这些文件就爱你个partition的日志切分成一段一段的;该属性就是每个文件的最大尺寸.当尺寸达到该属性值时,就会创建新文件.该设置可由每个topic基础设置时覆盖
+* log.roll.hours: 即使文件没有达到log.segment.bytes,只要文件创建时间达到此属性,就会创建新文件.该设置也可以由topic层面的设置进行覆盖
+* log.cleanup.policy: 文件清除策略,默认delete
+* log.retention.hours: 每个日志文件删除之前保存的时间,默认7天
+* log.retention.bytes: 每个topic每个partition保存数据的总量.这个是每个partition的上限.如果log.retention.bytes和log.retention.hours都设置了,则任务一个超过上限都会删除segment文件
+* log.retention.check.interval.ms: 检查日志分段文件的间隔时间,以确定是否文件属性达到删除要求
+* log.cleaner.enable: 当该属性设置为false时,一旦日志的保存时间达到上限时,就会被删除;如果设置为true,则当保存属性达到上限时,就会进行log compaction(日志压缩)
+* log.cleaner.threads: 进行日志压缩的线程数
+* log.cleaner.io.max.bytes.per.second: 进行log compaction时,log cleaner可以拥有的最大IO数
+* log.cleaner.io.buffer.size: log cleaner清除过程中针对日志进行索引化以及精简化所用到的缓存大小,最好设置大点
+* log.cleaner.backoff.ms: 进行日志清理检查的时间间隔
+* log.cleaner.min.cleanable.ratio: 这项配置控制log compactor试图清理日志的频率(假定log compaction是打开的).默认避免清理压缩超过50%的日志,这个比率绑定了备份日志所消耗的最大空间(50%的日志备份时压缩率为50%).更高的比率则意味着浪费消耗更少,也就可以更有效的清理更多的空间
+* log.cleaner.delete.retention.ms: 保存压缩日志的最长时间,也是客户端消费消息的最长时间,和log.retention.minutes的区别在于一个控制未压缩数据,一个控制压缩后的数据;会被topic创建时的指定时间覆盖
+* log.index.size.max.bytes: 每个log segment的最大尺寸.如果log尺寸达到该值,即使尺寸没有超过log.segment.bytes,也需要产生新的log segment
+* log.index.interval.bytes: 当执行一次fetch后,需要一定的空间扫描最近的offset,设置的越大越好,一般默认值就可以
+* log.flush.interval.messages: log文件sync到磁盘之前累积的消息条数.因为磁盘IO操作是一个慢操作,但又是一个数据可靠性的必要手段,所以检查是否需要固化到硬盘的时间间隔.需要在数据可靠性与性能之间做必要的权衡,如果此值过大,将会导致每次发sync的时间过长(IO阻塞),如果此值过小,将会导致fsync的时间较长(IO阻塞),fsync的次数较多,这也就意味着整体的client请求有一定的延迟,物理server故障,将会导致没有fsync的消息丢失
+* log.flush.scheduler.interval.ms: 检查是否需要fsync的时间间隔
+* log.flush.interval.ms: 仅仅通过interval来控制消息的磁盘写入时机是不足的,这个数用来控制fsync的时间间隔,如果消息量始终没有达到固化到磁盘的消息数,但是离上次磁盘同步的时间间隔达到阈值,也将触发磁盘同步
+* log.delete.delay.ms: 文件在索引中清除后的保留时间,一般不需要修改
+* auto.create.topics.enable controller.socket.timeout.ms controller.message.queue.s default.replication.factor replica.lag.time.max.ms replica max.messages replica .socket.timeout.ms replica .socket. receive. buffer.bytes true 30000 Int.MaxValue 1 10000 4000 30 * 1000 64 * 1024 是 否 允 许 自 动 创 建 topic, 如 果 是 真 的 ， 则 produce 或 者 fetch 不 存 在 的 topic 时 ， 会 自 动 创 建 这 个 topic, 否 则 需 要 使 用 命 令 行 创 建 topic partition 管 理 控 制 器 进 行 备 份 时 ， socket 的 超 时 时 间 。 controller-to-broker-channles 的 buffer 尺 寸 默 认 备 份 份 数 ， 仅 指 自 动 创 建 的 topics 如 果 一 个 fo № wer 在 这 个 时 间 内 没 有 发 送 fetch 请 求 ， leader 将 从 ISR 重 移 除 这 个 follower ， 并 认 为 这 个 follower 己 经 挂 了 如 果 一 个 replica 没 有 备 份 的 条 数 超 过 这 个 数 值 ， 则 leader 将 移 除 这 个 follower ， 并 认 为 这 个 follower 己 经 挂 了 leader 备 份 数 据 时 的 socket 网 络 请 求 的 超 时 时 间 备 份 时 向 leader 发 送 网 络 请 求 时 的 socket recei ve buffer
 
 
 
@@ -174,10 +210,10 @@
 
 * 启动: bin/kafka-server-start.sh config/server.properties &
 * 停止: bin/kafka-server-stop.sh
-* 创建Topic: bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic jiangzh-topic
+* 创建Topic: bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic dream-topic
 * 查看已经创建的Topic信息: bin/kafka-topics.sh --list --zookeeper localhost:2181
-* 发送消息: bin/kafka-console-producer.sh --broker-list 192.168.220.128:9092 --topic jiangzh-topic
-* 接收消息: bin/kafka-console-consumer.sh --bootstrap-server 192.168.220.128:9092 --topic jiangzh-topic --from-beginning
+* 发送消息: bin/kafka-console-producer.sh --broker-list 192.168.1.150:9092 --topic dream-topic
+* 接收消息: bin/kafka-console-consumer.sh --bootstrap-server 192.168.1.150:9092 --topic dream-topic --from-beginning
 
 
 

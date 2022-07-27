@@ -200,7 +200,38 @@
 * log.flush.scheduler.interval.ms: 检查是否需要fsync的时间间隔
 * log.flush.interval.ms: 仅仅通过interval来控制消息的磁盘写入时机是不足的,这个数用来控制fsync的时间间隔,如果消息量始终没有达到固化到磁盘的消息数,但是离上次磁盘同步的时间间隔达到阈值,也将触发磁盘同步
 * log.delete.delay.ms: 文件在索引中清除后的保留时间,一般不需要修改
-* auto.create.topics.enable controller.socket.timeout.ms controller.message.queue.s default.replication.factor replica.lag.time.max.ms replica max.messages replica .socket.timeout.ms replica .socket. receive. buffer.bytes true 30000 Int.MaxValue 1 10000 4000 30 * 1000 64 * 1024 是 否 允 许 自 动 创 建 topic, 如 果 是 真 的 ， 则 produce 或 者 fetch 不 存 在 的 topic 时 ， 会 自 动 创 建 这 个 topic, 否 则 需 要 使 用 命 令 行 创 建 topic partition 管 理 控 制 器 进 行 备 份 时 ， socket 的 超 时 时 间 。 controller-to-broker-channles 的 buffer 尺 寸 默 认 备 份 份 数 ， 仅 指 自 动 创 建 的 topics 如 果 一 个 fo № wer 在 这 个 时 间 内 没 有 发 送 fetch 请 求 ， leader 将 从 ISR 重 移 除 这 个 follower ， 并 认 为 这 个 follower 己 经 挂 了 如 果 一 个 replica 没 有 备 份 的 条 数 超 过 这 个 数 值 ， 则 leader 将 移 除 这 个 follower ， 并 认 为 这 个 follower 己 经 挂 了 leader 备 份 数 据 时 的 socket 网 络 请 求 的 超 时 时 间 备 份 时 向 leader 发 送 网 络 请 求 时 的 socket recei ve buffer
+* auto.create.topics.enable: 是否允许自动创建topic, 如果为true,则produce或者fetch不存在的topic时,会自动创 建这个topic,否则需要使用命令行创建topic
+* controller.socket.timeout.ms: partition管理控制器进行备份时,socket的超时时间
+* controller.message.queue.size: controller-to-broker-channles的buffer尺寸
+* default.replication.factor: 默认备份份数,仅指自动创建的topics
+* replica.lag.time.max.ms: 如果一个follower在这个时间内没有发送fetch请求,leader将从ISR中移除这个follower, 并认为这个follower己经挂了
+* replica.lag.max.messages: 如果一个replica没有备份的条数超过这个数值,则leader将移除这个follower,并认为这个follower己经挂了
+* replica.socket.timeout.ms: leader备份数据时的socket网络请求的超时时间 
+* replica.socket.receive.buffer.bytes: 备份时向leader发送网络请求时的socket receive buffer
+
+
+
+# 配置SSL
+
+
+
+* 需要在kafka的server.properties中添加SSL地址,如下
+
+  ```properties
+  # 服务器监听地址,还需要额外加上SSL地址,端口可自定义
+  listeners=PLAINTEXT://192.168.1.150:9092,SSL://192.168.1.150:8989
+  advertised.listeners=PLAINTEXT://192.168.1.150:9092,SSL://192.168.1.150:8989
+  # SSL证书的存放目录,密钥等.如何生成SSL证书,见Linux笔记
+  ssl.keystore.location=/opt/ca-tmp/server.keystore.jks
+  ssl.keystore.password=dream
+  ssl.key.password=dream
+  ssl.truststore.location=/opt/ca-tmp/server.truststore.jks
+  ssl.truststore.password=dream
+  ```
+
+* 测试SSL是否成功: `openssl s_client -debug -connect 192.168.1.150:8989 -tls1`
+
+* 在代码中可以同时访问9092和8989端口的程序,9092不需要配置SSL,而8989的需要配置SSL才可访问
 
 
 
@@ -209,11 +240,25 @@
 
 
 * 启动: bin/kafka-server-start.sh config/server.properties &
+
 * 停止: bin/kafka-server-stop.sh
+
 * 创建Topic: bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic dream-topic
+
 * 查看已经创建的Topic信息: bin/kafka-topics.sh --list --zookeeper localhost:2181
+
 * 发送消息: bin/kafka-console-producer.sh --broker-list 192.168.1.150:9092 --topic dream-topic
+
 * 接收消息: bin/kafka-console-consumer.sh --bootstrap-server 192.168.1.150:9092 --topic dream-topic --from-beginning
+
+* 推送数据和计算结果
+
+  ```shell
+  bin/kafka-console-producer.sh --broker-list 192.168.1.150:9092 --topic test-stream-in
+  bin/kafka-console-consumer.sh --bootstrap-server 192.168.1.150:9092 --topic test-stream-out --property print.key=true --property print.value=true  --property key.deserializer=org.apache.kafka.common.serialization.StringDeserializer --property value.deserializer=org.apache.kafka.common.serialization.LongDeserializer --from-beginning
+  ```
+
+  
 
 
 
@@ -235,11 +280,15 @@
 
 # 顺序消费
 
+
+
 * 将需要进行顺序消费的数据都放在一个queue中,而不是放在多个queue中,即放在单个partition中
 
 
 
 # 数据积压
+
+
 
 * 临时增加queue数量
 
@@ -261,3 +310,12 @@
 
 * Kafka并没有采用多数投票来选举leader,而是在每个节点中维护一组Leader数据的副本(ISR,一个列表)
 * Kafka会在ISR中选择一个速度比较快的设为Leader
+
+
+
+# Kafka-manager
+
+
+
+* kafka集群监控,要根据jdk版本下载
+* 下载完成之后解压,修改application.conf中的zk的地址以及端口,之后即可启动

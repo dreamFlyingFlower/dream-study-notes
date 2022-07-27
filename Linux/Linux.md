@@ -1,6 +1,11 @@
 # Linux
 
+
+
 # 目录结构
+
+
+
 * /:根目录
 * /bin:存放二进制可执行文件,普通用户使用的命令.当前为一个软链接,指向usr/bin
 * /boot:存放用于系统引导时使用的各种文件
@@ -1571,10 +1576,50 @@ ssh admin
 
 
 
+# SSL
+
+
+
+* 用户创建使用SSL连接,需要已经安装了openssl
+
+* 创建密钥仓库,用于存储证书文件:
+
+  ```shell
+  # server.truststore.jks可自定义,以jks结尾即可
+  keytool -keystore server.keystore.jks -alias dream -validity 100000 -genkey
+  ```
+
+* 创建CA: `openssl req -new -x509 -keyout ca-key -out ca-cert -days 100000`
+
+* 将生成的CA添加到客户信任库: `keytool -keystore client.truststore.jks -alias CARoot -import -file ca-cert`
+
+* 为程序提供信任库以及所有客户端签名了密钥的CA证书
+
+  ```shell
+  keytool -keystore server.truststore.jks -alias CARoot -import -file ca-cert
+  ```
+
+* 签名证书,用自己生成的CA来签名前面生成的证书:
+
+  ```shell
+  # 从密钥仓库导出证书
+  keytool -keystore server.keystore.jks -alias dream -certreq -file cert-file
+  # 用CA签名
+  openssl x509 -req -CA ca-cert -CAkey ca-key -in cert-file -out cert-signed -days 100000 -CAcreateserial -passin pass:dream
+  # 导入CA的证书和已签名的证书到密钥仓库
+  keytool -keystore server.keystore.jks -alias CARoot -import -file ca-cert
+  keytool -keystore server.keystore.jks -alias dream -import -file cert-signed
+  ```
+
+
 
 # 网络
 
+
+
 ## 网络配置
+
+
 
 * /etc/sysconfig/network-scripts/ifcfg-xxxx:主要的网络配置文件,该文件的数量根据真实情况的网卡数量而定
 * /etc/resolv.conf:配置可访问网络DNS的文件

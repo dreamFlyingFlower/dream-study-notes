@@ -108,47 +108,20 @@
 
 
 
-# 客户端
+# 核心
 
 
 
-## AdminClient API
+## Leader选举
 
 
 
-* 允许管理和检测Topic,Broker以及其他kafka对象
-
-
-
-## Producer API
-
-
-
-* 发布消息到1个或多个Topic
-
-
-
-## Consumer API
-
-
-
-* 订阅一个或多个Topic,并处理产生的消息
-
-
-
-## Streams API
-
-
-
-* 高效地将输入流转换到输出流
-
-
-
-## Connector API
-
-
-
-* 从一些源系统或应用程序中拉取数据到Kafka
+* Kafka并没有采用多数投票来选举leader,而是在每个节点中维护一组Leader数据的副本(ISR,一个列表)
+* Kafka会在ISR中选择一个速度比较快的设为Leader,ISR列表中的follower数据和leader相同
+* 如果ISR全部宕机,Kafka会进行unclean leader选举(脏选举):
+  * 等待follower或leader自动上线,或人工干预.该方法可以保证数据的完整性
+  * 使用ISR之外的其他follower作为leader,无法保证数据的完整性
+* 生产中应禁用unclean leader,同时手动指定最小ISR
 
 
 
@@ -419,15 +392,6 @@
 * Kafka基本不会因为节点故障而丢失数据,因为有集群做保证
 * Kafka的语义担保也很大程度上避免数据丢失
 * Kafka会对消息进行集群内平衡,减少消息在某些节点热度过高
-
-
-
-# Leader选举
-
-
-
-* Kafka并没有采用多数投票来选举leader,而是在每个节点中维护一组Leader数据的副本(ISR,一个列表)
-* Kafka会在ISR中选择一个速度比较快的设为Leader
 
 
 

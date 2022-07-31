@@ -92,6 +92,44 @@
 
 
 
+### 加入新Consumer
+
+
+
+![](img/001.png)
+
+
+
+* Coordinator:协调器
+* generation类似于乐观锁,每次新加入Consumer时都会新生成一个唯一值,只有重连的时候带上该值才能加入组中
+* Kafka在平衡Partition和Consumer时,会要求所有Consumer都断开,然后重连,重连要带上最新的generation.如果generation的值不等于当前Kafka的generation版本,就会拒绝提交
+
+
+
+### Consumer崩溃
+
+
+
+![](img/002.png)
+
+
+
+### Consumer主动离组
+
+
+
+![](img/003.png)
+
+
+
+### Consumer提交offset
+
+
+
+![](img/004.png)
+
+
+
 # 模式
 
 
@@ -420,3 +458,92 @@
   * 日志以partition为单位进行存储,每个partition日志会分为N个大小相等的segment,每个segment消息数量不等
   * 当segment达到一定阈值就会flush到磁盘上,segment文件分为index和data
   * 每个partition只支持顺序读写,消息会被追加到最新的一个segment末尾
+
+
+
+## 流式计算
+
+
+
+* 在Kafka的安装目录下有很多以connect开头的文件,这些文件就是将输入到Kafka中的数据输出到其他存储的配置文件
+
+* [confluentinc-kafka-connect-jdbc](https://www.confluent.io/connector/kafka-connect-jdbc/),一种将输出流输入到mysql的connect
+
+* 下载该文件到Kafka所在服务器中,放在/app/kafka/plugins(自定义目录)中,同时需要下载mysql的运行时jar包放到该connect解压后的lib目录中
+
+* 修改Kafka的配置文件connect-distributed.properties
+
+  ```properties
+  bootstrap.servers=192.168.1.150:9092
+  # 一个Web监控页面
+  rest.port=8083
+  # 插件目录
+  plugins.path=/app/kafka/plugins
+  ```
+
+* 在kafka安装目录中启动connect
+
+  ```shell
+  # -daemon:后台运行
+  bin/connect-distributed.sh -daemon config/connect-distributed.properties
+  bin/connect-distributed.sh config/connect-distributed.properties
+  ```
+
+* 在Web页面访问`http://192.168.1.150:8083/connector-plugins`,如果有JSON数据显示则表明启动成功
+
+* 在Web中访问`http://192.168.1.150:8083/connectors`,可查看Kafka中有哪些connect
+
+* 创建connect,需要先在数据库中创建表
+
+  ```shell
+  curl -X POST -H 'Content-Type: application/json' -i 'http://192.168.1.150:8083/connectors' \
+  --data \
+  # name:唯一标识
+  '{"name":"dream-upload-mysql",
+  # config:创建connect的参数
+  "config":{
+  # 可不用修改
+  "connector.class":"io.confluent.connect.jdbc.JdbcSourceConnector",
+  # 数据库地址
+  "connection.url":"jdbc:mysql://192.168.0.149:3306/dream_study?user=root&password=123456",
+  # 白名单,即数据库中需要加载的表名
+  "table.whitelist":"users",
+  # Kafka进行新增和更新时的主键,需要在表中存在该字段
+  "incrementing.column.name": "uuid",
+  # 数据是不断新增的
+  "mode":"incrementing",
+  # topic前缀,会添加table.whitelist中的表名
+  "topic.prefix": "dream-mysql-"}}'
+  ```
+
+* 在数据库中写入数据后,通过Kafka查询数据
+
+  ```shell
+  bin/kafka-console-consumer.sh --bootstrap-server 192.168.1.150:9092 --topic dream-mysql-users --from-beginning
+  ```
+
+* 从Kafka向MySQL中写数据,该connect建立后会一直存在
+
+  ```shell
+  curl -X POST -H 'Content-Type: application/json' -i 'http://192.168.1.150:8083/connectors' \
+  --data \
+  # name:唯一标识,和查看也不一样
+  '{"name":"imooc-download-mysql","config":{
+  # 写入MySQL
+  "connector.class":"io.confluent.connect.jdbc.JdbcSinkConnector",
+  "connection.url":"jdbc:mysql://192.168.0.149:3306/dream_study?user=root&password=123456",
+  # 根据新建connect时的topics组装成完成的topic,并从该表中获取数据
+  "topics":"dream-mysql-users",
+  # 是否自动创建表
+  "auto.create":"false",
+  # 插入模式:新增或更新
+  "insert.mode": "upsert",
+  # 主键,可不修改
+  "pk.mode":"record_value",
+  # 主键字段
+  "pk.fields":"uuid",
+  # 将从"topics":"dream-mysql-users"中获取的数据插入到指定的其他表中
+  "table.name.format": "users_bak"}}'
+  ```
+
+  

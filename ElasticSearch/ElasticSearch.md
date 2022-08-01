@@ -4,6 +4,10 @@
 
 # 概述
 
+
+
+* [官网](https://www.elastic.co/cn/products/elasticsearch)
+
 * 用数据库做搜索的效果:见**ElasticSearch.pptx-01**,不太靠谱,性能很差
 * 全文检索:指计算机索引程序通过扫描文章中的每一个词,对每一个词建立一个索引,指明该词在文章中出现的次数和位置,当用户查询时,检索程序就根据事先建立的索引进行查找,并将查找的结果反馈给用户的检索方式.这个过程类似于通过字典中的检索字表查字的过程.**见ElasticSearch.pptx-02**
 * Lucene,就是一个jar包,里面包含了封装好的各种建立倒排索引,以及进行搜索的代码,包括各种算法
@@ -31,11 +35,19 @@
 
 # 适用场景
 
-* 维基百科,类似百度百科,牙膏,牙膏的维基百科,全文检索,高亮,搜索推荐
+
+
+* 维基百科,类似百度百科,全文检索,高亮,搜索推荐
 * 新闻网站,类似搜狐新闻,用户行为日志(点击,浏览,收藏,评论)+社交网络数据(对某某新闻的相关看法),数据分析,给到每篇新闻文章的作者,让他知道他的文章的公众反馈(好,坏,热门,垃圾等)
 * StackOverflow论坛,IT问题,程序的报错,提交上去,有人会跟你讨论和回答,全文检索,搜索相关问题和答案,程序报错了,就会将报错信息粘贴到里面去,搜索有没有对应的答案
 * GitHub,开源代码管理,搜索上千亿行代码
 * 站内搜索(电商,招聘,门户,等等),IT系统搜索(OA,CRM,ERP,等等),数据分析(ES热门的一个使用场景)
+* 电商网站,检索商品
+* 日志数据分析,logstash采集日志,ES进行复杂的数据分析(ELK技术)
+
+* 商品价格监控网站,用户设定某商品的价格阈值,当低于该阈值的时候,发送通知消息给用户
+
+* BI系统,商业智能(Business Intelligence).大型连锁超市,分析全国网点传回的数据,分析各个商品在什么季节的销售量最好、利润最高.成本管理,店面租金、员工工资、负债等信息进行分析.从而部署下一个阶段的战略目标.
 
 
 
@@ -478,26 +490,89 @@ http.cors.allow-origin: "*"
 
 * 默认是使用官方的标准分词器,但是对中文支持不友好,需要使用IK分词器
 
-* IK分词器:对中文友好的分词器,不会像标准分词器一样将每个词都拆开,[官网](https://github.com/medcl/elasticsearch-analysis-ik/releases)
-
-* 下载压缩包解压到ES的plugins目录里中即可完成安装,重启ES和Kibana
-
-* 分析使用,在Kibana中的请求地址为:_analyze,post请求
-
   ```json
+  // standard 分词器,仅适用于英文
+  GET /_analyze
   {
-  	"analyzer":"ik_max_word",
-      "text":"我是中国人"
+    "analyzer": "standard",
+    "text": "中华人民共和国人民大会堂"
   }
   ```
 
-  * ik_max_word:最大粒度的对中文词汇进行拆分
-  * ik_smart:最粗粒度的对中文进行拆分,智能拆分
+  
+
+### 安装
+
+
+
+* IK分词器:对中文友好的分词器,不会像标准分词器一样将每个词都拆开,[官网](https://github.com/medcl/elasticsearch-analysis-ik/releases)
+
+* 根据es版本下载相应版本包,解压到 es/plugins/ik中,重启ES和Kibana
+
+
+
+### 配置
+
+
+
+* ik配置文件地址: es/plugins/ik/config目录
+* IKAnalyzer.cfg.xml: 用来配置自定义词库
+* main.dic: ik原生内置的中文词库,总共有27万多条,只要是这些单词,都会被分在一起
+* preposition.dic: 介词
+* quantifier.dic: 放了一些单位相关的词,量词
+* suffix.dic: 放了一些后缀
+* surname.dic: 中国的姓氏
+* stopword.dic: 英文停用词
+* ik原生最重要的两个配置文件
+  * main.dic: 包含了原生的中文词语,会按照这个里面的词语去分词
+  * stopword.dic: 包含了英文的停用词
+* 停用词,stopword,英文中类似`a,the,is`等,停用词会在分词的时候直接被干掉,不会建立在倒排索引中
+
+ 
+
+### 使用
+
+
+
+* ik_max_word:最大粒度的对中文词汇进行拆分.比如会将`中华人民共和国人民大会堂`拆分为`中华人民共和国,中华人民,中华,华人,人民共和国,人民大会堂,人民大会,大会堂`,会穷尽各种可能的组合
+
+* ik_smart:最粗粒度的对中文进行拆分,智能拆分.比如会将`中华人民共和国人民大会堂`拆分为`中华人民共和国,人民大会堂`
+
+* 存储时,使用ik_max_word,搜索时,使用ik_smart
+
+  ```json
+  PUT /index_name 
+  {
+    "mappings": {
+        "properties": {
+          "text": {
+            "type": "text",
+            "analyzer": "ik_max_word",
+            "search_analyzer": "ik_smart"
+          }
+        }
+    }
+  }
+  ```
+
+* 搜索
+
+  ```json
+  GET /index_name/_search?q=中华人民共和国人民大会堂
+  ```
+
+
+
+### 自定义分词
+
+
 
 * 自定义分词:需要修改IK分词器目录下的config/IKAnalyzer.cfg.xml
 
-  * ext_dict:本地分词文件地址,在值的位置配置自定义分词的文件名称.文件的每行只能定义一个词,最好是将文件的后缀定义为dic,同时该文件的编码模式选择UTF8,配置好后重启ES即可
-  * remote_ext_dict:远程分词器地址,是一个远程的http/https地址,可以配置到nginx或其他服务器中,文件形式和内容同ext_dict即可,配置后重启ES即可
+* ext_dict:本地分词文件地址,在值的位置配置自定义分词的文件名称.文件的每行只能定义一个词,最好是将文件的后缀定义为dic,同时该文件的编码模式选择UTF8,配置好后重启ES即可
+* remote_ext_dict:远程分词器地址,是一个远程的http/https地址,可以配置到nginx或其他服务器中,文件形式和内容同ext_dict即可,配置后重启ES即可
+* custom/ext_stopword.dic:自己建立停用词库:比如了,的等.已经有了常用的停用词,可以补充停用词,然后重启es
+
 
 
 
@@ -506,6 +581,48 @@ http.cors.allow-origin: "*"
 
 
 * 将mysql中的数据同步到ES中
+
+
+
+# MySQL热更新
+
+
+
+## 方案
+
+
+
+* 方案1: 基于ik分词器原生支持的热更新方案,部署一个web服务器,提供一个http接口,通过modified和tag两个http响应头,来提供词语的热更新
+* 方案2: 修改ik分词器源码,然后手动支持从mysql中每隔一定时间,自动加载新的词库
+* 用第二种方案,第一种,ik git社区官方都不建议采用,觉得不太稳定
+
+
+
+##  步骤
+
+
+
+* [下载源码](https://github.com/medcl/elasticsearch-analysis-ik/releases)
+* ik分词器是个标准的java maven工程,直接导入IDE就可以看到源码
+* 修改源`org.wltea.analyzer.dic.Dictionary`类,160行Dictionary单例类的初始化方法,在这里需要创建一个自定义的线程,并且启动它
+* `org.wltea.analyzer.dic.HotDictReloadThread`: 就是死循环,不断调用Dictionary.getSingleton().reLoadMainDict(),去重新加载词典
+* `Dictionary类399行`: this.loadMySQLExtDict(); 加载mymsql字典
+* `Dictionary类609行`: this.loadMySQLStopwordDict();加载mysql停用词
+* config下jdbc-reload.properties是mysql配置文件
+* 修改完之后用命令`mvn clean package`打包:target\releases\elasticsearch-analysis-ik-7.3.0.zip
+* 解压缩ik压缩包,将mysql驱动jar,放入ik的目录下
+* 修改jdbc相关配置
+* 重启es.观察日志,日志中就会显示我们打印的那些东西,比如加载了什么配置,加载了什么词语,什么停用词
+* 在mysql中添加词库与停用词
+* 分词实验,验证热更新生效
+
+```json
+GET /_analyze
+{
+  "analyzer": "ik_smart",
+  "text": "飞花梦影"
+}
+```
 
 
 
@@ -770,11 +887,11 @@ http.cors.allow-origin: "*"
   * SearchResponse:经过ES的搜素之后的结果集,包含源字段以及其他信息
   * SearchHists:搜索的匹配结果集,其他相关信息
   * SearchHit:只包含在SearchSourceBuilder中设置的源字段信息
-* 搜索单个索引文档,代码见**paradise-study-java/paradise-study-search/com.wy.service**
-* 搜索多个索引文档,代码见**paradise-study-java/paradise-study-search/com.wy.service**
-* 更新文档update,代码见**paradise-study-java/paradise-study-search/com.wy.service**
-* 更新文档upsert,代码见**paradise-study-java/paradise-study-search/com.wy.service**
-* 删除文档delete,代码见**paradise-study-java/paradise-study-search/com.wy.service**
+* 搜索单个索引文档,代码见**dream-study-java/dream-study-search/com.wy.service**
+* 搜索多个索引文档,代码见**dream-study-java/dream-study-search/com.wy.service**
+* 更新文档update,代码见**dream-study-java/dream-study-search/com.wy.service**
+* 更新文档upsert,代码见**dream-study-java/dream-study-search/com.wy.service**
+* 删除文档delete,代码见**dream-study-java/dream-study-search/com.wy.service**
 
 
 
@@ -782,7 +899,7 @@ http.cors.allow-origin: "*"
 
 
 
-* 所有代码见**paradise-study-java/paradise-study-search/com.wy.service.ElasticSearchService**
+* 所有代码见**dream-study-java/dream-study-search/com.wy.service.ElasticSearchService**
 
 * 查询所有(matchAllQuery)
 
@@ -949,20 +1066,6 @@ http.cors.allow-origin: "*"
 * 选举触发:discovery.zen.minimum_master_nodes,该属性定义在集群中有候选节点且相互连接的节点的最小数量为多少时,才能形成新的集群
 
 
-
-# ELK
-
-
-
-* ELK主要是用来做日志分析,由es,logstash,kibana组成
-* Logstash:日志收集工具,可以从本地磁盘,网络服务,消息队列中收集各种日志,然后进行过滤分析,并将日志输出到Elasticsearch中,类似于大数据中的Flume
-* Kibana:可视化日志Web展示工具,对ES中存储的日志进行展示,还可以生成相应的图标
-* 使用redis或队列作为数据来源的理由
-  * 防止Logstash和ES无法正常通信,从而丢失日志
-  * 防止日志量过大导致ES无法承受大量写操作从而丢失日志
-  * 防止logstash 直接与es操作,产生大量的链接,导致es瓶颈
-  * 如果redis使用的消息队列出现扩展瓶颈,可以使用更加强大的kafka,flume来代替
-* x-pack:权限管理和邮件服务
 
 
 

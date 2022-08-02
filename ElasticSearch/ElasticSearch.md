@@ -1391,6 +1391,17 @@ GET  /book/_search
 * range query: 范围查询
 * term query: 字段为keyword时,存储和搜索都不分词
 * exist query: 查询有某些字段值的文档
+* Fuzzy query: 返回包含与搜索词类似的词的文档,该词由Levenshtein编辑距离度量,包括以下几种情况: 
+  - 更改角色(box→fox)
+
+  - 删除字符(aple→apple)
+
+  - 插入字符(sick→sic)
+
+  - 调换两个相邻字符(ACT→CAT)
+* IDs: 
+* prefix: 前缀查询
+* regexp query: 正则查询
 
 ```json
 GET /book/_search
@@ -1418,79 +1429,20 @@ GET /book/_search
         },
         "exists": {
             "field": "join_date"
-        }
-    }
-}
-```
-
-
-
-
-
-### 14.7. 8、Fuzzy query
-
-返回包含与搜索词类似的词的文档,该词由Levenshtein编辑距离度量。
-
-包括以下几种情况: 
-
-- 更改角色（box→fox）
-
-- 删除字符（aple→apple）
-
-- 插入字符（sick→sic）
-
-- 调换两个相邻字符（ACT→CAT） 
-
-
-```
-GET /book/_search
-{
-    "query": {
+        },
         "fuzzy": {
             "description": {
                 "value": "jave"
             }
-        }
-    }
-}
-```
-
-### 14.7.9、IDs
-
-```
-GET /book/_search
-{
-    "query": {
+        },
         "ids" : {
             "values" : ["1", "4", "100"]
-        }
-    }
-}
-```
-
-
-
-### 14.7.10、prefix 前缀查询
-
-```
-GET /book/_search
-{
-    "query": {
+        },
         "prefix": {
             "description": {
                 "value": "spring"
             }
-        }
-    }
-}
-```
-
-### 14.7.11、regexp query  正则查询
-
-```
-GET /book/_search
-{
-    "query": {
+        },
         "regexp": {
             "description": {
                 "value": "j.*a",
@@ -1505,122 +1457,133 @@ GET /book/_search
 
 
 
-## 14.8． Filter
 
-### 14.8.1 filter与query示例
 
-需求: 用户查询description中有"java程序员",并且价格大于80小于90的数据。
+## Filter
 
-```
-GET /book/_search
+
+
+### filter与query
+
+
+
+* filter: 仅仅只是按照搜索条件过滤出需要的数据而已,不计算任何相关度分数,对相关度没有任何影响
+* query: 会去计算每个document相对于搜索条件的相关度,并按照相关度进行排序
+* 应用场景: 如果是在进行搜索,需要将最匹配搜索条件的数据先返回,那么用query;如果只是要根据一些条件筛选出一部分数据,不关注其排序,那么用filter
+
+
+* 需求: 用户查询description中有"java程序员",并且价格大于80小于90的数据
+
+```json
+// GET /book/_search
 {
-  "query": {
-    "bool": {
-      "must": [
-        {
-          "match": {
-            "description": "java程序员"
-          }
-        },
-        {
-          "range": {
-            "price": {
-              "gte": 80,
-		      "lte": 90
+    "query": {
+        "bool": {
+            "must": [
+                {
+                    "match": {
+                        "description": "java程序员"
+                    }
+                },
+                {
+                    "range": {
+                        "price": {
+                            "gte": 80,
+                            "lte": 90
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}
+```
+
+* 使用filter:
+
+```json
+// GET /book/_search
+{
+    "query": {
+        "bool": {
+            "must": [
+                {
+                    "match": {
+                        "description": "java程序员"
+                    }
+                }
+            ],
+            "filter": {
+                "range": {
+                    "price": {
+                        "gte": 80,
+                        "lte": 90
+                    }
+                }
             }
-          }
         }
-      ]
     }
-  }
 }
 ```
 
-使用filter:
 
-```
-GET /book/_search
+
+### filter与query性能
+
+
+
+* filter: 不需要计算相关度分数,不需要按照相关度分数进行排序,同时还有内置的自动cache最常使用filter的数据
+* query: 要计算相关度分数,按照分数进行排序,而且无法cache结果
+
+
+
+## 定位错误语法
+
+
+
+* 一般用在那种特别复杂庞大的搜索下,这个时候可以先用validate api去验证一下,搜索是否合法.合法以后,explain就像mysql的执行计划,可以看到搜索的目标等信息
+
+
+* 验证错误语句: 
+
+```json
+// GET /book/_validate/query?explain
 {
-  "query": {
-    "bool": {
-      "must": [
-        {
-          "match": {
+    "query": {
+        "mach": {
             "description": "java程序员"
-          }
         }
-      ],
-      "filter": {
-        "range": {
-          "price": {
-            "gte": 80,
-		     "lte": 90
-          }
-        }
-      }
     }
-  }
 }
 ```
 
-### 14.8.2 filter与query对比
 
-filter,仅仅只是按照搜索条件过滤出需要的数据而已,不计算任何相关度分数,对相关度没有任何影响。
 
-query,会去计算每个document相对于搜索条件的相关度,并按照相关度进行排序。
-
- 
-
-应用场景: 
-
-一般来说,如果你是在进行搜索,需要将最匹配搜索条件的数据先返回,那么用query		如果你只是要根据一些条件筛选出一部分数据,不关注其排序,那么用filter
-
-### 14.8.3 filter与query性能
-
-filter,不需要计算相关度分数,不需要按照相关度分数进行排序,同时还有内置的自动cache最常使用filter的数据
-
-query,相反,要计算相关度分数,按照分数进行排序,而且无法cache结果
-
-## 14.9． 定位错误语法
-
-验证错误语句: 
-
-```
-GET /book/_validate/query?explain
-{
-  "query": {
-    "mach": {
-      "description": "java程序员"
-    }
-  }
-}
-```
-
-返回: 
-
-```
+```json
 {
   "valid" : false,
   "error" : "org.elasticsearch.common.ParsingException: no [query] registered for [mach]"
 }
 ```
 
-正确
 
-```
-GET /book/_validate/query?explain
+
+* 正确的情况
+
+```json
+// GET /book/_validate/query?explain
 {
-  "query": {
-    "match": {
-      "description": "java程序员"
+    "query": {
+        "match": {
+            "description": "java程序员"
+        }
     }
-  }
 }
 ```
 
-返回
 
-```
+
+```json
 {
   "_shards" : {
     "total" : 1,
@@ -1638,104 +1601,109 @@ GET /book/_validate/query?explain
 }
 ```
 
-一般用在那种特别复杂庞大的搜索下,比如你一下子写了上百行的搜索,这个时候可以先用validate api去验证一下,搜索是否合法。
 
-合法以后,explain就像mysql的执行计划,可以看到搜索的目标等信息。
 
-## 14.10． 定制排序规则
+## 定制排序规则
 
-### 14.10.1 默认排序规则
 
-默认情况下,是按照_score降序排序的
 
-然而,某些情况下,可能没有有用的_score,比如说filter
+### 默认排序规则
 
-```
-GET book/_search
+
+
+* 默认情况下,是按照`_score`降序排序的,然而,某些情况下,可能没有有用的`_score`,比如说filter
+
+```json
+// GET book/_search
 {
-  "query": {
-    "bool": {
-      "must": [
-        {
-          "match": {
-            "description": "java程序员"
-          }
+    "query": {
+        "bool": {
+            "must": [
+                {
+                    "match": {
+                        "description": "java程序员"
+                    }
+                }
+            ]
         }
-      ]
     }
-  }
 }
 ```
 
-当然,也可以是constant_score
 
-### 14.10.2 定制排序规则
 
-相当于sql中order by  ?sort=sprice:desc
+### 定制排序规则
 
-```
-GET /book/_search 
+
+
+* 相当于sql中order by  ?sort=sprice:desc
+
+```json
+// GET /book/_search 
 {
-  "query": {
-    "constant_score": {
-      "filter" : {
-            "term" : {
-                "studymodel" : "201001"
+    "query": {
+        "constant_score": {
+            "filter" : {
+                "term" : {
+                    "studymodel" : "201001"
+                }
+            }
+        }
+    },
+    "sort": [
+        {
+            "price": {
+                "order": "asc"
+            }
+        }
+    ]
+}
+```
+
+
+
+## Text字段排序问题
+
+
+
+* 如果对一个text field进行排序,结果往往不准确,因为分词后是多个单词,再排序就不是我们想要的结果了
+* 通常解决方案是将一个text field建立两次索引,一个分词,用来进行搜索;一个不分词,用来进行排序
+
+```json
+// PUT /website 
+{
+    "mappings": {
+        "properties": {
+            "title": {
+                "type": "text",
+                "fields": {
+                    "keyword": {
+                        "type": "keyword"
+                    }        
+                }      
+            },
+            "content": {
+                "type": "text"
+            },
+            "post_date": {
+                "type": "date"
+            },
+            "author_id": {
+                "type": "long"
             }
         }
     }
-  },
-  "sort": [
-    {
-      "price": {
-        "order": "asc"
-      }
-    }
-  ]
 }
 ```
 
-## 14.11． Text字段排序问题
+* 插入数据
 
-如果对一个text field进行排序,结果往往不准确,因为分词后是多个单词,再排序就不是我们想要的结果了。
-
-通常解决方案是,将一个text field建立两次索引,一个分词,用来进行搜索；一个不分词,用来进行排序。
-
-fielddate:true
-
-    PUT /website 
-    {
-      "mappings": {
-      "properties": {
-        "title": {
-          "type": "text",
-          "fields": {
-            "keyword": {
-              "type": "keyword"
-            }        
-          }      
-        },
-        "content": {
-          "type": "text"
-        },
-        "post_date": {
-          "type": "date"
-        },
-        "author_id": {
-          "type": "long"
-        }
-      }
-     }
-    }
-
-插入数据
-
-```
-PUT /website/_doc/1
+```json
+// PUT /website/_doc/1
 {
   "title": "first article",
   "content": "this is my second article",
-  "post_date": "2019-01-01",
+  "post_date": "2022-01-01",
   "author_id": 110
 }
 
@@ -1743,7 +1711,7 @@ PUT /website/_doc/2
 {
     "title": "second article",
     "content": "this is my second article",
-     "post_date": "2019-01-01",
+     "post_date": "2022-01-01",
     "author_id": 110
 }
 
@@ -1751,92 +1719,92 @@ PUT /website/_doc/3
 {
      "title": "third article",
      "content": "this is my third article",
-     "post_date": "2019-01-02",
+     "post_date": "2022-01-02",
      "author_id": 110
 }
 ```
 
-搜索
+* 搜索
 
-```
-GET /website/_search
+```json
+// GET /website/_search
 {
-  "query": {
-    "match_all": {}
-  },
-  "sort": [
-    {
-      "title.keyword": {
-        "order": "desc"
-      }
-    }
-  ]
-}
-```
-
-### 14.12． Scroll分批查询
-
-场景: 下载某一个索引中1亿条数据,到文件或是数据库。
-
-不能一下全查出来,系统内存溢出。所以使用scoll滚动搜索技术,一批一批查询。
-
-scoll搜索会在第一次搜索的时候,保存一个当时的视图快照,之后只会基于该旧的视图快照提供数据搜索,如果这个期间数据变更,是不会让用户看到的
-
-每次发送scroll请求,我们还需要指定一个scoll参数,指定一个时间窗口,每次搜索请求只要在这个时间窗口内能完成就可以了。
-
-搜索
-
-```
-GET /book/_search?scroll=1m
-{
-  "query": {
-    "match_all": {}
-  },
-  "size": 3
-}
-```
-
-返回
-
-```
-{
-  "_scroll_id" : "DXF1ZXJ5QW5kRmV0Y2gBAAAAAAAAMOkWTURBNDUtcjZTVUdKMFp5cXloVElOQQ==",
-  "took" : 3,
-  "timed_out" : false,
-  "_shards" : {
-    "total" : 1,
-    "successful" : 1,
-    "skipped" : 0,
-    "failed" : 0
-  },
-  "hits" : {
-    "total" : {
-      "value" : 3,
-      "relation" : "eq"
+    "query": {
+        "match_all": {}
     },
-    "max_score" : 1.0,
-    "hits" : [
-     
+    "sort": [
+        {
+            "title.keyword": {
+                "order": "desc"
+            }
+        }
     ]
-  }
 }
 ```
 
-获得的结果会有一个scoll_id,下一次再发送scoll请求的时候,必须带上这个scoll_id
 
+
+## Scroll分批查询
+
+
+
+* 应用场景: 下载某一个索引中1亿条数据,到文件或是数据库
+* 不能一下全查出来,系统内存溢出,所以使用scroll滚动搜索技术,一批一批查询
+* scroll搜索会在第一次搜索的时候,保存一个当时的视图快照,之后只会基于该旧的视图快照提供数据搜索,如果这个期间数据变更,是不会让用户看到的
+* 每次发送scroll请求,还需要指定一个scroll参数,指定一个时间窗口,每次搜索请求只要在这个时间窗口内能完成就可以
+
+```json
+// GET /book/_search?scroll=1m
+{
+    "query": {
+        "match_all": {}
+    },
+    "size": 3
+}
 ```
-GET /_search/scroll
+
+
+
+```json
+// 返回
+{
+    "_scroll_id" : "DXF1ZXJ5QW5kRmV0Y2gBAAAAAAAAMOkWTURBNDUtcjZTVUdKMFp5cXloVElOQQ==",
+    "took" : 3,
+    "timed_out" : false,
+    "_shards" : {
+        "total" : 1,
+        "successful" : 1,
+        "skipped" : 0,
+        "failed" : 0
+    },
+    "hits" : {
+        "total" : {
+            "value" : 3,
+            "relation" : "eq"
+        },
+        "max_score" : 1.0,
+        "hits" : [
+
+        ]
+    }
+}
+```
+
+* 获得的结果会有一个scroll_id,下一次再发送scoll请求的时候,必须带上这个scoll_id
+
+```json
+// GET /_search/scroll
 {
     "scroll": "1m", 
     "scroll_id" : "DXF1ZXJ5QW5kRmV0Y2gBAAAAAAAAMOkWTURBNDUtcjZTVUdKMFp5cXloVElOQQ=="
 }
 ```
 
-与分页区别: 
+* 与分页区别: 
+  * 分页给用户看的  deep paging
+  * scroll是用户系统内部操作,如下载批量数据,数据转移.零停机改变索引映射
 
-分页给用户看的  deep paging
 
-scroll是用户系统内部操作,如下载批量数据,数据转移。零停机改变索引映射。
 
 ## Aggregations
 

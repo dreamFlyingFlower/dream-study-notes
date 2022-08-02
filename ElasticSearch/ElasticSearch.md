@@ -934,19 +934,17 @@ GET /book/_search?q=name:java&sort=price:desc
 
 
 
-### 图解timeout
-
-GET /book/_search?timeout=10ms
-
-全局设置: 配置文件中设置 search.default_search_timeout: 100ms,默认不超时
+### timeout超时
 
 
 
-## multi-index 多索引搜索
+* 单次搜索: `GET /book/_search?timeout=10ms`
+* 全局设置: 配置文件中设置 search.default_search_timeout: 100ms,默认不超时
+* 搜索时,请求必定跨所有主分片,数据量太大时,搜索完毕,每个分片可能需要的时间太久,影响用户体验.timeout超时机制可以指定每个分片只能在给定的时间内查询数据,能有几条就返回几条给客户端
 
 
 
-### multi-index搜索模式
+## multi-index多索引搜索
 
 
 
@@ -956,10 +954,6 @@ GET /book/_search?timeout=10ms
 * `/index1,index2/_search`: 同时搜索两个index下的数据
 * `/index*/_search`: 按照通配符去匹配多个索引
 * 应用场景: 生产环境log索引可以按照日期分开
-
-
-
-## 搜索原理
 
 
 
@@ -973,15 +967,16 @@ GET /book/_search?timeout=10ms
 
 * 关键词:`size,from`
 * `GET /book/_search?size=10`
-* `GET /book/_search?size=10&from=0
+* `GET /book/_search?size=10&from=0`
 * `GET /book/_search?size=10&from=20`
 * `GET /book_search?from=0&size=3`
+* 分页原理: 从每个分片获得相同数量的数据,然后再到coordinate进行汇总排序,将最终的结果取出
 
 
 
 ### deep paging
 
-#### 
+
 
 * 根据相关度评分倒排序,所以分页过深,协调节点会将大量数据聚合分析
 * 消耗网络带宽,因为所搜过深的话,各 shard 要把数据传递给 coordinate node,这个过程是有大量数据传递的,消耗网络

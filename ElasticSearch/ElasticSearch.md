@@ -2,7 +2,7 @@
 
 
 
-# 概述
+# 概述6,8,9,10,11
 
 
 
@@ -73,11 +73,15 @@
 
 ## Cluster
 
+
+
 * 集群:包含多个节点,每个节点属于哪个集群是通过配置(集群名称,默认是elasticsearch)来决定的,对于中小型应用来说,刚开始一个集群就一个节点很正常
 
 
 
 ## Node
+
+
 
 * 节点:集群中的一个节点,节点也有一个名称,默认随机分配
 * 节点名称很重要,特别是在执行运维管理操作的时候
@@ -87,12 +91,27 @@
 
 ## Index
 
+
+
 * 索引:类似关系型数据库的数据库,包含一堆有相似结构的文档数据,索引有一个名称
 * 一个index包含很多document,一个index就代表了一类类似的或者相同的document
+* 索引创建规则: 
+
+  - 仅限小写字母
+
+  - 不能包含\、/、 *、?、"、<、>、|、#以及空格符等特殊符号
+
+  - 从7.0版本开始不再包含冒号
+
+  - 不能以-、_或+开头
+
+  - 不能超过255个字节,多字节字符将计入255个限制
 
 
 
 ## Type
+
+
 
 * 类型:类似数据库中的表,**ES6以上就准备废弃,ES8中移除**
 * 每个索引里都可以有一个或多个type,type是index中的一个逻辑数据分类
@@ -114,6 +133,8 @@
 
 ## Document
 
+
+
 * 文档,类似关系型数据库中的行
 * 文档是es中的最小数据单元,一个document可以是一条客户数据,一条商品分类数据
 * 通常用JSON数据结构表示,每个index下的type中,都可以去存储多个document
@@ -121,6 +142,8 @@
 
 
 ## Field
+
+
 
 * 字段,类似关系型数据库中的字段
 * Field是Elasticsearch的最小单位
@@ -152,6 +175,23 @@ product document:{"product_id":"1","product_name":"高露洁牙膏","product_des
   ```
 
 * 该存储方式会使查找时结果不准,此时就必须规定user的类型为nested
+
+
+
+## Shard
+
+
+
+* 分片.index数据过大时,将index里面的数据,分为多个shard,分布式的存储在各个服务器上面.可以支持海量数据和高并发,提升性能和吞吐量,充分利用多台机器的cpu
+
+
+
+## Replica
+
+
+
+* 副本.为了保证数据的安全,需要将每个index的分片进行备份,存储在另外的机器上,保证少数机器宕机es集群仍可以搜索
+* 能正常提供查询和插入的分片叫做主分片(primary shard),其余的叫做备份的分片(replica shard)
 
 
 
@@ -268,144 +308,6 @@ client.indices.putMapping({
 * 索引对象(blog):存储数据的表结构 ,任何搜索数据,存放在索引对象上
 * 映射(mapping):数据如何存放到索引对象上,需要有一个映射配置, 包括:数据类型,是否存储,是否分词等
 * 文档(document):一条数据记录,存在索引对象上
-
-
-
-# 安装
-
-
-
-* 下载对应JDK版本的Elasticsearch安装包,或直接用yum或web-get下载安装包,解压到/app/es下
-
-* 在es目录下创建data和logs目录
-
-* 配置文件elasticsearch.yml在es/conf下
-
-  ```yaml
-  # 数据目录
-  path.data:  /app/es/data
-  # 日志目录
-  path.logs:  /app/es/logs
-  ```
-
-* 配置linux进程访问数量,vi /etc/security/limits.conf,添加如下内容:
-
-  ```shell
-  * soft nofile 65536
-  * hard nofile 131072
-  * soft nproc 2048
-  * hard nproc 4096
-  ```
-
-* 其他相关系统配置
-
-  * vi /etc/security/limits.d/90-nproc.conf,修改如下内容:
-
-  ```shell
-  # * soft nproc 1024 修改为
-  * soft nproc 2048
-  ```
-
-  * vi /etc/sysctl.conf ,添加下面配置:
-
-  ```shell
-  vm.max_map_count=655360
-  sysctl -p
-  ```
-
-* 启动.es/bin/,根据系统的不同,进入不同的文件夹,进入后./sonar.sh start
-
-* 启动测试:curl http://localhost:9200或在网页直接打开改地址
-
-* 可使用elasticsearch-head对es进行可视化查看,主要需要开启es的跨域
-
-* IK分词器,ES默认的分词器对中文支持不太好,使用IK分词器可以更好的查询中文,他分为2种模式:
-  * ik_max_word:会对中文做最细粒度的拆分
-  * ik_smart:最粗粒度的拆分
-  
-* 当直接在ElasticSearch建立文档对象时,如果索引不存在的,默认会自动创建,映射采用默认方式
-* ElasticSearch服务默认端口9300,Web管理平台端口9200
-
-
-
-## 常见问题
-
-* 内存不足
-
-  ```shell
-  # 报错:
-  # max virtual memory areas vm.max_map_count [65530] is too low, increase to at least [262144]
-  # 在/etc/sysctl.conf中添加如下
-  vm.max_map_count=655360
-  sysctl -p
-  # 若是docker,可添加命令参数: -e ES_JAVA_OPTS="-Xms1g -Xmx1g"
-  ```
-
-* 内存锁定
-
-  ```shell
-  # unable to install syscall filter: 
-  # java.lang.UnsupportedOperationException: seccomp unavailable: CONFIG_SECCOMP not compiled into kernel, CONFIG_SECCOMP and CONFIG_SECCOMP_FILTER are needed
-  # 在配置文件中添加如下配置
-  bootstrap.memory_lock: false
-  bootstrap.system_call_filter: false
-  ```
-
-* bootstrap checks failed
-
-  ```shell
-  # max file descriptors [4096] for elasticsearch process likely too low, increase to at least [65536]
-  # max number of threads [1024] for user [lishang] likely too low, increase to at least [2048]
-  # 修改/etc/security/limits.conf,添加如下
-  * soft nofile 65536
-  * hard nofile 131072
-  * soft nproc 2048
-  * hard nproc 4096
-  ```
-
-
-
-
-# 配置
-
-
-
-## elasticserch.yml
-
-
-
-* 配置文件为es/conf/elasticsearch.yml
-* cluster.name:集群名称,如果要配置集群,需要两个以上的elasticsearch节点配置的cluster.name相同,都启动可以自动组成集群,cluster.name默认是elasticsearch
-* node.name:当前es节点的名称,集群内部可重复
-* network.host:绑定地址,若是0.0.0.0,任何ip都可以访问es
-* http.port:http访问端口
-* http.cors.enabled:true,是否允许跨域访问
-* http.cors.allow-origin:/.*/,允许跨域访问的请求头
-* transport.tcp.port:es内部交互接口,用于集群内部通讯,选举等
-* node.master:true/false,集群中该节点是否能被选举为master节点,默认为true
-* node.data:true/false,指定节点是否存储索引数据,默认为true
-* discovery.zen.ping.unicast.hosts:["ip1:port1","ip2:port2"],设置集群中master节点的初始列表
-* discovery.zen.ping.timeout:3s,es自动发现节点连接超时时间,默认为3s
-* discovery.zen.minimum_master_nodes:2,最小主节点个数,此值的公式为:(master_eligible_nodes/2)+1
-* discovery.seed_hosts:设置集群中的master节点的出事列表ip端口地址,逗号分隔
-* cluster.initial_master_nodes:新集群初始时的候选主节点
-* node.max_local_storage_nodes:2,单机允许的最大存储节点数
-* node.ingest:true/false,是否允许成为协调节点
-* bootstrap.memeory_lock:true/false,设置true可以锁住es使用的内存,避免内存与swap分区交换数据
-* path.data:数据存储目录.默认是es根目录下的data文件夹,可以设置多个存储路径,用逗号隔开
-* path.logs:日志存储目录.默认是es根目录下的logs文件夹
-* path.conf:设置配置文件的存储路径,tar或zip默认在es根目录下的config,rpm默认在/etc/elasticsearch
-* path.plugins:设置插件的存放路径,默认是es根目录下的plugins文件夹
-* xpack.ml.enabled:boolean,是否启用机器学习,在windows上不支持,要设置为false
-
-
-
-## jvm.options
-
-
-
-* 主要设置xms和xmx
-* 两个值设置为相等,最大值不超过物理内存的一半
 
 
 
@@ -626,6 +528,39 @@ GET /_analyze
 
 
 
+## Cat API
+
+
+
+* es提供了一套api,叫做cat api,可以查看es中各种各样的数据
+
+* `GET /_cat/health?v`:查看集群状态
+
+  * green：每个索引的primary shard和replica shard都是active状态的
+  * yellow：每个索引的primary shard都是active状态的,但是部分replica shard不是active状态,处于不可用的状态
+  * red：不是所有索引的primary shard都是active状态的,部分索引有数据丢失了
+
+  ```
+  epoch      timestamp cluster       status node.total node.data shards pri relo init unassign pending_tasks max_task_wait_time active_shards_percent
+  1568635460 12:04:20  elasticsearch green           1         1      4   4    0    0        0             0                  -                100.0%
+  ```
+
+* `GET /_cat/indices?v`: 快速查看集群中有哪些索引
+
+  ```
+  health status index                           uuid                   pri rep docs.count docs.deleted store.size pri.store.size
+  green  open   .kibana_task_manager            JBMgpucOSzenstLcjA_G4A   1   0          2            0     45.5kb         45.5kb
+  green  open   .monitoring-kibana-7-2019.09.16 LIskf15DTcS70n4Q6t2bTA   1   0        433            0    218.2kb        218.2kb
+  green  open   .monitoring-es-7-2019.09.16     RMeUN3tQRjqM8xBgw7Zong   1   0       3470         1724      1.9mb          1.9mb
+  green  open   .kibana_1                       1cRiyIdATya5xS6qK5pGJw   1   0          4            0     18.2kb         18.2kb
+  ```
+
+* `GET /_cat/nodes`:查看所有节点
+* `GET /_cat/master`:查看主节点
+
+
+
+
 # API调用
 
 
@@ -638,23 +573,47 @@ GET /_analyze
 
 
 
-* esip:port/_cat/nodes:get,查看所有节点
+* `PUT /index`: 建立索引,如`PUT /book`
 
-* esip:port/_cat/health:get,查看es健康状况
+* `PUT /index/type/id`: 新增或更新文档,参数都相同,更新是整体覆盖
 
-* esip:port/_cat/master:get,查看主节点
+  ```json
+  // PUT /book/_doc/1
+  {
+      "name": "Bootstrap开发",
+      "description": "spring 在java领域非常流行,java程序员都在用。",
+      "studymodel": "201002",
+      "price":38.6,
+      "timestamp":"2019-08-25 19:11:35",
+      "pic":"group1/M00/00/00/wKhlQFs6RCeAY0pHAAJx5ZjNDEM428.jpg",
+      "tags": [ "bootstrap", "dev"]
+  }
+  ```
 
-* esip:port/_cat/indices:get,查看所有索引
+* `PUT /{index}/type/{id}/_create`:强制创建,若存在相同id的值,不会更新,会报错
 
-* esip:port/\_index/_type/[\_id]:post,在es中添加数据,数据为json格式,请求头为application/json
+* `POST  /{index}/type /{id}/_update`或`POST  /{index}/_update/{id}`: 更新
+
+  ```json
+  // POST /book/_update/1/ 
+  {
+      "doc": {
+          "name": " Bootstrap开发教程高级"
+      }
+  }
+  ```
+
+* `GET /{index}/type/id`:快速搜索,如`GET /book/_doc/1`就可看到json形式的文档
+
+* `DELETE /{index}/type/id`:删除某个文档,如`DELETE /book/_doc/1`
+
+* `POST /{index}/type/[\_id]`:,在es中添加数据,数据为json格式,请求头为application/json
 
   * _index:相当于数据库中的数据库,索引名
   * _type:相当于数据库中的表,类型名
   * _id:相当于数据库中的唯一标识.若不带id会自动生成一个随机uuid作为id;若带id,则es中没有该id数据时,created,若存在,则是updated
 
-* `esip:port/_index/_type/_id/_create`:put,强制创建,若存在相同_id的值,不会更新,会报错
-
-* `esip:port/_index/_type/[_id]`:get,在es中根据id进行搜索,得到json数据,下划线开头的统称为元数据,\_source中数据为查看到的真实数据,若没有,则为null
+* `GET /{index}/type/[_id]`: 在es中根据id进行搜索,得到json数据,下划线开头的统称为元数据,\_source中数据为查看到的真实数据,若没有,则为null
 
   ```json
   {
@@ -671,9 +630,9 @@ GET /_analyze
   }
   ```
 
-* `esip:port/_index/_type/_id?_source_includes=column1...`:只查询指定column1的值,_source_includes为固定写法
+* `GET /{index}/type/{id}?_source_includes=column1...`:只查询指定column1的值,_source_includes为固定写法
 
-* `esip:port/{index}/_update/{id}`:post,专用更新数据.该方式和不带`_update`更新方式不同,只能用来更新,不能用来新增.且两种方式的参数格式也不一样,对数据的影响也不一样.将`_update`放在末尾的方式已经废除
+* `POST /{index}/_update/{id}`: 专用更新数据.该方式和不带`_update`更新方式不同,只能用来更新,不能用来新增.且两种方式的参数格式也不一样,对数据的影响也不一样.将`_update`放在末尾的方式已经废除
 
   ```json
   // 带_udpate的更新数据传递格式,doc为固定写法
@@ -690,9 +649,7 @@ GET /_analyze
 
   * 带_update时若是第一次更新,\_version,\_seq_no等会变化,但是多次更新内容连续且相同时,这些元数据不会再变化.不带\_update的这些元数据都会变化
 
-* esip:port/\_index/\_type/\_id:delete,删除某个资源
-
-* esip:port/\_index/\_type/\_bulk:post,批量新增数据,固定格式,只能在kibana中测试
+* `POST /{index}/type/_bulk`: 批量新增数据,固定格式,只能在kibana中测试
 
   ```json
   {"index":"_id":"1"} // index是固定写法,_id是标识,注意不是一个严格的json,没有逗号
@@ -705,7 +662,7 @@ GET /_analyze
   }
   ```
 
-* esip:port/\_bulk:post,复杂批量操作
+* `POST /_bulk`: 复杂批量操作
 
   ```json
   {"delete":{"_index":"index1","_type":"type1","_id":1}}
@@ -1382,11 +1339,11 @@ GET  /book/_search
 
 * match_all:
 * match:
-* multi_match:
-* range query: 范围查询
-* term query: 字段为keyword时,存储和搜索都不分词
-* exist query: 查询有某些字段值的文档
-* Fuzzy query: 返回包含与搜索词类似的词的文档,该词由Levenshtein编辑距离度量,包括以下几种情况: 
+* multi_match: 多匹配
+* range: 范围查询
+* term: 字段为keyword时,存储和搜索都不分词
+* exists: 查询有某些字段值的文档
+* fuzzy: 返回包含与搜索词类似的词的文档,该词由Levenshtein编辑距离度量,包括以下几种情况: 
   - 更改角色(box→fox)
 
   - 删除字符(aple→apple)
@@ -1394,9 +1351,9 @@ GET  /book/_search
   - 插入字符(sick→sic)
 
   - 调换两个相邻字符(ACT→CAT)
-* IDs: 
+* ids: 根据id列表搜索多个
 * prefix: 前缀查询
-* regexp query: 正则查询
+* regexp: 正则查询
 
 ```json
 GET /book/_search
@@ -1801,7 +1758,7 @@ PUT /website/_doc/3
 
 
 
-## Aggregations
+# Aggregations
 
 
 
@@ -1811,7 +1768,7 @@ PUT /website/_doc/3
 {
     "query":{
         "match":{
-            "fildname1":"value1 value2"
+            "fieldname1":"value1 value2"
         }
     },
     // 固定写法,表示聚合查询
@@ -1827,6 +1784,10 @@ PUT /website/_doc/3
             },
             // 在聚合中对上次的结果集再次聚合
             "aggs":{
+                // 计算每个fildname1下的数量
+                "group_by_model": {
+                    "terms": { "field": "fildname1" }
+                },
                 "aggAvgTerms":{
                     // 对统计分析的结果再次求平均值
                     "avg":{
@@ -1850,7 +1811,837 @@ PUT /website/_doc/3
 
 
 
-## Springboot
+* 计算每个tags下的商品数量
+
+```json
+// GET /book/_search/
+{
+    "size": 0, 
+    "query": {
+        "match_all": {}
+    }, 
+    "aggs": {
+        "group_by_tags": {
+            "terms": { "field": "tags" }
+        }
+    }
+}
+```
+
+
+
+* 加上搜索条件,计算每个tags下的商品数量
+
+```json
+// GET /book/_search
+{
+    "size": 0, 
+    "query": {
+        "match": {
+            "description": "java程序员"
+        }
+    }, 
+    "aggs": {
+        "group_by_tags": {
+            "terms": { "field": "tags" }
+        }
+    }
+}
+```
+
+
+
+* 先分组,再算每组的平均值,计算每个tag下的商品的平均价格
+
+```json
+// GET /book/_search
+{
+    "size": 0,
+    "aggs" : {
+        "group_by_tags" : {
+            "terms" : { 
+                "field" : "tags" 
+            },
+            "aggs" : {
+                "avg_price" : {
+                    "avg" : { "field" : "price" }
+                }
+            }
+        }
+    }
+}
+```
+
+
+
+* 计算每个tag下的商品的平均价格,并且按照平均价格降序排序
+
+```json
+// GET /book/_search
+{
+    "size": 0,
+    "aggs" : {
+        "group_by_tags" : {
+            "terms" : { 
+                "field" : "tags",
+                "order": {
+                    "avg_price": "desc"
+                }
+            },
+            "aggs" : {
+                "avg_price" : {
+                    "avg" : { "field" : "price" }
+                }
+            }
+        }
+    }
+}
+```
+
+
+
+* 按照指定的价格范围区间进行分组,然后在每组内再按照tag进行分组,最后再计算每组的平均价格
+
+```json
+// GET /book/_search
+{
+    "size": 0,
+    "aggs": {
+        "group_by_price": {
+            "range": {
+                "field": "price",
+                "ranges": [
+                    {
+                        "from": 0,
+                        "to": 60
+                    },
+                    {
+                        "from": 60,
+                        "to": 80
+                    }
+                ]
+            },
+            "aggs": {
+                "group_by_tags": {
+                    "terms": {
+                        "field": "tags"
+                    },
+                    "aggs": {
+                        "average_price": {
+                            "avg": {
+                                "field": "price"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+
+
+## bucket
+
+
+
+* 一个数据分组
+
+
+
+## metric
+
+
+
+* 对一个bucket执行的某种聚合分析的操作,比如说求平均值,求最大值,求最小值
+* `select count(*) from book group column1`
+* bucket: group by column1 --> 那些column1 相同的数据,就会被划分到一个bucket中
+* metric: count(*),对每个user_id bucket中所有的数据,计算一个数量,还有avg(),sum(),max(),min()
+
+
+
+## 案例
+
+
+
+### 创建索引及映射
+
+
+
+```json
+// PUT /tvs
+// PUT /tvs/_search
+{			
+    "properties": {
+        "price": {
+            "type": "long"
+        },
+        "color": {
+            "type": "keyword"
+        },
+        "brand": {
+            "type": "keyword"
+        },
+        "sold_date": {
+            "type": "date"
+        }
+    }
+}
+```
+
+
+
+### 插入数据
+
+
+
+```json
+// POST /tvs/_bulk
+{ "index": {}}
+{ "price" : 1000, "color" : "红色", "brand" : "长虹", "sold_date" : "2019-10-28" }
+{ "index": {}}
+{ "price" : 2000, "color" : "红色", "brand" : "长虹", "sold_date" : "2019-11-05" }
+{ "index": {}}
+{ "price" : 3000, "color" : "绿色", "brand" : "小米", "sold_date" : "2019-05-18" }
+{ "index": {}}
+{ "price" : 1500, "color" : "蓝色", "brand" : "TCL", "sold_date" : "2019-07-02" }
+{ "index": {}}
+{ "price" : 1200, "color" : "绿色", "brand" : "TCL", "sold_date" : "2019-08-19" }
+{ "index": {}}
+{ "price" : 2000, "color" : "红色", "brand" : "长虹", "sold_date" : "2019-11-05" }
+{ "index": {}}
+{ "price" : 8000, "color" : "红色", "brand" : "三星", "sold_date" : "2020-01-01" }
+{ "index": {}}
+{ "price" : 2500, "color" : "蓝色", "brand" : "小米", "sold_date" : "2020-02-12" }
+```
+
+
+
+* 统计哪种颜色的电视销量最高
+  * size: 只获取聚合结果,而不要执行聚合的原始数据
+  * aggs: 固定语法,要对一份数据执行分组聚合操作
+  * popular_colors: 就是对每个aggs,都要起一个名字
+  * terms: 根据字段的值进行分组
+  * field: 根据指定的字段的值进行分组
+
+```json
+// GET /tvs/_search
+{
+    "size" : 0,
+    "aggs" : { 
+        "popular_colors" : { 
+            "terms" : { 
+                "field" : "color"
+            }
+        }
+    }
+}
+```
+
+
+
+* 返回
+  * hits.hits: 指定了size是0,所以hits.hits就是空的
+  * aggregations: 聚合结果
+  * popular_color: 我们指定的某个聚合的名称
+  * buckets: 根据我们指定的field划分出的buckets
+  * key: 每个bucket对应的那个值
+  * doc_count: 这个bucket分组内,有多少个数据.数量,其实就是这种颜色的销量.每种颜色对应的bucket中的数据的默认的排序规则:按照doc_count降序排序
+
+```json
+{
+    "took" : 18,
+    "timed_out" : false,
+    "_shards" : {
+        "total" : 1,
+        "successful" : 1,
+        "skipped" : 0,
+        "failed" : 0
+    },
+    "hits" : {
+        "total" : {
+            "value" : 8,
+            "relation" : "eq"
+        },
+        "max_score" : null,
+        "hits" : [ ]
+    },
+    "aggregations" : {
+        "popular_colors" : {
+            "doc_count_error_upper_bound" : 0,
+            "sum_other_doc_count" : 0,
+            "buckets" : [
+                {"key" : "红色","doc_count" : 4},
+                {"key" : "绿色","doc_count" : 2},
+                {"key" : "蓝色","doc_count" : 2}
+            ]
+        }
+    }
+}
+```
+
+
+
+* 统计每种颜色电视平均价格.在一个aggs执行的bucket操作(terms),平级的json结构下,再加一个aggs,这个第二个aggs内部,同样取个名字,执行一个metric操作,avg,对之前的每个bucket中的数据的指定的field,price field,求一个平均值
+
+```json
+// GET /tvs/_search
+{
+    "size" : 0,
+    "aggs": {
+        "colors": {
+            "terms": {
+                "field": "color"
+            },
+            "aggs": { 
+                "avg_price": { 
+                    "avg": {
+                        "field": "price" 
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+
+
+* 返回
+  * buckets,除了key和doc_count
+  * avg_price: 自己取的metric aggs的名字
+  * value: metric计算的结果,每个bucket中的数据的price字段求平均值后的结果,相当于`select avg(price) from tvs group by color`
+
+```json
+{
+    "took" : 4,
+    "timed_out" : false,
+    "_shards" : {
+        "total" : 1,
+        "successful" : 1,
+        "skipped" : 0,
+        "failed" : 0
+    },
+    "hits" : {
+        "total" : {
+            "value" : 8,
+            "relation" : "eq"
+        },
+        "max_score" : null,
+        "hits" : [ ]
+    },
+    "aggregations" : {
+        "colors" : {
+            "doc_count_error_upper_bound" : 0,
+            "sum_other_doc_count" : 0,
+            "buckets" : [
+                {
+                    "key" : "红色",
+                    "doc_count" : 4,
+                    "avg_price" : {
+                        "value" : 3250.0
+                    }
+                },
+                {
+                    "key" : "绿色",
+                    "doc_count" : 2,
+                    "avg_price" : {
+                        "value" : 2100.0
+                    }
+                },
+                {
+                    "key" : "蓝色",
+                    "doc_count" : 2,
+                    "avg_price" : {
+                        "value" : 2000.0
+                    }
+                }
+            ]
+        }
+    }
+}
+```
+
+
+
+* 每个颜色下,平均价格及每个颜色下,每个品牌的平均价格
+
+```json
+// GET /tvs/_search 
+{
+    "size": 0,
+    "aggs": {
+        "group_by_color": {
+            "terms": {
+                "field": "color"
+            },
+            "aggs": {
+                "color_avg_price": {
+                    "avg": {
+                        "field": "price"
+                    }
+                },
+                "group_by_brand": {
+                    "terms": {
+                        "field": "brand"
+                    },
+                    "aggs": {
+                        "brand_avg_price": {
+                            "avg": {
+                                "field": "price"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+
+
+* 更多的metric
+  * count: bucket,terms,自动就会有一个doc_count,就相当于是count
+  * avg: avg aggs,求平均值
+  * max: 求一个bucket内,指定field值最大的那个数据
+  * min: 求一个bucket内,指定field值最小的那个数据
+  * sum: 求一个bucket内,指定field值的总和
+
+```json
+// GET /tvs/_search
+{
+    "size" : 0,
+    "aggs": {
+        "colors": {
+            "terms": {
+                "field": "color"
+            },
+            "aggs": {
+                "avg_price": { "avg": { "field": "price" } },
+                "min_price" : { "min": { "field": "price"} }, 
+                "max_price" : { "max": { "field": "price"} },
+                "sum_price" : { "sum": { "field": "price" } } 
+            }
+        }
+    }
+}
+```
+
+
+
+* 划分范围 histogram
+* histogram: 类似于terms,也是进行bucket分组操作,接收一个field,按照这个field的值的各个范围区间,进行bucket分组操作
+  * interval: 2000,划分范围,0~2000,2000~4000,4000~6000,6000~8000,8000~10000,buckets,bucket有了之后,去对每个bucket执行avg,count,sum,max,min,等各种metric操作,聚合分析
+
+
+```json
+// GET /tvs/_search
+{
+    "size" : 0,
+    "aggs":{
+        "price":{
+            "histogram":{ 
+                "field": "price",
+                "interval": 2000
+            },
+            "aggs":{
+                "income": {
+                    "sum": { 
+                        "field" : "price"
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+
+
+### 按照日期分组聚合
+
+
+
+* date_histogram,按照指定的某个date类型的日期field,以及日期interval,按照一定的日期间隔,去划分bucket
+* min_doc_count: 即使某个日期interval中一条数据都没有,这个区间也是要返回的,不然默认会过滤掉这个区间
+* extended_bounds,min,max：划分bucket的时候,会限定在这个起始日期,和截止日期内
+
+```json
+// GET /tvs/_search
+{
+    "size" : 0,
+    "aggs": {
+        "sales": {
+            "date_histogram": {
+                "field": "sold_date",
+                "interval": "month", 
+                "format": "yyyy-MM-dd",
+                "min_doc_count" : 0, 
+                "extended_bounds" : { 
+                    "min" : "2019-01-01",
+                    "max" : "2020-12-31"
+                }
+            }
+        }
+    }
+}
+```
+
+
+
+### 统计每季度每个品牌的销售额
+
+```json
+// GET /tvs/_search 
+{
+    "size": 0,
+    "aggs": {
+        "group_by_sold_date": {
+            "date_histogram": {
+                "field": "sold_date",
+                "interval": "quarter",
+                "format": "yyyy-MM-dd",
+                "min_doc_count": 0,
+                "extended_bounds": {
+                    "min": "2019-01-01",
+                    "max": "2020-12-31"
+                }
+            },
+            "aggs": {
+                "group_by_brand": {
+                    "terms": {"field": "brand"},
+                    "aggs": {
+                        "sum_price": {
+                            "sum": {"field": "price"}
+                        }
+                    }
+                },
+                "total_sum_price": {
+                    "sum": {"field": "price"}
+                }
+            }
+        }
+    }
+}
+```
+
+
+
+### 查询某个品牌按颜色销量
+
+
+
+* sql: `select count(*) from tvs where brand like "%小米%" group by color`
+* es: aggregation,scope,任何的聚合,都必须在搜索出来的结果数据中之行,搜索结果,就是聚合分析操作的scope
+
+```json
+// GET /tvs/_search 
+{
+    "size": 0,
+    "query": {
+        "term": {
+            "brand": {
+                "value": "小米"
+            }
+        }
+    },
+    "aggs": {
+        "group_by_color": {
+            "terms": {
+                "field": "color"
+            }
+        }
+    }
+}
+```
+
+
+
+### 单个品牌与所有品牌销量对比
+
+
+
+* aggregation,scope,一个聚合操作,必须在query的搜索结果范围内执行
+* 出来两个结果,一个结果,是基于query搜索结果来聚合的; 一个结果,是对所有数据执行聚合的
+
+```json
+// GET /tvs/_search 
+{
+    "size": 0, 
+    "query": {
+        "term": {
+            "brand": {"value": "小米"}
+        }
+    },
+    "aggs": {
+        "single_brand_avg_price": {
+            "avg": {"field": "price"}
+        },
+        "all": {
+            "global": {},
+            "aggs": {
+                "all_brand_avg_price": {
+                    "avg": {"field": "price"}
+                }
+            }
+        }
+    }
+}
+```
+
+
+
+### 过滤+聚合
+
+
+
+```json
+// GET /tvs/_search 
+{
+    "size": 0,
+    "query": {
+        "constant_score": {
+            "filter": {
+                "range": {
+                    "price": {"gte": 1200}
+                }
+            }
+        }
+    },
+    "aggs": {
+        "avg_price": {
+            "avg": {"field": "price"}
+        }
+    }
+}
+```
+
+
+
+### bucket filter
+
+
+
+* aggs.filter,针对的是聚合去做的,如果放query里面的filter,是全局的,会对所有的数据都有影响
+* bucket filter: 对不同的bucket下的aggs,进行filter
+
+```json
+// GET /tvs/_search 
+{
+  "size": 0,
+  "query": {
+    "term": {
+      "brand": {"value": "小米"}
+    }
+  },
+  "aggs": {
+    "recent_150d": {
+      "filter": {
+        "range": {
+          "sold_date": {"gte": "now-150d"}
+        }
+      },
+      "aggs": {
+        "recent_150d_avg_price": {
+          "avg": {"field": "price"}
+        }
+      }
+    },
+    "recent_140d": {
+      "filter": {
+        "range": {
+          "sold_date": {"gte": "now-140d"}
+        }
+      },
+      "aggs": {
+        "recent_140d_avg_price": {
+          "avg": {"field": "price"}
+        }
+      }
+    },
+    "recent_130d": {
+      "filter": {
+        "range": {
+          "sold_date": {"gte": "now-130d"}
+        }
+      },
+      "aggs": {
+        "recent_130d_avg_price": {
+          "avg": {"field": "price"}
+        }
+      }
+    }
+  }
+}
+```
+
+
+
+### 排序1
+
+```json
+// GET /tvs/_search 
+{
+    "size": 0,
+    "aggs": {
+        "group_by_color": {
+            "terms": {
+                "field": "color",
+                "order": {
+                    "avg_price": "asc"
+                }
+            },
+            "aggs": {
+                "avg_price": {
+                    "avg": {
+                        "field": "price"
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+
+
+### 排序2
+
+```json
+// GET /tvs/_search  
+{
+    "size": 0,
+    "aggs": {
+        "group_by_color": {
+            "terms": {
+                "field": "color"
+            },
+            "aggs": {
+                "group_by_brand": {
+                    "terms": {
+                        "field": "brand",
+                        "order": {
+                            "avg_price": "desc"
+                        }
+                    },
+                    "aggs": {
+                        "avg_price": {
+                            "avg": {
+                                "field": "price"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+
+
+# Sql新特性
+
+
+
+## 快速入门
+
+```
+POST /_sql?format=txt
+{
+    "query": "SELECT * FROM tvs "
+}
+```
+
+
+
+## 启动方式
+
+
+
+* http 请求
+* 客户端: elasticsearch-sql-cli.bat
+* 代码
+
+
+
+## 显示方式
+
+
+
+![](img/004.png)
+
+
+
+## Sql翻译
+
+
+
+```
+POST /_sql/translate
+{
+    "query": "SELECT * FROM tvs "
+}
+```
+
+
+
+```
+{
+  "size" : 1000,
+  "_source" : false,
+  "stored_fields" : "_none_",
+  "docvalue_fields" : [
+    {
+      "field" : "brand"
+    },
+    {
+      "field" : "color"
+    },
+    {
+      "field" : "price"
+    },
+    {
+      "field" : "sold_date",
+      "format" : "epoch_millis"
+    }
+  ],
+  "sort" : [
+    {
+      "_doc" : {
+        "order" : "asc"
+      }
+    }
+  ]
+}
+```
+
+
+
+## 与其他DSL结合
+
+
+
+```
+POST /_sql?format=txt
+{
+    "query": "SELECT * FROM tvs",
+    "filter": {
+        "range": {
+            "price": {
+                "gte" : 1200,
+                "lte" : 2000
+            }
+        }
+    }
+}
+```
+
+
+
+# Springboot
 
 
 
@@ -1877,7 +2668,7 @@ PUT /website/_doc/3
 
 
 
-## Java原生API
+# Java原生API
 
 
 
@@ -1911,6 +2702,128 @@ PUT /website/_doc/3
 * 过滤器是针对搜索结果进行的,主要是判断文档是否匹配,并不计算和判断文档的匹配得分,所有比查询的性能要高,且方便缓存,尽量使用过滤器去实现查询或者过滤器和查询共同使用
 * 针对范围进行过滤(range),一次只能对一个Field过滤
 * 针对项进行精准过滤,一次只能对一个Field过滤
+
+
+
+# 评分
+
+
+
+## 评分算法
+
+
+
+* relevance score算法,就是计算出一个索引中的文本,与搜索文本,他们之间的关联匹配程度
+* Elasticsearch使用的是 term frequency/inverse document frequency算法,简称为TF/IDF算法
+  * TF词频(Term Frequency)
+  * IDF逆向文件频率(Inverse Document Frequency)
+
+
+
+### TF
+
+
+
+* Term frequency: 搜索文本中的各个词条在field文本中出现了多少次,出现次数越多,就越相关
+
+
+
+![](img/001.png)
+
+
+
+* Inverse document frequency: 搜索文本中的各个词条在整个索引的所有文档中出现了多少次,出现的次数越多,就越不相关
+
+
+
+![](img/002.png)
+
+![](img/003.png)
+
+
+
+* Field-length norm: field长度,field越长,相关度越弱
+
+
+
+### _score计算
+
+
+
+## Doc value
+
+
+
+* 搜索的时候,要依靠倒排索引;排序的时候,需要依靠正排索引,看到每个document的每个field,然后进行排序,正排索引,其实就是doc values
+* 在建立索引的时候,一方面会建立倒排索引,以供搜索用;一方面会建立正排索引,也就是doc values,以供排序,聚合,过滤等操作使用
+* doc values是被保存在磁盘上的,此时如果内存足够,os会自动将其缓存在内存中,性能还是会很高;如果内存不足够,os会将其写入磁盘上
+
+
+
+## query phase
+
+
+
+* 工作流程:
+
+  * 搜索请求发送到某一个coordinate node,构建一个priority queue,长度以paging操作from和size为准,默认为10
+
+  * coordinate node将请求转发到所有shard,每个shard本地搜索,并构建一个本地的priority queue
+
+  * 各个shard将自己的priority queue返回给coordinate node,并构建一个全局的priority queue
+
+
+
+### replica shard提升吞吐量
+
+
+
+* 一次请求要打到所有shard的一个replica/primary上,如果每个shard都有多个replica,那么同时并发过来的搜索请求可以同时打到其他的replica上
+
+
+
+## fetch phase
+
+
+
+* 工作流程:
+  * coordinate node构建完priority queue之后,就发送mget请求去所有shard上获取对应的document
+  * 各个shard将document返回给coordinate node
+  * coordinate node将合并后的document结果返回给client客户端
+
+* 一般搜索,如果不加from和size,就默认搜索前10条,按照_score排序
+
+
+
+## 搜索参数
+
+
+
+### preference
+
+
+
+* 决定了哪些shard会被用来执行搜索操作:`_primary, _primary_first, _local, _only_node:xyz, _prefer_node:xyz, _shards:2,3`
+* bouncing results问题,两个document排序,field值相同;不同的shard上,可能排序不同;每次请求轮询打到不同的replica shard上;每次页面上看到的搜索结果的排序都不一样.这就是bouncing result,也就是跳跃的结果
+* 搜索的时候,是轮询将搜索请求发送到每一个replica shard(primary shard),但是在不同的shard上,可能document的排序不同
+* 解决方案: 将preference设置为一个字符串,比如user_id,让每个user每次搜索都使用同一个replica shard执行,就不会看到bouncing results
+
+
+
+### routing
+
+
+
+* document文档路由,_id路由,routing=user_id,这样的话可以让同一个user对应的数据到一个shard上去
+
+
+
+### search_type
+
+
+
+* default: query_then_fetch
+* dfs_query_then_fetch: 可以提升revelance sort精准度
 
 
 
@@ -2046,6 +2959,121 @@ PUT /website/_doc/3
 * 减少脑裂应该进行角色分离,主节点和数据节点分开
 * 减少误判,延长主节点的心跳超时响应时间:discovery.zen.ping_timeout
 * 选举触发:discovery.zen.minimum_master_nodes,该属性定义在集群中有候选节点且相互连接的节点的最小数量为多少时,才能形成新的集群
+
+
+
+# 案例
+
+
+
+## 课程案例
+
+
+
+* mysql导入course表
+* ES中创建索引course
+* ES中创建映射: `PUT /course`
+
+```json
+{
+    "settings": {"number_of_shards": 1,"number_of_replicas": 0},
+    "mappings": {
+        "properties": {
+            "description" : {"analyzer" : "ik_max_word","search_analyzer": "ik_smart","type" : "text"},
+            "grade" : {"type" : "keyword"},
+            "id" : {"type" : "keyword"},
+            "mt" : {"type" : "keyword"},
+            "name" : {"analyzer" : "ik_max_word","search_analyzer": "ik_smart","type" : "text"},
+            "users" : {"index" : false,"type" : "text"},
+            "charge" : {"type" : "keyword"},
+            "valid" : {"type" : "keyword"},
+            "pic" : {"index" : false,"type" : "keyword"},
+            "qq" : {"index" : false,"type" : "keyword"},
+            "price" : {"type" : "float"},
+            "price_old" : {"type" : "float"},
+            "st" : {"type" : "keyword"},
+            "status" : {"type" : "keyword"},
+            "studymodel" : {"type" : "keyword"},
+            "teachmode" : {"type" : "keyword"},
+            "teachplan" : {"analyzer" : "ik_max_word","search_analyzer": "ik_smart","type" : "text"},
+            "expires" : {"type" : "date","format": "yyyy-MM-dd HH:mm:ss"},
+            "pub_time" : {"type" : "date","format": "yyyy-MM-dd HH:mm:ss"},
+            "start_time" : {"type" : "date","format": "yyyy-MM-dd HH:mm:ss"},
+            "end_time" : {"type" : "date","format": "yyyy-MM-dd HH:mm:ss"}
+        }
+    } 
+}
+```
+
+* Logstash创建模板文件: 从MySQL中读取数据,向ES中创建索引,这里需要提前创建mapping的模板文件以便Logstash使用.在Logstach的config目录创建course_template.json
+
+```json
+{
+    "mappings" : {
+        "doc" : {
+            "properties" : {
+                "charge" : {"type" : "keyword"},
+                "description" : {"analyzer" : "ik_max_word","search_analyzer" : "ik_smart","type" : "text"},
+                "end_time" : {"format" : "yyyy-MM-dd HH:mm:ss","type" : "date"},
+                "expires" : {"format" : "yyyy-MM-dd HH:mm:ss","type" : "date"},
+                "grade" : {"type" : "keyword"},
+                "id" : {"type" : "keyword"},
+                "mt" : {"type" : "keyword"},
+                "name" : {"analyzer" : "ik_max_word","search_analyzer" : "ik_smart","type" : "text"},
+                "pic" : {"index" : false,"type" : "keyword"},
+                "price" : {"type" : "float"},
+                "price_old" : {"type" : "float"},
+                "pub_time" : {"format" : "yyyy-MM-dd HH:mm:ss","type" : "date"},
+                "qq" : {"index" : false,"type" : "keyword"},
+                "st" : {"type" : "keyword"},
+                "start_time" : {"format" : "yyyy-MM-dd HH:mm:ss","type" : "date"},
+                "status" : {"type" : "keyword"},
+                "studymodel" : {"type" : "keyword"},
+                "teachmode" : {"type" : "keyword"},
+                "teachplan" : {"analyzer" : "ik_max_word","search_analyzer" : "ik_smart","type" : "text"},
+                "users" : {"index" : false,"type" : "text"},
+                "valid" : {"type" : "keyword"}
+            }
+        }
+    },
+    "template" : "course"
+}
+```
+
+* Logstash配置mysql.conf
+  * ES采用UTC时区问题,比北京时间早8小时,所以ES读取数据时让最后更新时间加8小时
+  * `where timestamp > date_add(:sql_last_value,INTERVAL 8 HOUR)`
+* Logstash每个执行完成会在/config/logstash_metadata记录执行时间下次以此时间为基准进行增量同步数据到索引库
+* 启动: `.\logstash.bat -f ..\config\mysql.conf`
+* 后台代码见**dream-study-search/**
+
+7后端代码
+
+7.1Controller
+
+```java
+@RestController
+@RequestMapping("/search/course")
+public class EsCourseController  {
+    @Autowired
+    EsCourseService esCourseService;
+
+    @GetMapping(value="/list/{page}/{size}")
+    public QueryResponseResult<CoursePub> list(@PathVariable("page") int page, @PathVariable("size") int size, CourseSearchParam courseSearchParam) {
+        return esCourseService.list(page,size,courseSearchParam);
+    }
+
+}
+```
+
+7.2
+
+```
+@Service
+public class EsCourseService {
+   
+}
+```
 
 
 

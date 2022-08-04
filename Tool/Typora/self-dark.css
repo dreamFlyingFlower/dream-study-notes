@@ -12,6 +12,7 @@
     --self-bg-color: #2b2b2b;
     --self-preferences-text-color: #acb7c4;
     --self-text-color: white;
+    --self-code-selected-bg-color: green;
 }
 
 html {
@@ -279,6 +280,7 @@ tt {
 code {
     background-color: #f3f4f4;
     padding: 0 2px 0 2px;
+
 }
 
 .md-fences {
@@ -529,6 +531,21 @@ input:not([type=range]):not([type=color]):focus {
 /*代码块圆角*/
 #write pre.md-fences {
     border-radius: 0.7em;
+    background-color: var(--self-bg-color);
+}
+
+/*代码块字体颜色*/
+.cm-s-inner .cm-property{
+	color: var(--self-main-color);
+}
+
+.cm-s-inner .cm-variable{
+	color: var(--self-text-color);
+}
+
+.CodeMirror-selected, .CodeMirror-selectedtext {
+    background: var(--self-code-selected-bg-color);
+    color: white;
 }
 
 /*文本选中颜色*/

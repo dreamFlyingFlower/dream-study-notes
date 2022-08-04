@@ -42,12 +42,10 @@
 * StackOverflow论坛,IT问题,程序的报错,提交上去,有人会跟你讨论和回答,全文检索,搜索相关问题和答案,程序报错了,就会将报错信息粘贴到里面去,搜索有没有对应的答案
 * GitHub,开源代码管理,搜索上千亿行代码
 * 站内搜索(电商,招聘,门户,等等),IT系统搜索(OA,CRM,ERP,等等),数据分析(ES热门的一个使用场景)
-* 电商网站,检索商品
+* 电商网站,检索商品,传统论坛页面等
 * 日志数据分析,logstash采集日志,ES进行复杂的数据分析(ELK技术)
-
 * 商品价格监控网站,用户设定某商品的价格阈值,当低于该阈值的时候,发送通知消息给用户
-
-* BI系统,商业智能(Business Intelligence).大型连锁超市,分析全国网点传回的数据,分析各个商品在什么季节的销售量最好、利润最高.成本管理,店面租金、员工工资、负债等信息进行分析.从而部署下一个阶段的战略目标.
+* BI系统,商业智能(Business Intelligence).大型连锁超市,分析全国网点传回的数据,分析各个商品在什么季节的销售量最好、利润最高.成本管理,店面租金、员工工资、负债等信息进行分析.从而部署下一个阶段的战略目标
 
 
 
@@ -62,6 +60,8 @@
 
 
 ## 分片
+
+
 
 * 一个分片是一个底层的工作单元,保存了全部数据中的一部分,可以认为是一个数据区
 * 所有文档被存储和索引到分片内,但应用程序是直接与索引而不是分片进行交互
@@ -543,9 +543,9 @@ GET /_analyze
 
 * `GET /_cat/health?v`:查看集群状态
 
-  * green：每个索引的primary shard和replica shard都是active状态的
-  * yellow：每个索引的primary shard都是active状态的,但是部分replica shard不是active状态,处于不可用的状态
-  * red：不是所有索引的primary shard都是active状态的,部分索引有数据丢失了
+  * green: 每个索引的primary shard和replica shard都是active状态的
+  * yellow: 每个索引的primary shard都是active状态的,但是部分replica shard不是active状态,处于不可用的状态
+  * red: 不是所有索引的primary shard都是active状态的,部分索引有数据丢失了
 
   ```
   epoch      timestamp cluster       status node.total node.data shards pri relo init unassign pending_tasks max_task_wait_time active_shards_percent
@@ -1893,6 +1893,646 @@ PUT /test_index/_doc/15?routing=num
 
 
 
+# Document
+
+
+
+## 内置字段
+
+
+
+```json
+{
+    "_index" : "book",
+    "_type" : "_doc",
+    "_id" : "1",
+    "_version" : 1,
+    "_seq_no" : 10,
+    "_primary_term" : 1,
+    "found" : true,
+    "_source" : {
+        "name" : "Bootstrap开发教程1",
+        "description" : "Bootstrap是由Twitter推出的一个前台页面开发css框架",
+        "studymodel" : "201002",
+        "price" : 38.6,
+        "timestamp" : "2019-08-25 19:11:35",
+        "pic" : "group1/M00/00/00/wKhlQFs6RCeAY0pHAAJx5ZjNDEM428.jpg",
+        "tags" : [
+            "bootstrap",
+            "开发"
+        ]
+    }
+}
+```
+
+
+
+### _index
+
+
+
+-  此文档属于哪个索引
+-  类似数据放在一个索引中,数据库中表的定义规则,各个索引存储和搜索时互不影响
+-  定义规则: 英文小写,尽量不要使用特殊字符
+
+
+
+### _type
+
+
+
+-  类别
+-  以后的es9将彻底删除此字段
+
+
+
+### _id
+
+
+
+* 文档的唯一标识,类似表的主键,结合索引可以标识和定义一个文档
+* 生成: 手动(put /index/_doc/id),自动
+
+
+
+## 生成文档id
+
+
+
+### 手动生成id
+
+
+
+* `PUT /{index}/_doc/id`
+
+```json
+PUT /test_index/_doc/1
+{
+  "test_field": "test"
+}
+```
+
+
+
+### 自动生成id
+
+
+
+* `POST /{index}/_doc`
+
+```json
+POST /test_index/_doc
+{
+  "test_field": "test1"
+}
+```
+
+
+
+```json
+{
+  "_index" : "test_index",
+  "_type" : "_doc",
+  "_id" : "x29LOm0BPsY0gSJFYZAl",
+  "_version" : 1,
+  "result" : "created",
+  "_shards" : {
+    "total" : 2,
+    "successful" : 1,
+    "failed" : 0
+  },
+  "_seq_no" : 0,
+  "_primary_term" : 1
+}
+```
+
+* 自动id特点: 长度为20个字符,URL安全,base64编码,GUID,分布式生成不冲突
+
+
+
+## _source
+
+
+
+* 插入数据时的所有字段和值,在get获取数据时,在_source字段中原样返回
+* `GET /book/_doc/1`: 查询id为1的所有字段
+
+
+
+### 自定义返回字段
+
+
+
+* 就像sql不要select *,而要select name,price from book …一样
+* `GET  /book/_doc/1?__source_includes=name,price`: 指定返回字段
+
+```json
+{
+  "_index" : "book",
+  "_type" : "_doc",
+  "_id" : "1",
+  "_version" : 1,
+  "_seq_no" : 10,
+  "_primary_term" : 1,
+  "found" : true,
+  "_source" : {
+    "price" : 38.6,
+    "name" : "Bootstrap开发教程1"
+  }
+}
+```
+
+
+
+## 全量更新
+
+
+
+* `PUT /{index}/_doc/{id}`
+
+```json
+PUT /test_index/_doc/1
+{
+  "test_field": "test"
+}
+```
+
+
+
+## 强制创建
+
+
+
+* 为防止覆盖原有数据,在新增时,设置为强制创建,不会覆盖原有文档
+* `PUT /{index}/ _doc/{id}/_create`
+
+```json
+PUT /test_index/_doc/1/_create
+{
+  "test_field": "test"
+}
+```
+
+* 已有相同数据时会返回错误
+
+```json
+{
+    "error": {
+        "root_cause": [
+            {
+                "type": "version_conflict_engine_exception",
+                "reason": "[2]: version conflict, document already exists (current version [1])",
+                "index_uuid": "lqzVqxZLQuCnd6LYtZsMkg",
+                "shard": "0",
+                "index": "test_index"
+            }
+        ],
+        "type": "version_conflict_engine_exception",
+        "reason": "[2]: version conflict, document already exists (current version [1])",
+        "index_uuid": "lqzVqxZLQuCnd6LYtZsMkg",
+        "shard": "0",
+        "index": "test_index"
+    },
+    "status": 409
+}
+```
+
+
+
+## 删除
+
+
+
+* `DELETE /{index}/_doc/{id}`
+* 旧文档的内容不会立即删除,只是标记为deleted,适当的时机,集群会将这些文档删除
+
+
+
+## 局部更新
+
+
+
+* 使用`PUT /index/type/id` 为文档全量替换,需要将文档所有数据提交,而partial update局部替换则只修改变动字段
+* `POST /{index}/type/{id}/_update`
+
+```json
+post /index/type/id/_update 
+{
+   "doc": {
+      "field": "value"
+   }
+}
+```
+
+
+
+## 脚本
+
+
+
+* ES可以内置脚本执行复杂操作,例如painless脚本.groovy脚本在ES6以后就不支持了,原因是耗内存,不安全远程注入漏洞
+
+
+
+### 内置脚本
+
+
+
+* 修改文档6的num字段,+1
+
+```json
+POST /test_index/_doc/6/_update
+{
+   "script" : "ctx._source.num+=1"
+}
+```
+
+* 搜索所有文档,将num字段乘以2输出
+
+```json
+GET /test_index/_search
+{
+  "script_fields": {
+    "my_doubled_field": {
+      "script": {
+       "lang": "expression",
+        "source": "doc['num'] * multiplier",
+        "params": {
+          "multiplier": 2
+        }
+      }
+    }
+  }
+}
+```
+
+* 返回
+
+```json
+{
+    "_index" : "test_index",
+    "_type" : "_doc",
+    "_id" : "7",
+    "_score" : 1.0,
+    "fields" : {
+        "my_doubled_field" : [
+            10.0
+        ]
+    }
+}
+```
+
+
+
+### 外部脚本
+
+
+
+* [官方文档](https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-scripting-using.html)
+* Painless是内置支持的,脚本内容可以通过多种途径传给 es,包括 rest 接口,或者放到 config/scripts目录等,默认开启
+* 脚本性能低下,且容易发生注入,不建议使用
+
+
+
+## ES并发
+
+
+
+* 如同秒杀,多线程情况下,es同样会出现并发冲突问题
+* es内部主从同步时,是多线程异步,乐观锁机制
+
+
+
+### 基于_version乐观锁
+
+
+
+* ES对于文档的增删改都是基于版本号.新增多次文档,返回版本号递增
+
+
+
+### 案例
+
+
+
+* 客户端基于_version并发操作流程
+* 新建文档
+
+```json
+PUT /test_index/_doc/5
+{
+  "test_field": "test001"
+}
+```
+
+* 返回:  
+
+```json
+{
+  "_index" : "test_index",
+  "_type" : "_doc",
+  "_id" : "3",
+  "_version" : 1,
+  "result" : "created",
+  "_shards" : {
+    "total" : 2,
+    "successful" : 1,
+    "failed" : 0
+  },
+  "_seq_no" : 8,
+  "_primary_term" : 1
+}
+```
+
+* 客户端1修改,带版本号1
+* 先获取数据的当前版本号
+
+```
+GET /test_index/_doc/5
+```
+
+* 更新文档
+
+```
+PUT /test_index/_doc/5?version=1
+{
+  "test_field": "test001"
+}
+PUT /test_index/_doc/5?if_seq_no=21&if_primary_term=1
+{
+  "test_field": "test001"
+}
+```
+
+* 客户端2并发修改,带版本号1
+
+```
+PUT /test_index/_doc/5?version=1
+{
+  "test_field": "test001"
+}
+PUT /test_index/_doc/5?if_seq_no=21&if_primary_term=1
+{
+  "test_field": "test001"
+}
+```
+
+* 报错
+* 客户端2重新查询,得到最新版本为2,seq_no=22
+
+```
+GET /test_index/_doc/4
+```
+
+* 客户端2并发修改,带版本号2
+
+```
+PUT /test_index/_doc/4?version=2
+{
+  "test_field": "test001"
+}
+es7
+PUT /test_index/_doc/5?if_seq_no=22&if_primary_term=1
+{
+  "test_field": "test001"
+}
+```
+
+* 修改成功
+
+
+
+## 手动控制版本号
+
+
+
+* 已有数据是在数据库中,有自己手动维护的版本号的情况下,可以使用external version控制
+* 修改时external version要大于当前文档的_version
+* 基于_version时,修改的文档version等于当前文档的版本号
+* `?version=1&version_type=external`
+* 新建文档
+
+```
+PUT /test_index/_doc/4
+{
+  "test_field": "test001"
+}
+```
+
+* 客户端1修改文档
+
+```
+PUT /test_index/_doc/4?version=2&version_type=external
+{
+  "test_field": "test001"
+}
+```
+
+* 客户端2同时修改
+
+```
+PUT /test_index/_doc/4?version=2&version_type=external
+{
+  "test_field": "test002"
+}
+```
+
+* 返回: 
+
+```json
+{
+    "error": {
+        "root_cause": [
+            {
+                "type": "version_conflict_engine_exception",
+                "reason": "[4]: version conflict, current version [2] is higher or equal to the one provided [2]",
+                "index_uuid": "-rqYZ2EcSPqL6pu8Gi35jw",
+                "shard": "1",
+                "index": "test_index"
+            }
+        ],
+        "type": "version_conflict_engine_exception",
+        "reason": "[4]: version conflict, current version [2] is higher or equal to the one provided [2]",
+        "index_uuid": "-rqYZ2EcSPqL6pu8Gi35jw",
+        "shard": "1",
+        "index": "test_index"
+    },
+    "status": 409
+}
+```
+
+* 客户端2重新查询数据: `GET /test_index/_doc/4`
+* 客户端2重新修改数据
+
+```
+PUT /test_index/_doc/4?version=3&version_type=external
+{
+  "test_field": "test002"
+}
+```
+
+
+
+## retry_on_conflict
+
+
+
+* 更新时指定重试次数: `POST /test_index/_doc/5/_update?retry_on_conflict=3`
+
+```json
+{
+    "doc": {
+        "test_field": "test001"
+    }
+}
+```
+
+* 与 _version结合使用: `POST /test_index/_doc/5/_update?retry_on_conflict=3&version=22&version_type=external`
+
+```json
+{
+    "doc": {
+        "test_field": "test001"
+    }
+}
+```
+
+
+
+## 批量查询
+
+
+
+### mget
+
+
+
+* `GET /_mget`
+
+```json
+{
+    "docs" : [
+        {
+            "_index" : "test_index",
+            "_type" :  "_doc",
+            "_id" :    1
+        },
+        {
+            "_index" : "test_index",
+            "_type" :  "_doc",
+            "_id" :    7
+        }
+    ]
+}
+```
+
+* 返回: 
+
+```json
+{
+    "docs" : [
+        {
+            "_index" : "test_index",
+            "_type" : "_doc",
+            "_id" : "2",
+            "_version" : 6,
+            "_seq_no" : 12,
+            "_primary_term" : 1,
+            "found" : true,
+            "_source" : {
+                "test_field" : "test12333123321321"
+            }
+        },
+        {
+            "_index" : "test_index",
+            "_type" : "_doc",
+            "_id" : "3",
+            "_version" : 6,
+            "_seq_no" : 18,
+            "_primary_term" : 1,
+            "found" : true,
+            "_source" : {
+                "test_field" : "test3213"
+            }
+        }
+    ]
+}
+```
+
+
+
+### 同一索引下批量查询
+
+
+
+* `GET /test_index/_mget`
+
+```json
+{
+    "docs" : [
+        {
+            "_id" :    2
+        },
+        {
+            "_id" :    3
+        }
+    ]
+}
+```
+
+
+
+### 搜索
+
+
+
+* `POST /test_index/_doc/_search`
+
+```json
+{
+    "query": {
+        "ids" : {
+            "values" : ["1", "7"]
+        }
+    }
+}
+```
+
+
+
+## 批量增删改
+
+
+
+* Bulk 操作解释将文档的增删改查一些列操作,通过一次请求全都做完,减少网络传输次数
+
+```
+POST /_bulk
+{"action": {"metadata"}}
+{"data"}
+```
+
+* 如下操作,删除5,新增14,修改2
+
+```
+POST /_bulk
+{ "delete": { "_index": "test_index",  "_id": "5" }} 
+{ "create": { "_index": "test_index",  "_id": "14" }}
+{ "test_field": "test14" }
+{ "update": { "_index": "test_index",  "_id": "2"} }
+{ "doc" : {"test_field" : "bulk test"} } 
+```
+
+-  delete: 删除一个文档,只要1个json串就可以了
+-  create: 相当于强制创建`PUT /index/type/id/_create`
+-  index: 普通的put操作,可以是创建文档,也可以是全量替换文档
+-  update: 执行的是局部更新partial update操作
+-  格式: 每个json不能换行,相邻json必须换行
+-  隔离: 每个操作互不影响,操作失败的行会返回其失败信息
+-  bulk请求一次不要太大,否则一下积压到内存中,性能会下降,一次请求几千个操作、大小在几M正好
+
+
+
 # Index索引
 
 
@@ -1984,7 +2624,7 @@ PUT /my_index/_settings
 
 
 
-为了安全起见,防止恶意删除索引,删除时必须指定索引名：
+为了安全起见,防止恶意删除索引,删除时必须指定索引名: 
 
 elasticsearch.yml
 
@@ -3361,7 +4001,7 @@ PUT /company/_doc/1
 
 * date_histogram,按照指定的某个date类型的日期field,以及日期interval,按照一定的日期间隔,去划分bucket
 * min_doc_count: 即使某个日期interval中一条数据都没有,这个区间也是要返回的,不然默认会过滤掉这个区间
-* extended_bounds,min,max：划分bucket的时候,会限定在这个起始日期,和截止日期内
+* extended_bounds,min,max: 划分bucket的时候,会限定在这个起始日期,和截止日期内
 
 ```json
 // GET /tvs/_search
@@ -3733,6 +4373,96 @@ POST /_sql?format=txt
     }
 }
 ```
+
+
+
+# ES内部机制
+
+
+
+-   分布式机制: 分布式数据存储及共享
+-   分片机制: 数据存储到哪个分片,副本数据写入
+-   集群发现机制: cluster discovery,新启动es实例,自动加入集群
+-   shard负载均衡: 大量数据写入及查询,es会将数据平均分配
+-   shard副本: 新增副本数,分片重分配
+-   新增或减少es实例时,es集群会将数据重新分配
+
+
+
+## 扩容
+
+
+
+* 垂直扩容: 使用更加强大的服务器替代老服务器.但单机存储及运算能力有上限,且成本直线上升
+* 水平扩容: 采购更多服务器,加入集群,大数据
+
+
+
+## master节点
+
+ 
+
+* 创建删除节点
+
+-  创建删除索引
+
+
+
+## 节点对等架构
+
+
+
+- 节点对等,每个节点都能接收所有的请求
+- 自动请求路由
+- 响应收集
+
+
+
+## 分片,副本
+
+
+
+* 每个index包含一个或多个shard
+* 每个shard都是一个最小工作单元,承载部分数据,lucene实例,完整的建立索引和处理请求的能力
+* 增减节点时,shard会自动在nodes中负载均衡
+* primary shard和replica shard,每个document只存在于某一个primary shard以及其对应的replica shard中
+* replica shard是primary shard的副本,负责容错,以及承担读请求负载
+* primary shard的数量在创建索引的时候就固定了,replica shard的数量可以随时修改
+* primary shard的默认数量是1,replica默认是1,默认共有2个shard.ES7以前primary shard的默认数量是5,replica默认是1,默认有10个shard,5个primary shard,5个replica shard
+* primary shard不能和自己的replica shard放在同一个节点上,否则节点宕机,primary shard和副本都丢失,起不到容错的作用
+
+
+
+## 单node创建index
+
+
+
+* 单node环境下,创建一个index,有3个primary shard,3个replica shard,集群status是yellow
+* 此时只会将3个primary shard分配到仅有的一个node上去,另外3个replica shard是无法分配的
+* 集群可以正常工作,但是一旦出现节点宕机,数据全部丢失,而且集群不可用,无法承接任何请求
+
+
+
+## 横向扩容
+
+
+
+- 分片自动负载均衡,分片向空闲机器转移
+- 每个节点存储更少分片,系统资源给与每个分片的资源更多,整体集群性能提高
+- 扩容极限: 节点数大于整体分片数,则必有空闲机器
+- 超出扩容极限时,可以增加副本数,如设置副本数为2,总共3*3=9个分片,9台机器同时运行,存储和搜索性能更强,容错性更好
+- 容错性: 只要一个索引的所有主分片在,集群就就可以运行
+
+
+
+## 容错
+
+
+
+* master选举,replica容错,数据恢复,以3分片,2副本数,3节点为例:
+* master node宕机,自动master选举,集群为red
+* replica容错: 新master将replica提升为primary shard,yellow
+* 重启宕机node,master copy replica到该node,使用原有的shard并同步宕机后的修改,green
 
 
 

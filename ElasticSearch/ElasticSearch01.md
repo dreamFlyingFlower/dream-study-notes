@@ -6,18 +6,6 @@
 
 
 
-* Elasticsearch是基于Lucene的全文检索库,本质也是存储数据,很多概念与MySQL类似
-* Elasticsearch本身就是分布式的,因此即便只有一个节点,ES默认也会对数据进行分片和副本操作,当向集群添加新数据时,数据也会在新加入的节点中进行平衡
-* 对比关系:
-
-| ES                     | MySQL           |
-| ---------------------- | --------------- |
-| 索引,index             | 数据库,database |
-| 类型,type(es7以后废除) | 表,table        |
-| 文档,document          | 行,row          |
-| 字段,field             | 列,column       |
-|                        |                 |
-
 ## 索引操作
 
 
@@ -29,8 +17,6 @@
 ```
 GET /_cat/indices?v
 ```
-
-![1563199326580](assets/1563199326580.png)
 
 es 中会默认存在一个名为.kibana和.kibana_task_manager的索引
 
@@ -70,11 +56,19 @@ PUT /索引名
 
 演示:说明索引创建成功
 
-![1563200563246](assets/1563200563246.png)
+```
+{
+	"acknowledged": true,
+	"shards_acknowledged": true,
+	"index": "test_index"
+}
+```
+
+
 
 再次查询,可以看到刚刚创建的索引:
 
-![1563200665166](assets/1563200665166.png)
+
 
 
 
@@ -96,9 +90,15 @@ GET /索引名
 DELETE /索引库名
 ```
 
-演示:
 
-![1563201353271](assets/1563201353271.png)
+
+```
+{
+	"acknowledged": true
+}
+```
+
+
 
 查看atguigu:
 
@@ -789,11 +789,9 @@ size:取多少条
 
 ## 高亮(highlight)
 
-查看百度高亮的原理:
 
-![1563258499361](assets/1563258499361.png)
 
-发现:高亮的本质是给关键字添加了<em>标签,在前端再给该标签添加样式即可。
+高亮的本质是给关键字添加了<em>标签,在前端再给该标签添加样式即可
 
 
 
@@ -1256,22 +1254,6 @@ GET /atguigu/_search
 
 # Spring整合ES
 
-目前市面上有两类客户端
-
-一类是TransportClient 为代表的ES原生客户端,不能执行原生dsl语句必须使用它的Java api方法。
-
-另外一种是以Rest Api为主的missing client,最典型的就是jest。 这种客户端可以直接使用dsl语句拼成的字符串,直接传给服务端,然后返回json字符串再解析。
-
-两种方式各有优劣,但是最近elasticsearch官网,宣布计划在7.0以后的版本中废除TransportClient。以RestClient为主。
-
-![1563260042308](assets/1563260042308.png)
-
-由于原生的Elasticsearch客户端API非常麻烦。所以这里直接学习Spring提供的套件:Spring Data Elasticsearch。
-
-
-
-**spring-data-Elasticsearch 使用之前,必须先确定版本,elasticsearch 对版本的要求比较高。**
-
 
 
 ## 创建module
@@ -1383,13 +1365,9 @@ class EsDemoApplicationTests {
 
 ## Repository文档操作
 
-Spring Data 的强大之处,就在于你不用写任何DAO处理,自动根据方法名或类的信息进行CRUD操作。只要你定义一个接口,然后继承Repository提供的一些子接口,就能具备各种基本的CRUD功能。
 
- ![1575806287671](assets/1575806287671.png)
 
-其中ElasticsearchRepository接口功能最强大。该接口的方法包括:
-
-![1575806405547](assets/1575806405547.png)
+ElasticsearchRepository
 
 
 
@@ -1407,8 +1385,6 @@ void testAdd(){
 
 修改和新增是同一个接口,区分的依据就是id,这一点跟我们在页面发起PUT请求是类似的。
 
-
-
 ### 删除
 
 ```java
@@ -1423,8 +1399,6 @@ void testDelete(){
 ## 查询
 
 ### 基本查询
-
-![1575848896764](assets/1575848896764.png)
 
 
 

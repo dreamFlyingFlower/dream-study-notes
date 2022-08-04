@@ -4,21 +4,26 @@
     /*自定义全局变量*/
     --self-font-family: "Comic Sans MS", "华文楷体", sans-serif;
     --self-main-color: rgba(128, 30, 255, 1);
-    --self-shadow-color : rgb(178, 80, 255);
-    --self-blockquote-color : rgba(117, 117, 117, 0.9);
-    --self-light-color : rgb(248, 242, 255);
-    --self-quote-title-font-size : 0.9em;
-    --self-quote-tag-font-size : 1.1em;
+    --self-shadow-color: rgb(178, 80, 255);
+    --self-blockquote-color: rgba(117, 117, 117, 0.9);
+    --self-light-color: rgb(248, 242, 255);
+    --self-quote-title-font-size: 0.9em;
+    --self-quote-tag-font-size: 1.1em;
+    --self-bg-color: #2b2b2b;
+    --self-preferences-text-color: #acb7c4;
+    --self-text-color: white;
 }
 
 html {
     font-size: 16px;
     -webkit-font-smoothing: antialiased;
+    background-color: #212121;
+    color: var(--self-text-color);
 }
 
 body {
     font-family: var(--self-font-family);
-    color: rgb(51, 51, 51);
+    color: var(--self-text-color);
     line-height: 1.6;
 }
 
@@ -470,7 +475,7 @@ code {
 }
 
 /*搜索框*/
-input:not([type=range]):not([type=color]){
+input:not([type=range]):not([type=color]) {
     outline: none;
     border: 2px solid var(--self-main-color);
     border-radius: .7em;
@@ -486,16 +491,16 @@ input:not([type=range]):not([type=color]):focus {
 }
 
 /*大纲padding*/
-.outline-content{
+.outline-content {
     padding: 3px 5px;
 }
 
 /*大纲展开符号间隔*/
-.outline-expander{
+.outline-expander {
     width: 0.5rem;
 }
 
-.outline-expander:before{
+.outline-expander:before {
     margin-right: 2px;
 }
 
@@ -548,7 +553,7 @@ span::-webkit-selection {
     color: var(--self-blockquote-color);
     border-left: 6px solid var(--self-main-color);
     background: var(--self-light-color);
-    border-radius : 0.5em;
+    border-radius: 0.5em;
     line-height: 20px;
 }
 
@@ -653,4 +658,117 @@ span::-webkit-selection {
     left: 0;
     vertical-align: baseline;
     border-width: 0;
+}
+
+#typora-sidebar {
+    background-color: var(--self-bg-color);
+}
+
+/*preference panel*/
+#megamenu-content {
+    background-image: none !important;
+    background-color: var(--self-bg-color);
+}
+
+#top-titlebar {
+    height: inherit;
+    background-color: var(--self-bg-color);
+}
+
+#megamenu-menu-sidebar {
+    background-color: var(--self-bg-color);
+    color: var(--self-preferences-text-color);
+}
+
+.long-btn {
+    width: inherit;
+    min-width: 300px;
+    border: 1px solid var(--self-preferences-text-color);
+    border-radius: 6px;
+}
+
+.megamenu-menu-panel h1 {
+    margin-bottom: 3rem;
+    text-align: left;
+}
+
+.megamenu-menu-panel h1,
+.megamenu-menu-panel h2 {
+    font-weight: normal;
+}
+
+#recent-file-panel-search-input {
+    height: 45px;
+    border: none;
+    border-bottom: 1px solid var(--self-preferences-text-color);
+    padding-left: 8px;
+}
+
+#recent-file-panel-search-input::placeholder {
+    color: var(--self-preferences-text-color);
+    opacity: .5;
+}
+
+.megamenu-menu-header {
+    border-bottom: none;
+}
+
+#recent-file-panel-action-btn {
+    background: none;
+    border: none;
+}
+
+#recent-file-panel-action-btn-container {
+    float: none;
+    display: inline-block;
+}
+
+#top-titlebar .toolbar-icon.btn.hover,
+#top-titlebar .toolbar-icon.btn:hover {
+    background-color: #222222;
+    color: var(--self-preferences-text-color);
+}
+
+.megamenu-menu-panel .btn:hover {
+    background-color: #222222 !important;
+    color: var(--self-preferences-text-color);
+}
+
+#recent-file-panel tbody tr:nth-child(2n-1),
+.megamenu-menu-panel table thead,
+.megamenu-menu-panel table tr {
+    background-color: transparent;
+}
+
+.megamenu-menu-panel table {
+    font-weight: normal;
+}
+
+#megamenu-back-btn {
+    color: var(--self-preferences-text-color);
+    border: 1px solid var(--self-preferences-text-color);
+}
+
+.megamenu-menu-header #megamenu-menu-header-title {
+    color: var(--self-preferences-text-color);
+}
+
+header,
+.context-menu,
+.megamenu-content,
+footer {
+    font-family: var(--self-font-family);
+}
+
+.ty-preferences select {
+    padding-left: 2px;
+}
+
+.preference-item-hint {
+    font-size: 14px;
+}
+
+a.ty-link {
+    color: var(--self-main-color);
+    margin: 0 .2rem;
 }

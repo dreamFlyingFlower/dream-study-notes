@@ -2,7 +2,7 @@
 
 
 
-# 概述6,8,9,10,11
+# 概述6,8
 
 
 
@@ -401,7 +401,14 @@ http.cors.allow-origin: "*"
   }
   ```
 
-  
+* 结果:
+
+  * token 实际存储的term 关键字
+  * position 在此词条在原文本中的位置
+  * start_offset/end_offset字符在原始字符串中的位置
+
+
+
 
 ### 安装
 
@@ -587,6 +594,35 @@ GET /_analyze
       "timestamp":"2019-08-25 19:11:35",
       "pic":"group1/M00/00/00/wKhlQFs6RCeAY0pHAAJx5ZjNDEM428.jpg",
       "tags": [ "bootstrap", "dev"]
+  }
+  ```
+
+* `GET /_mapping`: 查看所有mapping
+
+* `GET /{index}/_mapping/`: 查看mapping
+
+* `PUT /{index}/_mapping`: 创建mapping,需要先创建索引,且还没有插入数据
+
+  ```json
+  // PUT /book/_mapping
+  {
+      "properties": {
+          "name": {
+              "type": "text"
+          },
+          "description": {
+              "type": "text",
+              "analyzer":"english",
+              "search_analyzer":"english"
+          },
+          "pic":{
+              "type":"text",
+              "index":false
+          },
+          "studymodel":{
+              "type":"text"
+          }
+      }
   }
   ```
 
@@ -1755,6 +1791,1065 @@ PUT /website/_doc/3
 * 与分页区别: 
   * 分页给用户看的  deep paging
   * scroll是用户系统内部操作,如下载批量数据,数据转移.零停机改变索引映射
+
+
+
+# 文档存储机制
+
+
+
+## 数据路由
+
+
+
+* 一个文档,最终会落在主分片的一个分片上,数据路由决定文档最终落在那个分片上
+
+
+
+### 路由算法
+
+
+
+* 哈希值对主分片数取模
+
+```
+shard = hash(routing) % number_of_primary_shards
+```
+
+* 对一个文档进行CRUDd时,都会带一个路由值 routing number,默认为文档_id(可能是手动指定,也可能是自动生成)
+* 存储1号文档,经过哈希计算,哈希值为2,此索引有3个主分片,那么计算2%3=2,就算出此文档在P2分片上
+* 决定一个document在哪个shard上,最重要的一个值就是routing值,默认是_id,也可以手动指定,相同的routing值,计算的hash值是相同的
+
+
+
+### 手动指定routing number
+
+
+
+```
+PUT /test_index/_doc/15?routing=num
+{
+  "num": 0,
+  "tags": []
+}
+```
+
+* 可以指定已有数据的一个属性为路由值,好处是可以定制一类文档数据存储到一个分片中,缺点是设计不好,会造成数据倾斜
+* 不同文档尽量放到不同的索引中,剩下的事情交给es集群自己处理
+
+
+
+### 主分片数量不可变
+
+
+
+## 文档增删改
+
+
+
+* 增删改可以看做update,都是对数据的改动,一个改动请求发送到es集群,经历以下四个步骤:
+  * 客户端选择一个node发送请求过去,这个node就是coordinating node(协调节点)
+  * coordinating node,对document进行路由,将请求转发给对应的node(有primary shard)
+  * 实际的node上的primary shard处理请求,然后将数据同步到replica node
+  * coordinating node,如果发现primary node和所有replica node都搞定之后,就返回响应结果给客户端
+
+
+
+## 文档查询
+
+
+
+* 客户端发送请求到任意一个node,成为coordinate node
+* coordinate node对document进行路由,将请求转发到对应的node,此时会使用round-robin随机轮询算法,在primary shard以及其所有replica中随机选择一个,让读请求负载均衡
+* 接收请求的node返回document给coordinate node
+* coordinate node返回document给客户端
+* 特殊情况: document如果还在建立索引过程中,可能只有primary shard有,任何一个replica shard都没有,此时可能会导致无法读取到document,但是document完成索引建立之后,primary shard和replica shard就都有了
+
+
+
+## bulk api
+
+
+
+```json
+// POST /_bulk
+{ "delete": { "_index": "test_index",  "_id": "5" }} \n
+{ "create": { "_index": "test_index",  "_id": "14" }}\n
+{ "test_field": "test14" }\n
+{ "update": { "_index": "test_index",  "_id": "2"} }\n
+{ "doc" : {"test_field" : "bulk test"} }\n
+```
+
+
+
+* bulk中的每个操作都可能要转发到不同的node的shard去执行
+* 允许任意的换行,es拿到那种标准格式的json串以后,要按照下述流程去进行处理
+  * 直接按照换行符切割json
+  * 对每两个一组的json,读取meta,进行document路由
+  * 直接将对应的json发送到node上去
+* 耗费更多内存,更多的jvm gc开销
+* bulk size最佳大小一般建议在几千条,大小在10MB左右,如果此时有多个请求同时发送,会极大的消耗内存.占用更多的内存可能会积压其他请求的内存使用量,此时就可能会导致其他请求的性能急速下降
+* 占用内存更多会导致java虚拟机的垃圾回收次数更多,更频繁,每次要回收的垃圾对象更多,耗费的时间更多
+
+
+
+# Index索引
+
+
+
+## 索引管理
+
+
+
+### 创建索引
+
+
+
+* 直接put数据 PUT index/_doc/1,es会自动生成索引,并建立动态映射dynamic mapping
+* 在生产上,需要自己手动建立索引和映射,是为了更好地管理索引,就像数据库的建表语句一样
+
+
+
+### 创建索引
+
+
+
+```json
+// PUT /my_index
+{
+    "settings": {
+        "number_of_shards": 1,
+        "number_of_replicas": 1
+    },
+    "mappings": {
+        "properties" : {
+            "field1" : { "type" : "text" }
+        }
+    },
+    // 索引别名
+    "aliases": {
+        "default_index": {}
+    } 
+}
+```
+
+
+
+### 插入数据
+
+
+
+```
+POST /my_index/_doc/1
+{
+	"field1":"java",
+	"field2":"js"
+}
+```
+
+
+
+### 查询
+
+
+
+* `GET /my_index/_doc/1`,`GET /default_index/_doc/1`:查询数据
+* `GET /my_index/_mapping`,`GET /my_index/_setting`: 查询索引结构信息
+
+
+
+### 修改索引
+
+
+
+```console
+PUT /my_index/_settings
+{
+    "index" : {
+        "number_of_replicas" : 2
+    }
+}
+```
+
+
+
+### 删除索引
+
+
+
+* `DELETE /my_index`: 删除单个索引
+* `DELETE /index_one,index_two`: 同时删除2个索引
+* `DELETE /index_*`: 删除index_开头的索引
+* `DELETE /_all`: 删除所有索引
+
+
+
+为了安全起见,防止恶意删除索引,删除时必须指定索引名：
+
+elasticsearch.yml
+
+action.destructive_requires_name: true
+
+
+
+## 定制分词器
+
+
+
+### 默认的分词器
+
+
+
+* standard: 对中文不友好
+* 分词三个组件,character filter,tokenizer,token filter
+* standard tokenizer: 以单词边界进行切分
+* standard token filter: 什么都不做
+* lowercase token filter: 将所有字母转换为小写
+* stop token filer: 移除停用词,比如a the it等等,默认被禁用
+
+
+
+### 修改分词器的设置
+
+
+
+* 启用english停用词token filter
+
+```
+PUT /my_index
+{
+  "settings": {
+    "analysis": {
+      "analyzer": {
+        "es_std": {
+          "type": "standard",
+          "stopwords": "_english_"
+        }
+      }
+    }
+  }
+}
+```
+
+
+
+### 自定义分词器
+
+
+
+```
+PUT /my_index
+{
+  "settings": {
+    "analysis": {
+      "char_filter": {
+        "&_to_and": {
+          "type": "mapping",
+          "mappings": ["&=> and"]
+        }
+      },
+      "filter": {
+        "my_stopwords": {
+          "type": "stop",
+          "stopwords": ["the", "a"]
+        }
+      },
+      "analyzer": {
+        "my_analyzer": {
+          "type": "custom",
+          "char_filter": ["html_strip", "&_to_and"],
+          "tokenizer": "standard",
+          "filter": ["lowercase", "my_stopwords"]
+        }
+      }
+    }
+  }
+}
+```
+
+* 设置字段使用自定义分词器
+
+```
+PUT /my_index/_mapping/
+{
+  "properties": {
+    "content": {
+      "type": "text",
+      "analyzer": "my_analyzer"
+    }
+  }
+}
+```
+
+
+
+## type
+
+
+
+* type,是一个index中用来区分类似的数据的,类似的数据,但是可能有不同的fields,而且有不同的属性来控制索引建立、分词器.
+* field的value,在底层的lucene中建立索引的时候,全部是opaque bytes类型,不区分类型的
+* lucene是没有type的概念的,在document中,实际上将type作为一个document的field来存储,即`_type,es`通过_type来进行type的过滤和筛选
+
+
+
+### es中不同type存储机制
+
+
+
+* 一个index中的多个type是放在一起存储的,因此一个index下的type不能重名
+
+```json
+{
+    "goods": {
+        "mappings": {
+            "electronic_goods": {
+                "properties": {
+                    "name": {
+                        "type": "string",
+                    },
+                    "price": {
+                        "type": "double"
+                    },
+                    "service_period": {
+                        "type": "string"
+                    }			
+                }
+            },
+            "fresh_goods": {
+                "properties": {
+                    "name": {
+                        "type": "string",
+                    },
+                    "price": {
+                        "type": "double"
+                    },
+                    "eat_period": {
+                        "type": "string"
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+```json
+PUT /goods/electronic_goods/1
+{
+    "name": "小米空调",
+    "price": 1999.0,
+    "service_period": "one year"
+}
+```
+
+```json
+PUT /goods/fresh_goods/1
+{
+    "name": "澳洲龙虾",
+    "price": 199.0,
+    "eat_period": "one week"
+}
+```
+
+
+
+* es文档的底层存储形式
+
+```json
+{
+    "goods": {
+        "mappings": {
+            "_type": {
+                "type": "string",
+                "index": "false"
+            },
+            "name": {
+                "type": "string"
+            },
+            "price": {
+                "type": "double"
+            },
+            "service_period": {
+                "type": "string"
+            },
+            "eat_period": {
+                "type": "string"
+            }
+        }
+    }
+}
+```
+
+
+
+* 底层数据存储格式
+
+```json
+{
+    "_type": "electronic_goods",
+    "name": "小米空调",
+    "price": 1999.0,
+    "service_period": "one year",
+    "eat_period": ""
+}
+```
+
+```json
+{
+    "_type": "fresh_goods",
+    "name": "澳洲龙虾",
+    "price": 199.0,
+    "service_period": "",
+    "eat_period": "one week"
+}
+```
+
+
+
+### type弃用
+
+
+
+* 同一索引下,不同type的数据存储其他type的field 大量空值,造成资源浪费,所以,不同类型数据,要放到不同的索引中
+* es9中,将会彻底删除type
+
+
+
+## dynamic mapping
+
+
+
+### dynamic策略
+
+
+
+* true: 遇到陌生字段,就进行dynamic mapping
+* false: 新检测到的字段将被忽略,这些字段将不会被索引,因此将无法搜索,但仍将出现在返回点击的源字段中
+* strict: 遇到陌生字段,就报错
+
+
+
+```json
+// PUT /my_index
+{
+    "mappings": {
+        "dynamic": "strict",
+        "properties": {
+            "title": {
+                "type": "text"
+            },
+            "address": {
+                "type": "object",
+                "dynamic": "true"
+            }
+        }
+    }
+}
+```
+
+
+
+### 自定义策略
+
+
+
+* es会根据传入的值推断类型
+
+
+
+#### date_detection
+
+
+
+* 日期探测,默认会按照一定格式识别date,比如yyyy-MM-dd
+* 如果某个field先过来一个2017-01-01的值,就会被自动dynamic mapping成date,后面如果再来一个"hello world"之类的值,就会报错.可以手动关闭某个type的date_detection,如果有需要,自己手动指定某个field为date类型
+
+```json
+// PUT /my_index
+{
+    "mappings": {
+        "date_detection": false,
+        "properties": {
+            "title": {
+                "type": "text"
+            },
+            "address": {
+                "type": "object",
+                "dynamic": "true"
+            }
+        }
+    }
+}
+```
+
+
+
+#### 自定义日期格式
+
+```console
+PUT my_index
+{
+  "mappings": {
+    "dynamic_date_formats": ["MM/dd/yyyy"]
+  }
+}
+```
+
+
+
+####  numeric_detection
+
+
+
+* 数字探测,默认禁用
+
+```console
+PUT my_index
+{
+  "mappings": {
+    "numeric_detection": true
+  }
+}
+```
+
+```
+PUT my_index/_doc/1
+{
+  "my_float":   "1.0", 
+  "my_integer": "1" 
+}
+```
+
+
+
+### 自定义template
+
+
+
+```json
+// PUT /my_index
+{
+    "mappings": {
+        "dynamic_templates": [
+            { 
+                "en": {
+                    "match":              "*_en", 
+                    "match_mapping_type": "string",
+                    "mapping": {
+                        "type":           "text",
+                        "analyzer":       "english"
+                    }
+                }                  
+            }
+        ]
+    }
+}
+```
+
+
+
+#### 模板语法
+
+
+
+* "match":   "long_*",
+  "unmatch": "*_text",
+  "match_mapping_type": "string",
+  "path_match":   "name.*",
+  "path_unmatch": "*.middle",
+* "match_pattern": "regex",
+  "match": "^profit_\d+$"
+
+```json
+PUT my_index
+{
+    "mappings": {
+        "dynamic_templates": [
+            {
+                "integers": {
+                    "match_mapping_type": "long",
+                    "mapping": {
+                        "type": "integer"
+                    }
+                }
+            },
+            {
+                "strings": {
+                    "match_mapping_type": "string",
+                    "mapping": {
+                        "type": "text",
+                        "fields": {
+                            "raw": {
+                                "type":  "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    }
+                }
+            }
+        ]
+    }
+}
+```
+
+
+
+#### 场景
+
+
+
+##### 结构化搜索
+
+
+
+* 默认情况下,elasticsearch将字符串字段映射为带有子关键字字段的文本字段,但是,如果只对结构化内容进行索引,而对全文搜索不感兴趣,则可以仅将字段映射为关键字,这意味着为了搜索这些字段,必须搜索索引所用的完全相同的值
+
+```json
+{
+    "strings_as_keywords": {
+        "match_mapping_type": "string",
+        "mapping": {
+            "type": "keyword"
+        }
+    }
+}
+```
+
+
+
+##### 仅搜索
+
+
+
+* 与结构化搜索相反,如果只关心字符串字段的全文搜索,并且不打算对字符串字段运行聚合、排序或精确搜索,可以仅映射为文本字段
+
+```json
+{
+    "strings_as_text": {
+        "match_mapping_type": "string",
+        "mapping": {
+            "type": "text"
+        }
+    }
+}
+```
+
+
+
+##### norms 不关心评分
+
+
+
+* norms是指标时间的评分因素,如果不关心评分,则可以在索引中禁用这些评分因子的存储并节省一些空间
+
+```json
+{
+    "strings_as_keywords": {
+        "match_mapping_type": "string",
+        "mapping": {
+            "type": "text",
+            "norms": false,
+            "fields": {
+                "keyword": {
+                    "type": "keyword",
+                    "ignore_above": 256
+                }
+            }
+        }
+    }
+}
+```
+
+
+
+## 零停机重建索引
+
+
+
+### 零停机重建索引 
+
+
+
+* 如果要修改一个Field,那么应该重新按照新的mapping建立一个index,然后将数据批量查询出来,重新用bulk api写入index中
+* 批量查询的时候,建议采用scroll api,并且采用多线程并发的方式来reindex数据,每次scoll就查询指定日期的一段数据,交给一个线程即可
+* 依靠dynamic mapping插入数据时,有些数据的格式错误,如string类型被映射为date.当后期向索引中加入string类型值的时候,就会报错.如果此时想修改field的类型,是不可能的
+* 唯一的办法,就是进行reindex,即重新建立一个索引,将旧索引的数据查询出来,再导入新索引
+* 如果旧索引的名字,是old_index,新索引的名字是new_index,需要给旧索引一个别名,让其他程序先使用.这个别名是指向旧索引的
+* 创建索引的时候带上别名: `PUT /my_index/_alias/prod_index`
+* 新建一个新的index,修改其中需要调整的字段
+* 使用scroll api将数据批量查询出来
+
+```json
+// GET /my_index/_search?scroll=1m
+{
+    "query": {
+        "match_all": {}
+    },    
+    "size":  1
+}
+```
+
+* 采用bulk api将scroll查出来的一批数据,批量写入新索引
+* 反复循环导入,查询一批又一批的数据出来,采取bulk api将每一批数据批量写入新索引
+* 将程序中连接的alias切换到new_index上去
+
+```
+POST /_aliases
+{
+    "actions": [
+        { "remove": { "index": "my_index", "alias": "prod_index" }},
+        { "add":    { "index": "new_index", "alias": "prod_index" }}
+    ]
+}
+```
+
+* 直接通过prod_index别名来查询,是否ok
+
+```
+GET /prod_index/_search
+```
+
+* 该方法缺点是不能在迁移的时候做增删改的操作,否则不能保证数据的完整性
+
+
+
+# Mapping
+
+
+
+* 自动或手动为index中的_doc建立的一种数据结构和相关配置
+* 动态映射: dynamic mapping,自动建立index以及对应的mapping,mapping中包含了每个field对应的数据类型,以及如何分词等设置
+* 往es里面直接插入数据,es会自动建立索引,同时建立对应的mapping(dynamic mapping)
+* mapping中就自动定义了每个field的数据类型
+* 不同的数据类型,如text和date,可能有的是exact value,有的是full text
+* exact value在建立倒排索引的时候,分词的时候,是将整个值一起作为一个关键词建立到倒排索引中的;full text会进行分词,normaliztion(时态转换,同义词转换,大小写转换),才会建立到倒排索引中
+* exact value和full text类型的field在搜索时的行为也是不一样的,会跟建立倒排索引的行为保持一致;比如exact value搜索的时候,就是直接按照整个值进行匹配,full text query string,也会进行分词和normalization再去倒排索引中去搜索
+* 可以用es的dynamic mapping,让其自动建立mapping,包括自动设置数据类型;也可以提前手动创建index和mapping,自己对各个field进行设置,包括数据类型,包括索引行为,包括分词器等
+
+
+
+## 精确匹配与全文搜索
+
+
+
+### exact value
+
+
+
+* 精确匹配,顾名思义,完全相同才可以查到数据
+
+
+
+### full text
+
+
+
+* 全文检索,并不是单纯的只匹配完整的一个值,而是可以对值进行分词后匹配,也可以通过缩写、时态、大小写、同义词等进行匹配,深入 NPL,自然语义处理
+
+
+
+## 全文检索原理
+
+
+
+* 分词,初步建立倒排索引
+* 重建倒排索引,加入normalization
+  * normalization: 正规化,建立倒排索引的时候,会对拆分出的各个单词进行处理,以提升搜索的时候能够搜索到相关联的文档的概率.如时态的转换,单复数的转换,同义词的转换,大小写的转换等
+
+
+
+## analyzer
+
+
+
+* 分词器,切分词语,normalization(提升recall召回率)
+* 将句子拆分成一个一个的单词,同时对每个单词进行normalization(时态转换,单复数转换)
+* recall,召回率: 搜索的时候,增加能够搜索到的结果的数量
+* analyzer 组成部分: 
+  * character filter: 在一段文本进行分词之前,先进行预处理,比如过滤html标签`<span>hello<span> --> hello,& --> and I&you --> I and you`
+  * tokenizer: 分词,hello you and me --> hello, you, and, me
+  * token filter: lowercase,stop word,synonymom,dogs --> dog,liked --> like,Tom --> tom,a/the/an --> 干掉,mother --> mom,small --> little
+
+ 
+
+### 内置分词器
+
+
+
+* [官网](https://www.elastic.co/guide/en/elasticsearch/reference/7.4/analysis-analyzers.html)
+* standard analyzer标准分词器: set, the, shape, to, semi, transparent, by, calling, set_trans, 5(默认的是standard)
+* simple analyzer简单分词器: set, the, shape, to, semi, transparent, by, calling, set, trans
+* whitespace analyzer: Set, the, shape, to, semi-transparent, by, calling, set_trans(5)
+* language analyzer(特定语言分词器,比如english,英语分词器): set, shape, semi, transpar, call, set_tran, 5
+
+
+
+## query string
+
+
+
+* 根据字段分词策略
+* 必须以和index建立时相同的analyzer进行分词
+* 对exact value和full text的区别对待.如:  date: exact value 精确匹配;text: full text 全文检索
+
+
+
+## 数据类型
+
+
+
+* [文档](https://www.elastic.co/guide/en/elasticsearch/reference/7.3/mapping-types.html)
+* string :text and keyword
+* byte,short,integer,long,float,double
+* boolean
+* date
+
+
+
+## dynamic mapping 推测规则
+
+
+
+* true or false   --> boolean
+* 123     --> long
+* 123.45      --> double
+* 2019-01-01  --> date
+* "hello world"   --> text/keywod
+
+
+
+## 创建索引
+
+
+
+```json
+// PUT /book/_mapping
+{
+    "properties": {
+        "name": {
+            "type": "text"
+        },
+        "description": {
+            "type": "text",
+            "analyzer":"english",
+            "search_analyzer":"english"
+        },
+        "pic":{
+            "type":"text",
+            "index":false
+        },
+        "studymodel":{
+            "type":"text"
+        }
+    }
+}
+```
+
+
+
+### Text
+
+
+
+* 文本类型
+* analyzer: 通过analyzer属性指定分词器.上述例子指定了analyzer是指在索引和搜索都使用english,如果单独想定义搜索时使用的分词器则可以通过search_analyzer属性
+* index: index属性指定是否索引.默认为true,即要进行索引,只有进行索引才可以从索引库搜索到
+* store: 是否在source之外存储,每个文档索引后会在 ES中保存一份原始文档,存放在`_source`中,一般不需要设置store为true,因为在_source中已经有一份原始文档了
+
+
+
+### keyword
+
+
+
+* 关键字字段
+* 目前已经取代了index: false.上述例子介绍的text文本字段在映射时要设置分词器,keyword字段为关键字字段,通常搜索keyword是按照整体搜索,所以创建keyword字段的索引时是不进行分词的,比如邮政编码、手机号码、身份证等.keyword字段通常用于过虑、排序、聚合等
+
+
+
+### date
+
+
+
+* 日期类型,不用设置分词器,通常用于排序
+
+* format: 通过format设置日期格式
+
+  ```json
+  {
+      "properties": {
+          "timestamp": {
+              "type":   "date",
+              // 设置允许date字段存储年月日时分秒、年月日及毫秒三种格式
+              "format": "yyyy-MM-dd HH:mm:ss||yyyy-MM-dd"
+          }
+      }
+  }
+  ```
+
+
+
+### 数值类型
+
+
+
+* ES支持常见是数字类型,如byte,short,int,long,float,double,另外还有half_float,scaled_float等
+* 尽量选择范围小的类型,提高搜索效率
+* 对于浮点数尽量用比例因子,比如一个价格字段,单位为元,将比例因子设置为100这在ES中会按分存储: 
+  * 由于比例因子为100,如果我们输入的价格是23.45则ES中会将23.45乘以100存储在ES中
+  * 如果输入的价格是23.456,ES会将23.456乘以100再取一个接近原始值的数,得出2346
+  * 使用比例因子的好处是整型比浮点型更易压缩,节省磁盘空间.如果比例因子不适合,则从下表选择范围小的去用
+
+```json
+"price": {
+    "type": "scaled_float",
+    "scaling_factor": 100
+},
+```
+
+
+
+## 修改映射
+
+
+
+* 只能创建index时手动建立mapping,或者新增field mapping,但是不能update field mapping
+* 因为已有数据按照映射早已分词存储好,如果修改,那这些存量数据就无法匹配
+
+
+
+## 删除映射
+
+
+
+* 只能通过删除索引来删除映射
+
+
+
+## 复杂数据类型
+
+
+
+### multivalue field
+
+
+
+* `{ "tags": [ "tag1", "tag2" ]}`: 建立索引时与string是一样的
+
+
+
+### empty field
+
+
+
+* `null,[],[null]`
+
+
+
+### object field
+
+
+
+```
+PUT /company/_doc/1
+{
+  "address": {
+    "country": "china",
+    "province": "guangdong",
+    "city": "guangzhou"
+  },
+  "name": "jack"
+}
+```
+
+* 上述例子中address就是object类型
+
+```json
+// GET /company/_mapping
+{
+    "company" : {
+        "mappings" : {
+            "properties" : {
+                "address" : {
+                    "properties" : {
+                        "city" : {
+                            "type" : "text",
+                            "fields" : {
+                                "keyword" : {
+                                    "type" : "keyword",
+                                    "ignore_above" : 256
+                                }
+                            }
+                        },
+                        "country" : {
+                            "type" : "text",
+                            "fields" : {
+                                "keyword" : {
+                                    "type" : "keyword",
+                                    "ignore_above" : 256
+                                }
+                            }
+                        },
+                        "province" : {
+                            "type" : "text",
+                            "fields" : {
+                                "keyword" : {
+                                    "type" : "keyword",
+                                    "ignore_above" : 256
+                                }
+                            }
+                        }
+                    }
+                },
+                "name" : {
+                    "type" : "text",
+                    "fields" : {
+                        "keyword" : {
+                            "type" : "keyword",
+                            "ignore_above" : 256
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+* 底层存储格式
+
+```json
+{
+    "name":            [jack],
+    "age":          [27],
+    "join_date":      [2017-01-01],
+    "address.country":         [china],
+    "address.province":   [guangdong],
+    "address.city":  [guangzhou]
+}
+```
+
+* 对象数组: 
+
+```
+{
+    "authors": [
+        { "age": 26, "name": "Jack White"},
+        { "age": 55, "name": "Tom Jones"},
+        { "age": 39, "name": "Kitty Smith"}
+    ]
+}
+```
+
+* 存储格式: 
+
+```
+{
+    "authors.age":    [26, 55, 39],
+    "authors.name":   [jack, white, tom, jones, kitty, smith]
+}
+```
 
 
 

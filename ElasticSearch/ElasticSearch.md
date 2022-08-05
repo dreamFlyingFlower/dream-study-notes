@@ -2,14 +2,14 @@
 
 
 
-# 概述6,8
+# 概述
 
 
 
 * [官网](https://www.elastic.co/cn/products/elasticsearch)
 
-* 用数据库做搜索的效果:见**ElasticSearch.pptx-01**,不太靠谱,性能很差
-* 全文检索:指计算机索引程序通过扫描文章中的每一个词,对每一个词建立一个索引,指明该词在文章中出现的次数和位置,当用户查询时,检索程序就根据事先建立的索引进行查找,并将查找的结果反馈给用户的检索方式.这个过程类似于通过字典中的检索字表查字的过程.**见ElasticSearch.pptx-02**
+* 用数据库做搜索的效果,不太靠谱,性能很差,特别是对中文,字数很多的情况
+* 全文检索:指计算机索引程序通过扫描文章中的每一个词,对每一个词建立一个索引,指明该词在文章中出现的次数和位置,当用户查询时,检索程序就根据事先建立的索引进行查找,并将查找的结果反馈给用户的检索方式.这个过程类似于通过字典中的检索字表查字的过程
 * Lucene,就是一个jar包,里面包含了封装好的各种建立倒排索引,以及进行搜索的代码,包括各种算法
 * 倒排索引:通常从文章中搜索关键字是直接全文扫描文章,查看是否有关键字,倒排索引正好相反.先将文章分词建立关键字索引,搜索关键字的时候直接就能通过预先建立好的索引查找文章
 * ES是基于Lucene的搜索引擎,是一个实时的分布式搜索和分析引擎,可用于全文搜索,结构化搜索以及分析
@@ -54,6 +54,8 @@
 
 
 ## 近实时
+
+
 
 * 从写入数据到数据可以被搜索到有一个小延迟(大概1秒);基于es执行搜索和分析可以达到秒级
 
@@ -195,355 +197,15 @@ product document:{"product_id":"1","product_name":"高露洁牙膏","product_des
 
 
 
-# 字段映射类型
+# Cat API
 
-* string:text和keyword,keyword在进行搜索时不会对值存储在ES中的值进行分词,是通过整体搜索
-* number:long,integer,short,byte,double,float,half_float,scaled_float
-* date:date
-* boolean:boolean
-* binary:binary
-* range:integer_range,float_range,long_range,double_range,date_range
 
 
-
-## Mapping
-
-* 映射,类似关系型数据库中的约束.第一次存数据时,若不指定类型,由ES自行判断类型
-
-* 创建映射
-
-  ```json
-  // 创建映射,esip:port/indexname,_mapping是固定写法,put
-  {
-      "mappings":{
-          "properties":{
-              "age":{"type":"integer"},
-              "email":{"type":"keyword"},
-              "username":{"type":"text"}
-          }
-      }
-  }
-  ```
-
-* 添加映射
-
-  ```json
-  // 添加映射,esip:port/indexname/_mapping,_mapping是固定写法,put
-  {
-      "mappings":{
-          "properties":{
-              "salary":{"type":"double"}
-          }
-      }
-  }
-  ```
-
-* 不能更新映射,因为修改映射会对数据的检索方式造成很大的变动,只能数据迁移.需要先重新新增正确的映射方式,之后使用_reindex对数据重新建立索引
-
-  ```json
-  // 重新建立索引,在kibana中直接使用_reindex接口即可
-  {
-      "source":{
-          "index":"oldindexname"
-      },
-      "dest":{
-          "index":"newindexname"
-      }
-  }
-  ```
-
-* 数据如何存放到索引对象上,需要有一个映射配置,包括:数据类型,是否存储,是否分词等
-
-* 这样就创建了一个名为blog的Index.Type不用单独创建,在创建Mapping 时指定就可以
-
-* Mapping用来定义Document中每个字段的类型,即所使用的analyzer,是否索引等属性,非常关键
-
-```json
-
-// 复杂Mapping
-client.indices.putMapping({
-    index : 'blog',
-    type : 'article',
-    body : {
-        article:{
-            properties:{
-                id:{
-                    type:'string',
-                    analyzer:'ik',
-                    store:'yes',
-                },
-                title:{
-                    type:'string',
-                    analyzer:'ik',
-                    store:'no',
-                },
-                content:{
-                    type:'string',
-                    analyzer:'ik',
-                    store:'yes',
-                }
-            }
-        }
-    }
-});
-```
-
-
-
-## 对比数据库
-
-| 关系型数据库(比如Mysql) | 非关系型数据库(Elasticsearch) |
-| ----------------------- | ----------------------------- |
-| 数据库Database          | 索引Index                     |
-| 表Table                 | 类型Type,ES6以上废弃,ES8移除  |
-| 数据行Row               | 文档Document                  |
-| 数据列Column            | 字段Field                     |
-| 约束 Schema             | 映射Mapping                   |
-
-
-
-## 存储和搜索数据
-
-* **见ElasticSearch.pptx-03**
-* 索引对象(blog):存储数据的表结构 ,任何搜索数据,存放在索引对象上
-* 映射(mapping):数据如何存放到索引对象上,需要有一个映射配置, 包括:数据类型,是否存储,是否分词等
-* 文档(document):一条数据记录,存在索引对象上
-
-
-
-# 插件
-
-
-
-## Elasticsearch head
-
-
-
-* ES集群可视化操作,可在Web上管理ES集群
-* [下载插件](https://github.com/mobz/elasticsearch-head),elasticsearch-head-master.zip
-* nodejs[官网](https://nodejs.org/dist/)下载安装包
-* 将elasticsearch-head-master.zip和node-linux-x64.tar.xz都导入到linux的/app/software目录
-* 安装nodejs,配置环境变量,查看node和npm版本
-
-```shell
-vi /etc/profile
-export NODE_HOME=/app/nodejs
-export PATH=$PATH:$NODE_HOME/bin
-source /etc/profile
-node -v
-npm -v
-```
-
-* 解压head插件到/app/eshead目录下
-* 查看当前head插件目录下有无node_modules/grunt目录,没有:执行命令创建
-
-```shell
-# 替换nodejs源为淘宝镜像源,加速依赖下载
-npm install -g cnpm --registry=https://registry.npm.taobao.org
-# 安装依赖
-npm install grunt --save
-npm install -g grunt-cli
-```
-
-* 编辑Gruntfile.js:vim Gruntfile.js
-
-```javascript
-# 文件93行添加hostname:'0.0.0.0'
-options: {
-    hostname:'0.0.0.0',
-    port: 9100,
-    base: '.',
-    keepalive: true
-}
-```
-
-* 检查head根目录下是否存在base文件夹,没有:将_site下的base文件夹及其内容复制到head根目录下
-* 启动grunt server:grunt server -d->Started connect web server on http://localhost:9100
-* 如果提示grunt的模块没有安装:
-
-```shell
-Local Npm module “grunt-contrib-clean” not found. Is it installed? 
-Local Npm module “grunt-contrib-concat” not found. Is it installed? 
-Local Npm module “grunt-contrib-watch” not found. Is it installed? 
-Local Npm module “grunt-contrib-connect” not found. Is it installed? 
-Local Npm module “grunt-contrib-copy” not found. Is it installed? 
-Local Npm module “grunt-contrib-jasmine” not found. Is it installed? 
-Warning: Task “connect:server” not found. Use –force to continue. 
-# 执行以下命令,最后一个模块可能安装不成功,但是不影响使用
-npm install grunt-contrib-clean grunt-contrib-concat grunt-contrib-watch grunt-contrib-connect grunt-contrib-copy grunt-contrib-jasmine 
-```
-
-* 浏览器访问head插件:http://hadoop102:9100
-* 启动集群插件后发现集群未连接,提示跨域访问,可在es配置文件添加如下配置
-
-```yaml
-http.cors.enabled: true
-http.cors.allow-origin: "*"
-```
-
-* 再重新启动elasticsearch
-* 关闭插件服务:ctrl+c
-
-
-
-## IK分词器
-
-
-
-* 默认是使用官方的标准分词器,但是对中文支持不友好,需要使用IK分词器
-
-  ```json
-  // standard 分词器,仅适用于英文
-  GET /_analyze
-  {
-    "analyzer": "standard",
-    "text": "中华人民共和国人民大会堂"
-  }
-  ```
-
-* 结果:
-
-  * token 实际存储的term 关键字
-  * position 在此词条在原文本中的位置
-  * start_offset/end_offset字符在原始字符串中的位置
-
-
-
-
-### 安装
-
-
-
-* IK分词器:对中文友好的分词器,不会像标准分词器一样将每个词都拆开,[官网](https://github.com/medcl/elasticsearch-analysis-ik/releases)
-
-* 根据es版本下载相应版本包,解压到 es/plugins/ik中,重启ES和Kibana
-
-
-
-### 配置
-
-
-
-* ik配置文件地址: es/plugins/ik/config目录
-* IKAnalyzer.cfg.xml: 用来配置自定义词库
-* main.dic: ik原生内置的中文词库,总共有27万多条,只要是这些单词,都会被分在一起
-* preposition.dic: 介词
-* quantifier.dic: 放了一些单位相关的词,量词
-* suffix.dic: 放了一些后缀
-* surname.dic: 中国的姓氏
-* stopword.dic: 英文停用词
-* ik原生最重要的两个配置文件
-  * main.dic: 包含了原生的中文词语,会按照这个里面的词语去分词
-  * stopword.dic: 包含了英文的停用词
-* 停用词,stopword,英文中类似`a,the,is`等,停用词会在分词的时候直接被干掉,不会建立在倒排索引中
-
- 
-
-### 使用
-
-
-
-* ik_max_word:最大粒度的对中文词汇进行拆分.比如会将`中华人民共和国人民大会堂`拆分为`中华人民共和国,中华人民,中华,华人,人民共和国,人民大会堂,人民大会,大会堂`,会穷尽各种可能的组合
-
-* ik_smart:最粗粒度的对中文进行拆分,智能拆分.比如会将`中华人民共和国人民大会堂`拆分为`中华人民共和国,人民大会堂`
-
-* 存储时,使用ik_max_word,搜索时,使用ik_smart
-
-  ```json
-  PUT /index_name 
-  {
-    "mappings": {
-        "properties": {
-          "text": {
-            "type": "text",
-            "analyzer": "ik_max_word",
-            "search_analyzer": "ik_smart"
-          }
-        }
-    }
-  }
-  ```
-
-* 搜索
-
-  ```json
-  GET /index_name/_search?q=中华人民共和国人民大会堂
-  ```
-
-
-
-### 自定义分词
-
-
-
-* 自定义分词:需要修改IK分词器目录下的config/IKAnalyzer.cfg.xml
-
-* ext_dict:本地分词文件地址,在值的位置配置自定义分词的文件名称.文件的每行只能定义一个词,最好是将文件的后缀定义为dic,同时该文件的编码模式选择UTF8,配置好后重启ES即可
-* remote_ext_dict:远程分词器地址,是一个远程的http/https地址,可以配置到nginx或其他服务器中,文件形式和内容同ext_dict即可,配置后重启ES即可
-* custom/ext_stopword.dic:自己建立停用词库:比如了,的等.已经有了常用的停用词,可以补充停用词,然后重启es
-
-
-
-
-## Logstash
-
-
-
-* 将mysql中的数据同步到ES中
-
-
-
-# MySQL热更新
-
-
-
-## 方案
-
-
-
-* 方案1: 基于ik分词器原生支持的热更新方案,部署一个web服务器,提供一个http接口,通过modified和tag两个http响应头,来提供词语的热更新
-* 方案2: 修改ik分词器源码,然后手动支持从mysql中每隔一定时间,自动加载新的词库
-* 用第二种方案,第一种,ik git社区官方都不建议采用,觉得不太稳定
-
-
-
-##  步骤
-
-
-
-* [下载源码](https://github.com/medcl/elasticsearch-analysis-ik/releases)
-* ik分词器是个标准的java maven工程,直接导入IDE就可以看到源码
-* 修改源`org.wltea.analyzer.dic.Dictionary`类,160行Dictionary单例类的初始化方法,在这里需要创建一个自定义的线程,并且启动它
-* `org.wltea.analyzer.dic.HotDictReloadThread`: 就是死循环,不断调用Dictionary.getSingleton().reLoadMainDict(),去重新加载词典
-* `Dictionary类399行`: this.loadMySQLExtDict(); 加载mymsql字典
-* `Dictionary类609行`: this.loadMySQLStopwordDict();加载mysql停用词
-* config下jdbc-reload.properties是mysql配置文件
-* 修改完之后用命令`mvn clean package`打包:target\releases\elasticsearch-analysis-ik-7.3.0.zip
-* 解压缩ik压缩包,将mysql驱动jar,放入ik的目录下
-* 修改jdbc相关配置
-* 重启es.观察日志,日志中就会显示我们打印的那些东西,比如加载了什么配置,加载了什么词语,什么停用词
-* 在mysql中添加词库与停用词
-* 分词实验,验证热更新生效
-
-```json
-GET /_analyze
-{
-  "analyzer": "ik_smart",
-  "text": "飞花梦影"
-}
-```
-
-
-
-## Cat API
-
-
-
-* es提供了一套api,叫做cat api,可以查看es中各种各样的数据
+* ES提供了一套cat api,可以查看ES中各种各样的数据
 
 * `GET /_cat/health?v`:查看集群状态
 
-  * green: 每个索引的primary shard和replica shard都是active状态的
+  * green: 每个索引的primary shard和replica shard都是active状态的,集群状态正常
   * yellow: 每个索引的primary shard都是active状态的,但是部分replica shard不是active状态,处于不可用的状态
   * red: 不是所有索引的primary shard都是active状态的,部分索引有数据丢失了
 
@@ -552,7 +214,27 @@ GET /_analyze
   1568635460 12:04:20  elasticsearch green           1         1      4   4    0    0        0             0                  -                100.0%
   ```
 
-* `GET /_cat/indices?v`: 快速查看集群中有哪些索引
+* `GET /_cat/indices?v`: 快速查看集群中有哪些索引,默认存在一个名为.kibana和.kibana_task_manager的索引
+
+  * health: green(集群完整) yellow(单点正常、集群不完整) red(单点故障)
+
+  * status: 是否能使用
+
+  * index: 索引名
+
+  * uuid: 索引统一编号
+
+  * pri: 主节点个数
+
+  * rep: 副本个数
+
+  * docs.count: 文档数
+
+  * docs.delete: 文档被删除了多少
+
+  * store.size: 整体占空间大小
+
+  * pri.store.size: 主节点占空间大小
 
   ```
   health status index                           uuid                   pri rep docs.count docs.deleted store.size pri.store.size
@@ -568,414 +250,107 @@ GET /_analyze
 
 
 
-# API调用
+# Search
 
 
 
-[官方文档](https://www.elastic.co/guide/en/elasticsearch/client/java-rest/current/java-rest-high-getting-started.html)
+* [官方文档](https://www.elastic.co/guide/en/elasticsearch/client/java-rest/current/java-rest-high-getting-started.html)
 
 
 
-## 内置API
+## 查询所有
 
 
 
-* `PUT /index`: 建立索引,如`PUT /book`
-
-* `PUT /index/type/id`: 新增或更新文档,参数都相同,更新是整体覆盖
-
-  ```json
-  // PUT /book/_doc/1
-  {
-      "name": "Bootstrap开发",
-      "description": "spring 在java领域非常流行,java程序员都在用。",
-      "studymodel": "201002",
-      "price":38.6,
-      "timestamp":"2019-08-25 19:11:35",
-      "pic":"group1/M00/00/00/wKhlQFs6RCeAY0pHAAJx5ZjNDEM428.jpg",
-      "tags": [ "bootstrap", "dev"]
-  }
-  ```
-
-* `GET /_mapping`: 查看所有mapping
-
-* `GET /{index}/_mapping/`: 查看mapping
-
-* `PUT /{index}/_mapping`: 创建mapping,需要先创建索引,且还没有插入数据
-
-  ```json
-  // PUT /book/_mapping
-  {
-      "properties": {
-          "name": {
-              "type": "text"
-          },
-          "description": {
-              "type": "text",
-              "analyzer":"english",
-              "search_analyzer":"english"
-          },
-          "pic":{
-              "type":"text",
-              "index":false
-          },
-          "studymodel":{
-              "type":"text"
-          }
-      }
-  }
-  ```
-
-* `PUT /{index}/type/{id}/_create`:强制创建,若存在相同id的值,不会更新,会报错
-
-* `POST  /{index}/type /{id}/_update`或`POST  /{index}/_update/{id}`: 更新
-
-  ```json
-  // POST /book/_update/1/ 
-  {
-      "doc": {
-          "name": " Bootstrap开发教程高级"
-      }
-  }
-  ```
-
-* `GET /{index}/type/id`:快速搜索,如`GET /book/_doc/1`就可看到json形式的文档
-
-* `DELETE /{index}/type/id`:删除某个文档,如`DELETE /book/_doc/1`
-
-* `POST /{index}/type/[\_id]`:,在es中添加数据,数据为json格式,请求头为application/json
-
-  * _index:相当于数据库中的数据库,索引名
-  * _type:相当于数据库中的表,类型名
-  * _id:相当于数据库中的唯一标识.若不带id会自动生成一个随机uuid作为id;若带id,则es中没有该id数据时,created,若存在,则是updated
-
-* `GET /{index}/type/[_id]`: 在es中根据id进行搜索,得到json数据,下划线开头的统称为元数据,\_source中数据为查看到的真实数据,若没有,则为null
-
-  ```json
-  {
-  	"_index":"_index",	// 在那个索引
-  	"_type":"_type",	// 在哪个类型
-  	"_id":"_id",		// 记录id
-  	"_version":2,		// 版本号,每修改一次就加1
-  	"_seq_no":1,		// 并发控制字段,每次更新就会+1,用来做乐观锁,可以写在url后
-  	"_primary_term":1,	// 同上,主分片重新分配,如重启就会变化
-  	"found":true,
-  	"_source":{			// 真实数据
-  		"shuju":"shuju"
-  	}
-  }
-  ```
-
-* `GET /{index}/type/{id}?_source_includes=column1...`:只查询指定column1的值,_source_includes为固定写法
-
-* `POST /{index}/_update/{id}`: 专用更新数据.该方式和不带`_update`更新方式不同,只能用来更新,不能用来新增.且两种方式的参数格式也不一样,对数据的影响也不一样.将`_update`放在末尾的方式已经废除
-
-  ```json
-  // 带_udpate的更新数据传递格式,doc为固定写法
-  {
-  	"doc":{
-  		// 更新内容
-  	}
-  }
-  // 不带_update的更新方式
-  {
-      // 更新内容
-  }
-  ```
-
-  * 带_update时若是第一次更新,\_version,\_seq_no等会变化,但是多次更新内容连续且相同时,这些元数据不会再变化.不带\_update的这些元数据都会变化
-
-* `POST /{index}/type/_bulk`: 批量新增数据,固定格式,只能在kibana中测试
-
-  ```json
-  {"index":"_id":"1"} // index是固定写法,_id是标识,注意不是一个严格的json,没有逗号
-  {
-  	// 需要更新的内容key-value
-  }					// 注意,没有逗号
-  {"index":"_id":"2"}
-  {
-  	// 需要更新的内容key-value
-  }
-  ```
-
-* `POST /_bulk`: 复杂批量操作
-
-  ```json
-  {"delete":{"_index":"index1","_type":"type1","_id":1}}
-  {"create":{"_index":"index1","_type":"type1","_id":1}}
-  // 需要创建内容的json,需要紧挨着create
-  {"name":"testee"}
-  {"update":{"_index":"index1","_type":"type1","_id":1}}
-  // 需要更新的内容,固定写法
-  {"doc":{"name":"test2"}}
-  ```
-
-* queryDsl:通过json格式的请求从es中查询数据,可以定制各种查询类型,排序,过滤等
-
-  ```json
-  {
-      // 查询类型
-      "query":{
-          // 具体查询类型,全文检索,会根据空格等进行分词
-          "match_all":{},
-          // 匹配具体的字段,该方式默认是全文检索
-          "match":{
-              // 具体匹配的字段名,需要匹配的值,包含value1或value2的内容都会被搜索到
-              "fildname1":"value1 value2",
-              "fildname2":"value3",
-              // 同match_phrase:不同的是必须精确匹配,不可以是包含
-              "fildname3.keyword":"value4 value5"
-          },
-          // 同match,但不会进行分词,用于精确值的查找
-          // 官方不建议该方式用于文本值的检索,而是数值的检索
-          "term":{
-            "fildname1" :"value1"
-          },
-          // 短语匹配,不会对空格等进行分词,不会对需要搜索的关键字进行分词
-          // 可以匹配包含搜索关键字的字段
-          "match_phrase":{
-              "fieldname1":"value1 value2"
-          },
-          // 多字段匹配.只要有一个字段中包含搜索关键字即可,同样会进行分词
-          "multi_match":{
-              "query":"value1 value2",
-              "fields":["fildname1","fildname2"]
-          },
-          // 符合查询,需要满足多个条件,bool和must,must_not,should是固定写法
-          "bool":{
-              // 必须符合的条件
-              "must":[
-                  {
-                      "match":{
-                          "fildname1":"value1 value2"
-                      }
-                  },{
-                      "match":{
-                          "fildname2":"value1 value2"
-                      }
-                  }
-              ],
-              // 必须不符合的条件
-              "must_not":[
-                  {
-                      "match":{
-                          "fildname1":"value1 value2"
-                      }
-                  },{
-                      "match":{
-                          "fildname2":"value1 value2"
-                      }
-                  }
-              ],
-              // 可满足,可不满足的条件,只会影响评分和排序
-              "should":[
-                  {
-                      "match":{
-                          "fildname1":"value1 value2"
-                      }
-                  },{
-                      "match":{
-                          "fildname2":"value1 value2"
-                      }
-                  }
-              ],
-              // filter的作用和must_not的作用相同,但是不影响评分
-              "filter":[
-                  {
-                      "match":{
-                          "fildname1":"value1 value2"
-                      }
-                  },{
-                      "match":{
-                          "fildname2":"value1 value2"
-                      }
-                  }
-              ]
-          }
-      },
-      // 排序,可对多个字段进行排序
-      "sort":[{
-          // 需要进行排序的字段
-      	"balance":{
-              // 排序类型
-              "order":"desc"
-          }
-  	}],
-      // 分页查询,从第几条数据开始
-      "from":0,
-      // 分页查询,每页显示条数
-      "size":10,
-      // 指定查询返回的字段,默认是返回所有
-      "_source":["userId","username"]
-  }
-  ```
-
-
-
-## 搜索
-
-
-
-### 查询所有
-
-
-
-* 无条件搜索所有
+* `GET /{index}/_search`: 无条件搜索所有数据
 * took: 耗费了几毫秒
 * timed_out: 是否超时
 * _shards: 到几个分片搜索,成功几个,跳过几个,失败几个
+* hits: 搜索结果总览对象
 * hits.total: 查询结果的数量,1个document
-* hits.max_score: score的含义,就是document对于一个search的相关度的匹配分数,越相关,就越匹配,分数也高
-* hits.hits: 包含了匹配搜索的document的所有详细数据
+* hits.max_score: 所有结果中文档得分的最高分.document对于一个search的相关度的匹配分数,越相关,就越匹配,分数也高
+* hits.hits: 包含了匹配搜索的document的所有详细数据,所有数据都在该字段内
+  * _index:索引库
+  * _type:文档类型
+  * _id:文档id
+  * _score:文档得分
+  * _source:文档的源数据
+
 
 ```json
 GET /book/_search
 {
-  "took" : 969,
-  "timed_out" : false,
-  "_shards" : {
-    "total" : 1,
-    "successful" : 1,
-    "skipped" : 0,
-    "failed" : 0
-  },
-  "hits" : {
-    "total" : {
-      "value" : 1,
-      "relation" : "eq"
+    "took" : 969,
+    "timed_out" : false,
+    "_shards" : {
+        "total" : 1,
+        "successful" : 1,
+        "skipped" : 0,
+        "failed" : 0
     },
-    "max_score" : 1.0,
-    "hits" : [
-      {
-        "_index" : "book",
-        "_type" : "_doc",
-        "_id" : "1",
-        "_score" : 1.0,
-        "_source" : {
-          "name" : "java编程思想",
-          "description" : "java语言是世界第一编程语言,在软件开发领域使用人数最多。",
-          "studymodel" : "201001",
-          "price" : 68.6,
-          "timestamp" : "2022-07-25 19:11:35",
-          "pic" : "group1/M00/00/00/wKhlQFs6RCeAY0pHAAJx5ZjNDEM428.jpg",
-          "tags" : [
-            "java",
-            "dev"
-          ]
-        }
-      }
-    ]
-  }
-}
-```
-
-
-
-### 传参
-
-
-
-```
-GET /book/_search?q=name:java&sort=price:desc
-类比sql:  select * from book where name like ’ %java%’ order by price desc
-```
-
-
-
-```json
-{
-  "took" : 2,
-  "timed_out" : false,
-  "_shards" : {
-    "total" : 1,
-    "successful" : 1,
-    "skipped" : 0,
-    "failed" : 0
-  },
-  "hits" : {
-    "total" : {
-      "value" : 1,
-      "relation" : "eq"
-    },
-    "max_score" : null,
-    "hits" : [
-      {
-        "_index" : "book",
-        "_type" : "_doc",
-        "_id" : "2",
-        "_score" : null,
-        "_source" : {
-          "name" : "java编程思想",
-          "description" : "java语言是世界第一编程语言,在软件开发领域使用人数最多。",
-          "studymodel" : "201001",
-          "price" : 68.6,
-          "timestamp" : "2022-07-25 19:11:35",
-          "pic" : "group1/M00/00/00/wKhlQFs6RCeAY0pHAAJx5ZjNDEM428.jpg",
-          "tags" : [
-            "java",
-            "dev"
-          ]
+    "hits" : {
+        "total" : {
+            "value" : 1,
+            "relation" : "eq"
         },
-        "sort" : [
-          68.6
+        "max_score" : 1.0,
+        "hits" : [
+            {
+                "_index" : "book",
+                "_type" : "_doc",
+                "_id" : "1",
+                "_score" : 1.0,
+                "_source" : {
+                    "name" : "java编程思想",
+                    "description" : "java语言是世界第一编程语言,在软件开发领域使用人数最多。",
+                    "studymodel" : "201001",
+                    "price" : 68.6,
+                    "timestamp" : "2022-07-25 19:11:35",
+                    "pic" : "group1/M00/00/00/wKhlQFs6RCeAY0pHAAJx5ZjNDEM428.jpg",
+                    "tags" : [
+                        "java",
+                        "dev"
+                    ]
+                }
+            }
         ]
-      }
-    ]
-  }
+    }
 }
 ```
 
 
 
-### timeout超时
+### timeout
 
 
 
-* 单次搜索: `GET /book/_search?timeout=10ms`
+* 单次搜索: `GET /{index}/_search?timeout=10ms`
 * 全局设置: 配置文件中设置 search.default_search_timeout: 100ms,默认不超时
 * 搜索时,请求必定跨所有主分片,数据量太大时,搜索完毕,每个分片可能需要的时间太久,影响用户体验.timeout超时机制可以指定每个分片只能在给定的时间内查询数据,能有几条就返回几条给客户端
 
 
 
-## multi-index多索引搜索
+### 自定义返回字段
 
 
 
-* 一次性搜索多个index和多个type下的数据
-* `/_search`: 所有索引下的所有数据都搜索出来
-* `/index1/_search`: 指定一个index,搜索其下所有的数据
-* `/index1,index2/_search`: 同时搜索两个index下的数据
-* `/index*/_search`: 按照通配符去匹配多个索引
-* 应用场景: 生产环境log索引可以按照日期分开
+* `GET  /{index}/_doc/{id}?_source_includes=name,price`: 指定返回字段
 
-
-
-## 分页搜索
-
-
-
-### 语法
-
-
-
-* 关键词:`size,from`
-* `GET /book/_search?size=10`
-* `GET /book/_search?size=10&from=0`
-* `GET /book/_search?size=10&from=20`
-* `GET /book_search?from=0&size=3`
-* 分页原理: 从每个分片获得相同数量的数据,然后再到coordinate进行汇总排序,将最终的结果取出
-
-
-
-### deep paging
-
-
-
-* 根据相关度评分倒排序,所以分页过深,协调节点会将大量数据聚合分析
-* 消耗网络带宽,因为所搜过深的话,各 shard 要把数据传递给 coordinate node,这个过程是有大量数据传递的,消耗网络
-* 消耗内存,各 shard 要把数据传送给 coordinate ,这个传递回来的数据,是被 coordinate 保存在内存中的,这样会大量消耗内存
-* 消耗cup,coordinate 要把传回来的数据进行排序,这个排序过程很消耗cpu
-* 所以: 鉴于deep paging的性能问题,所有应尽量减少使用
+```json
+{
+    "_index" : "book",
+    "_type" : "_doc",
+    "_id" : "1",
+    "_version" : 1,
+    "_seq_no" : 10,
+    "_primary_term" : 1,
+    "found" : true,
+    "_source" : {
+        "price" : 38.6,
+        "name" : "Bootstrap开发教程1"
+    }
+}
+```
 
 
 
@@ -983,22 +358,9 @@ GET /book/_search?q=name:java&sort=price:desc
 
 
 
-### 基础语法
-
-
-
-* `GET /book/_search?q=name:java`
+* `GET /book/_search?q=name:java&sort=price:desc`: 类似于sql->` select * from book where name like ’ %java%’ order by price desc`
 * `GET /book/_search?q=+name:java`
 * `GET /book/_search?q=-name:java`
-
-
-
-### _all metadata
-
-
-
-* 直接可以搜索所有的field,任意一个field包含指定的关键字就可以搜索出来,在进行中搜索的时候,并不是对document中的每一个field都进行一次搜索
-* es中_all元数据,建立索引的时候,插入一条docunment,es会将所有的field值经行全量分词,把这些分词,放到_all field中,在搜索的时候,没有指定field,就在_all搜索
 
 
 
@@ -1008,396 +370,49 @@ GET /book/_search?q=name:java&sort=price:desc
 
 * Query string 后边的参数越多,搜索条件越来越复杂,不能满足需求
 * DSL:Domain Specified Language,特定领域的语言,es特有的搜索语言,可在请求体中携带搜索条件,功能强大
-
-```json
-// 查询全部
-GET /book/_search
-{
-  "query": { "match_all": {} }
-}
-
-// 排序 GET /book/_search?sort=price:desc
-GET /book/_search 
-{
-    "query" : {
-        "match" : {
-            "name" : " java"
-        }
-    },
-    "sort": [
-        { "price": "desc" }
-    ]
-}
-
-// 分页查询 GET /book/_search?size=10&from=0
-GET  /book/_search 
-{
-  "query": { "match_all": {} },
-  "from": 0,
-  "size": 1
-}
-
-// 指定返回字段 GET /book/ _search? _source=name,studymodel
-GET /book/_search 
-{
-  "query": { "match_all": {} },
-  "_source": ["name", "studymodel"]
-}
-```
-
-
-
-### 语法
-
-
-
-```
-{
-    QUERY_NAME: {
-        ARGUMENT: VALUE,
-        ARGUMENT: VALUE,...
-    }
-}
-```
-
-```
-{
-    QUERY_NAME: {
-        FIELD_NAME: {
-            ARGUMENT: VALUE,
-            ARGUMENT: VALUE,...
-        }
-    }
-}
-```
-
-```
-GET /index_name/_search 
-{
-  "query": {
-    "match": {
-      "test_field": "test"
-    }
-  }
-}
-```
-
-
-
-### 组合多个搜索条件
-
-
-
-* 搜索需求: title必须包含elasticsearch,content可以包含elasticsearch也可以不包含,author_id必须不为111
-
-```json
-// 原始数据
-POST /website/_doc/1
-{
-          "title": "my hadoop article",
-          "content": "hadoop is very bad",
-          "author_id": 111
-}
-
-POST /website/_doc/2
-{
-          "title": "my elasticsearch  article",
-          "content": "es is very bad",
-          "author_id": 112
-}
-POST /website/_doc/3
-{
-          "title": "my elasticsearch article",
-          "content": "es is very goods",
-          "author_id": 111
-}
-```
-
-* 搜索: 
-
-```json
-GET /website/_doc/_search
-{
-  "query": {
-    "bool": {
-      "must": [
-        {
-          "match": {
-            "title": "elasticsearch"
-          }
-        }
-      ],
-      "should": [
-        {
-          "match": {
-            "content": "elasticsearch"
-          }
-        }
-      ],
-      "must_not": [
-        {
-          "match": {
-            "author_id": 111
-          }
-        }
-      ]
-    }
-  }
-}
-```
-
-* 返回: 
-
-```json
-{
-  "took" : 488,
-  "timed_out" : false,
-  "_shards" : {
-    "total" : 1,
-    "successful" : 1,
-    "skipped" : 0,
-    "failed" : 0
-  },
-  "hits" : {
-    "total" : {
-      "value" : 1,
-      "relation" : "eq"
-    },
-    "max_score" : 0.47000363,
-    "hits" : [
-      {
-        "_index" : "website",
-        "_type" : "_doc",
-        "_id" : "2",
-        "_score" : 0.47000363,
-        "_source" : {
-          "title" : "my elasticsearch  article",
-          "content" : "es is very bad",
-          "author_id" : 112
-        }
-      }
-    ]
-  }
-}
-```
-
-* 更复杂的搜索需求: `select * from test_index where name='tom' or (hired =true and (personality ='good' and rude != true ))`
-
-```json
-GET /index_name/_search
-{
-    "query": {
-            "bool": {
-                "must": { "match":{ "name": "tom" }},
-                "should": [
-                    { "match":{ "hired": true }},
-                    { "bool": {
-                        "must":{ "match": { "personality": "good" }},
-                        "must_not": { "match": { "rude": true }}
-                    }}
-                ],
-                "minimum_should_match": 1
-            }
-    }
-}
-```
-
-
-
-## 全文检索
-
-
-
-* 创建book索引
-
-```json
-PUT /book/
-{
-  "settings": {
-    "number_of_shards": 1,
-    "number_of_replicas": 0
-  },
-  "mappings": {
-    "properties": {
-      "name":{
-        "type": "text",
-        "analyzer": "ik_max_word",
-        "search_analyzer": "ik_smart"
-      },
-      "description":{
-        "type": "text",
-        "analyzer": "ik_max_word",
-        "search_analyzer": "ik_smart"
-      },
-      "studymodel":{
-        "type": "keyword"
-      },
-      "price":{
-        "type": "double"
-      },
-      "timestamp": {
-         "type": "date",
-         "format": "yyyy-MM-dd HH:mm:ss||yyyy-MM-dd||epoch_millis"
-      },
-      "pic":{
-        "type":"text",
-        "index":false
-      }
-    }
-  }
-}
-```
-
-* 插入数据
-
-```json
-PUT /book/_doc/1
-{
-    "name": "Bootstrap开发",
-    "description": "Bootstrap是由Twitter推出的一个前台页面开发css框架,是一个非常流行的开发框架,此框架集成了多种页面效果。此开发框架包含了大量的CSS、JS程序代码,可以帮助开发者（尤其是不擅长css页面开发的程序人员）轻松的实现一个css,不受浏览器限制的精美界面css效果。",
-    "studymodel": "201002",
-    "price":38.6,
-    "timestamp":"2022-07-25 19:11:35",
-    "pic":"group1/M00/00/00/wKhlQFs6RCeAY0pHAAJx5ZjNDEM428.jpg",
-    "tags": [ "bootstrap", "dev"]
-}
-
-PUT /book/_doc/2
-{
-    "name": "java编程思想",
-    "description": "java语言是世界第一编程语言,在软件开发领域使用人数最多。",
-    "studymodel": "201001",
-    "price":68.6,
-    "timestamp":"2022-07-25 19:11:35",
-    "pic":"group1/M00/00/00/wKhlQFs6RCeAY0pHAAJx5ZjNDEM428.jpg",
-    "tags": [ "java", "dev"]
-}
-
-PUT /book/_doc/3
-{
-    "name": "spring开发基础",
-    "description": "spring 在java领域非常流行,java程序员都在用。",
-    "studymodel": "201001",
-    "price":88.6,
-    "timestamp":"2022-07-25 19:11:35",
-    "pic":"group1/M00/00/00/wKhlQFs6RCeAY0pHAAJx5ZjNDEM428.jpg",
-    "tags": [ "spring", "java"]
-}
-```
-
-* 搜索
-
-```json
-GET  /book/_search 
-{
-    "query" : {
-        "match" : {
-            "description" : "java程序员"
-        }
-    }
-}
-```
-
-
-
-## _score
-
-
-
-```json
-{
-  "took" : 1,
-  "timed_out" : false,
-  "_shards" : {
-    "total" : 1,
-    "successful" : 1,
-    "skipped" : 0,
-    "failed" : 0
-  },
-  "hits" : {
-    "total" : {
-      "value" : 2,
-      "relation" : "eq"
-    },
-    "max_score" : 2.137549,
-    "hits" : [
-      {
-        "_index" : "book",
-        "_type" : "_doc",
-        "_id" : "3",
-        "_score" : 2.137549,
-        "_source" : {
-          "name" : "spring开发基础",
-          "description" : "spring 在java领域非常流行,java程序员都在用。",
-          "studymodel" : "201001",
-          "price" : 88.6,
-          "timestamp" : "2022-07-24 19:11:35",
-          "pic" : "group1/M00/00/00/wKhlQFs6RCeAY0pHAAJx5ZjNDEM428.jpg",
-          "tags" : [
-            "spring",
-            "java"
-          ]
-        }
-      },
-      {
-        "_index" : "book",
-        "_type" : "_doc",
-        "_id" : "2",
-        "_score" : 0.57961315,
-        "_source" : {
-          "name" : "java编程思想",
-          "description" : "java语言是世界第一编程语言,在软件开发领域使用人数最多。",
-          "studymodel" : "201001",
-          "price" : 68.6,
-          "timestamp" : "2022-07-25 19:11:35",
-          "pic" : "group1/M00/00/00/wKhlQFs6RCeAY0pHAAJx5ZjNDEM428.jpg",
-          "tags" : [
-            "java",
-            "dev"
-          ]
-        }
-      }
-    ]
-  }
-}
-```
-
-
-
-* 建立索引时, description字段 term倒排索引
-* 搜索时,直接找description中含有java的文档 2,3,并且3号文档含有两个java字段,一个程序员,所以得分高,排在前面.2号文档含有一个java,排在后面
-
-
-
-## DSL
-
-
-
-* match_all:
-* match:
-* multi_match: 多匹配
-* range: 范围查询
-* term: 字段为keyword时,存储和搜索都不分词
+* query: 代表查询对象
+* match_all:  匹配所有,具体查询类型,全文检索,会根据空格等进行分词
+* match: 条件匹配,里面是每个字段需要匹配的值,以空格进行分词,默认匹配是or
+* match_phrase: 短语匹配,和match不同的是,里面的短语不会以空格进行分词
+* multi_match: 多字段匹配.只要有一个字段中包含搜索关键字即可,同样会进行分词
+* range: 范围查询,可选字段有`gt,gte,lt,lte`
+* term: 精确匹配,字段为keyword时,存储和搜索都不分词
+* bool: 布尔查询/组合查询,将各种其它查询通过`must`(与),`must_not`(非),`should`(或)进行组合.一个组合查询里面只能出现一种组合,不能混用
 * exists: 查询有某些字段值的文档
 * fuzzy: 返回包含与搜索词类似的词的文档,该词由Levenshtein编辑距离度量,包括以下几种情况: 
-  - 更改角色(box→fox)
-
-  - 删除字符(aple→apple)
-
-  - 插入字符(sick→sic)
-
-  - 调换两个相邻字符(ACT→CAT)
+  * 更改角色(box→fox)
+  * 删除字符(aple→apple)
+  * 插入字符(sick→sic)
+  * 调换两个相邻字符(ACT→CAT)
 * ids: 根据id列表搜索多个
 * prefix: 前缀查询
 * regexp: 正则查询
+* filter: 过滤,作用和bool查询中must_not的作用相同,但是不影响评分
+* `_source`: 结果过滤.ES默认在搜索的结果中会把保存在`_source`中的所有字段都返回,如果只想获取部分字段,可以添加`_source`过滤
+* sort: 按照不同的字段进行排序,并且通过`order`指定排序的方式
+* from/size: 分页查询
 
 ```json
 GET /book/_search
 {
     "query": {
         "match_all": {},
-        "match": { 
-            "description": "java程序员"
+        // 匹配具体的字段,该方式默认是全文检索
+        "match": {
+            // 具体匹配的字段名,需要匹配的值词,包含value1或value2的内容都会被搜索到.默认是or匹配,相关数据也会查出
+            "description": "value1 value2",
+            "content": {
+                "query": "java程序员",
+                // 相当于精准匹配
+                "operator": "and"
+            },
+            // 若是对象属性,也可以进行匹配.同match_phrase:不同的是必须精确匹配,不可以是包含
+            "test.txt": "test"
+        },
+        // 短语匹配,不会对空格等进行分词,不会对需要搜索的关键字进行分词
+        // 可以匹配包含搜索关键字的字段
+        "match_phrase":{
+            "description":"value1 value2"
         },
         "multi_match": {
             "query": "java程序员",
@@ -1409,27 +424,59 @@ GET /book/_search
                 "lte": 90
             }
         },
+        // 同match,但不会进行分词,用于精确值的查找.官方不建议该方式用于文本值的检索,而是数值的检索
         "term": {
             "description": "java程序员"
+        },
+        "bool":{
+            "must": [
+                {
+                    "match": {
+                        "name": "java"
+                    }
+                },
+                {
+                    "range": {
+                        "price": {
+                            "gte": 1000,
+                            "lte": 3000
+                        }
+                    }
+                },
+                {
+                    "range": {
+                        "price": {
+                            "gte": 2000,
+                            "lte": 4000
+                        }
+                    }
+                }
+            ],
+            // 可满足,可不满足的条件,只会影响评分和排序
+            "should": [
+                {"match": {"description": "java"}},
+                { "bool": {
+                    "must":{ "match": { "name": "java" }},
+                    "must_not": { "match": { "rude": true }}
+                }}
+            ],
+            "minimum_should_match": 1,
+            "must_not": [
+                {"match": {"content": "java"}}
+            ]
         },
         "terms": { 
             "tag":[ "search", "full_text", "nosql"]
         },
-        "exists": {
-            "field": "join_date"
-        },
+        "exists": {"field": "join_date"},
         "fuzzy": {
-            "description": {
-                "value": "jave"
-            }
+            "description": {"value": "jave"}
         },
         "ids" : {
             "values" : ["1", "4", "100"]
         },
         "prefix": {
-            "description": {
-                "value": "spring"
-            }
+            "description": {"value": "spring"}
         },
         "regexp": {
             "description": {
@@ -1438,20 +485,45 @@ GET /book/_search
                 "max_determinized_states": 10000,
                 "rewrite": "constant_score"
             }
-        }
+        },
+        "filter": {
+            "range": {
+                "price": { "gt": 2000, "lt": 3000 }
+            }
+        },
+        // 分页查询,从第几条数据开始
+        "from":0,
+        // 分页查询,每页显示条数
+        "size":10,
+        // 指定查询返回的字段,默认是返回所有
+        "_source": ["title","price"],
+        // 排序,可对多个字段进行排序
+        "sort": [
+            {
+                "price": { "order": "desc" }
+            },
+            {
+                "_score": { "order": "desc"}
+            }
+        ]
     }
 }
 ```
 
 
 
-
-
-## Filter
+### Filter
 
 
 
-### filter与query
+* 过滤
+* 所有的查询都会影响到文档的评分及排名,如果需要在查询结果中进行过滤,并且不希望过滤条件影响评分,那么就不要把过滤条件作为查询条件来用,而是使用filter方式.filter中还可以再次进行bool组合条件过滤
+* 针对范围进行过滤(range),一次只能对一个Field过滤
+* 针对项进行精准过滤,一次只能对一个Field过滤
+
+
+
+#### filter与query
 
 
 
@@ -1516,12 +588,89 @@ GET /book/_search
 
 
 
-### filter与query性能
+#### filter与query性能
 
 
 
 * filter: 不需要计算相关度分数,不需要按照相关度分数进行排序,同时还有内置的自动cache最常使用filter的数据
 * query: 要计算相关度分数,按照分数进行排序,而且无法cache结果
+
+
+
+### Highlight
+
+
+
+* 高亮,本质是给关键字添加了<em>标签,在前端再给该标签添加样式即可
+* highlight: 需要高亮的对象
+  * fields:高亮字段
+  * pre_tags:前置标签
+  * post_tags:后置标签
+
+```json
+GET /book/_search
+{
+    "query": {
+        "match": {
+            "name": "java"
+        }
+    },
+    "highlight": {
+        "fields": {"name": {}}, 
+        "pre_tags": "<em>",
+        "post_tags": "</em>"
+    }
+}
+```
+
+
+
+## 多索引搜索
+
+
+
+* 一次性搜索多个index和多个type下的数据
+* `/_search`: 所有索引下的所有数据都搜索出来
+* `/index1/_search`: 指定一个index,搜索其下所有的数据
+* `/index1,index2/_search`: 同时搜索两个index下的数据
+* `/index*/_search`: 按照通配符去匹配多个索引
+* 应用场景: 生产环境log索引可以按照日期分开
+
+
+
+## 分页搜索
+
+
+
+* 关键词:`size,from`
+* `GET /book/_search?size=10`
+* `GET /book/_search?size=10&from=0`
+* `GET /book/_search?size=10&from=20`
+* `GET /book_search?from=0&size=3`
+* 分页原理: 从每个分片获得相同数量的数据,然后再到coordinate进行汇总排序,将最终的结果取出
+
+
+
+## deep paging
+
+
+
+* 根据相关度评分倒排序,所以分页过深,coordinate(协调节点)会将进行大量数据聚合分析
+* 消耗网络带宽,各 shard 要把数据传递给 coordinate node,这个过程是有大量数据传递的
+* 消耗内存,各 shard 要把数据传送给 coordinate ,这个传递回来的数据,是被 coordinate 保存在内存中的,这样会大量消耗内存
+* 消耗cpu,coordinate 要把传回来的数据进行排序,这个排序过程很消耗cpu
+* 所以: 鉴于deep paging的性能问题,所有应尽量减少使用
+
+
+
+## bouncing results
+
+
+
+* 两个document排序,field值相同,不同的shard上,可能排序不同: 每次请求轮询到不同的replica上;每次得到的搜索结果的排序都不一样
+* 这个问题出现最多的地方就是timestamp进行排序
+* 当使用一个timestamp字段对结果进行排序,因为es中时间格式为`%Y-%m-%d`,那么同样时间的数据会有很多.es如果不做任何设置,将会按round-robin的方式从primary和replica里取了再排序,这样结果就不能保证每次都一样的.因为primary有的relica里不一定有,尤其是在不停往es里存放数据的情况
+* 如果有两份文档拥有相同的timestamp,因为搜索请求是以一种循环(Round-robin)的方式被可用的分片拷贝进行处理的,因此这两份文档的返回顺序可能因为处理的分片不一样而不同,比如主分片处理的顺序和副本分片处理的顺序就可能不一样,这就是结果跳跃问题: 每次用户刷新页面都会发现结果的顺序不一样
 
 
 
@@ -1554,8 +703,6 @@ GET /book/_search
 }
 ```
 
-
-
 * 正确的情况
 
 ```json
@@ -1586,65 +733,6 @@ GET /book/_search
       "explanation" : "description:java description:程序员"
     }
   ]
-}
-```
-
-
-
-## 定制排序规则
-
-
-
-### 默认排序规则
-
-
-
-* 默认情况下,是按照`_score`降序排序的,然而,某些情况下,可能没有有用的`_score`,比如说filter
-
-```json
-// GET book/_search
-{
-    "query": {
-        "bool": {
-            "must": [
-                {
-                    "match": {
-                        "description": "java程序员"
-                    }
-                }
-            ]
-        }
-    }
-}
-```
-
-
-
-### 定制排序规则
-
-
-
-* 相当于sql中order by  ?sort=sprice:desc
-
-```json
-// GET /book/_search 
-{
-    "query": {
-        "constant_score": {
-            "filter" : {
-                "term" : {
-                    "studymodel" : "201001"
-                }
-            }
-        }
-    },
-    "sort": [
-        {
-            "price": {
-                "order": "asc"
-            }
-        }
-    ]
 }
 ```
 
@@ -1794,768 +882,23 @@ PUT /website/_doc/3
 
 
 
-# 文档存储机制
+# Index
 
 
 
-## 数据路由
-
-
-
-* 一个文档,最终会落在主分片的一个分片上,数据路由决定文档最终落在那个分片上
-
-
-
-### 路由算法
-
-
-
-* 哈希值对主分片数取模
-
-```
-shard = hash(routing) % number_of_primary_shards
-```
-
-* 对一个文档进行CRUDd时,都会带一个路由值 routing number,默认为文档_id(可能是手动指定,也可能是自动生成)
-* 存储1号文档,经过哈希计算,哈希值为2,此索引有3个主分片,那么计算2%3=2,就算出此文档在P2分片上
-* 决定一个document在哪个shard上,最重要的一个值就是routing值,默认是_id,也可以手动指定,相同的routing值,计算的hash值是相同的
-
-
-
-### 手动指定routing number
-
-
-
-```
-PUT /test_index/_doc/15?routing=num
-{
-  "num": 0,
-  "tags": []
-}
-```
-
-* 可以指定已有数据的一个属性为路由值,好处是可以定制一类文档数据存储到一个分片中,缺点是设计不好,会造成数据倾斜
-* 不同文档尽量放到不同的索引中,剩下的事情交给es集群自己处理
-
-
-
-### 主分片数量不可变
-
-
-
-## 文档增删改
-
-
-
-* 增删改可以看做update,都是对数据的改动,一个改动请求发送到es集群,经历以下四个步骤:
-  * 客户端选择一个node发送请求过去,这个node就是coordinating node(协调节点)
-  * coordinating node,对document进行路由,将请求转发给对应的node(有primary shard)
-  * 实际的node上的primary shard处理请求,然后将数据同步到replica node
-  * coordinating node,如果发现primary node和所有replica node都搞定之后,就返回响应结果给客户端
-
-
-
-## 文档查询
-
-
-
-* 客户端发送请求到任意一个node,成为coordinate node
-* coordinate node对document进行路由,将请求转发到对应的node,此时会使用round-robin随机轮询算法,在primary shard以及其所有replica中随机选择一个,让读请求负载均衡
-* 接收请求的node返回document给coordinate node
-* coordinate node返回document给客户端
-* 特殊情况: document如果还在建立索引过程中,可能只有primary shard有,任何一个replica shard都没有,此时可能会导致无法读取到document,但是document完成索引建立之后,primary shard和replica shard就都有了
-
-
-
-## bulk api
-
-
-
-```json
-// POST /_bulk
-{ "delete": { "_index": "test_index",  "_id": "5" }} \n
-{ "create": { "_index": "test_index",  "_id": "14" }}\n
-{ "test_field": "test14" }\n
-{ "update": { "_index": "test_index",  "_id": "2"} }\n
-{ "doc" : {"test_field" : "bulk test"} }\n
-```
-
-
-
-* bulk中的每个操作都可能要转发到不同的node的shard去执行
-* 允许任意的换行,es拿到那种标准格式的json串以后,要按照下述流程去进行处理
-  * 直接按照换行符切割json
-  * 对每两个一组的json,读取meta,进行document路由
-  * 直接将对应的json发送到node上去
-* 耗费更多内存,更多的jvm gc开销
-* bulk size最佳大小一般建议在几千条,大小在10MB左右,如果此时有多个请求同时发送,会极大的消耗内存.占用更多的内存可能会积压其他请求的内存使用量,此时就可能会导致其他请求的性能急速下降
-* 占用内存更多会导致java虚拟机的垃圾回收次数更多,更频繁,每次要回收的垃圾对象更多,耗费的时间更多
-
-
-
-# Document
-
-
-
-## 内置字段
-
-
-
-```json
-{
-    "_index" : "book",
-    "_type" : "_doc",
-    "_id" : "1",
-    "_version" : 1,
-    "_seq_no" : 10,
-    "_primary_term" : 1,
-    "found" : true,
-    "_source" : {
-        "name" : "Bootstrap开发教程1",
-        "description" : "Bootstrap是由Twitter推出的一个前台页面开发css框架",
-        "studymodel" : "201002",
-        "price" : 38.6,
-        "timestamp" : "2019-08-25 19:11:35",
-        "pic" : "group1/M00/00/00/wKhlQFs6RCeAY0pHAAJx5ZjNDEM428.jpg",
-        "tags" : [
-            "bootstrap",
-            "开发"
-        ]
-    }
-}
-```
-
-
-
-### _index
-
-
-
--  此文档属于哪个索引
--  类似数据放在一个索引中,数据库中表的定义规则,各个索引存储和搜索时互不影响
--  定义规则: 英文小写,尽量不要使用特殊字符
-
-
-
-### _type
-
-
-
--  类别
--  以后的es9将彻底删除此字段
-
-
-
-### _id
-
-
-
-* 文档的唯一标识,类似表的主键,结合索引可以标识和定义一个文档
-* 生成: 手动(put /index/_doc/id),自动
-
-
-
-## 生成文档id
-
-
-
-### 手动生成id
-
-
-
-* `PUT /{index}/_doc/id`
-
-```json
-PUT /test_index/_doc/1
-{
-  "test_field": "test"
-}
-```
-
-
-
-### 自动生成id
-
-
-
-* `POST /{index}/_doc`
-
-```json
-POST /test_index/_doc
-{
-  "test_field": "test1"
-}
-```
-
-
-
-```json
-{
-  "_index" : "test_index",
-  "_type" : "_doc",
-  "_id" : "x29LOm0BPsY0gSJFYZAl",
-  "_version" : 1,
-  "result" : "created",
-  "_shards" : {
-    "total" : 2,
-    "successful" : 1,
-    "failed" : 0
-  },
-  "_seq_no" : 0,
-  "_primary_term" : 1
-}
-```
-
-* 自动id特点: 长度为20个字符,URL安全,base64编码,GUID,分布式生成不冲突
-
-
-
-## _source
-
-
-
-* 插入数据时的所有字段和值,在get获取数据时,在_source字段中原样返回
-* `GET /book/_doc/1`: 查询id为1的所有字段
-
-
-
-### 自定义返回字段
-
-
-
-* 就像sql不要select *,而要select name,price from book …一样
-* `GET  /book/_doc/1?__source_includes=name,price`: 指定返回字段
-
-```json
-{
-  "_index" : "book",
-  "_type" : "_doc",
-  "_id" : "1",
-  "_version" : 1,
-  "_seq_no" : 10,
-  "_primary_term" : 1,
-  "found" : true,
-  "_source" : {
-    "price" : 38.6,
-    "name" : "Bootstrap开发教程1"
-  }
-}
-```
-
-
-
-## 全量更新
-
-
-
-* `PUT /{index}/_doc/{id}`
-
-```json
-PUT /test_index/_doc/1
-{
-  "test_field": "test"
-}
-```
-
-
-
-## 强制创建
-
-
-
-* 为防止覆盖原有数据,在新增时,设置为强制创建,不会覆盖原有文档
-* `PUT /{index}/ _doc/{id}/_create`
-
-```json
-PUT /test_index/_doc/1/_create
-{
-  "test_field": "test"
-}
-```
-
-* 已有相同数据时会返回错误
-
-```json
-{
-    "error": {
-        "root_cause": [
-            {
-                "type": "version_conflict_engine_exception",
-                "reason": "[2]: version conflict, document already exists (current version [1])",
-                "index_uuid": "lqzVqxZLQuCnd6LYtZsMkg",
-                "shard": "0",
-                "index": "test_index"
-            }
-        ],
-        "type": "version_conflict_engine_exception",
-        "reason": "[2]: version conflict, document already exists (current version [1])",
-        "index_uuid": "lqzVqxZLQuCnd6LYtZsMkg",
-        "shard": "0",
-        "index": "test_index"
-    },
-    "status": 409
-}
-```
-
-
-
-## 删除
-
-
-
-* `DELETE /{index}/_doc/{id}`
-* 旧文档的内容不会立即删除,只是标记为deleted,适当的时机,集群会将这些文档删除
-
-
-
-## 局部更新
-
-
-
-* 使用`PUT /index/type/id` 为文档全量替换,需要将文档所有数据提交,而partial update局部替换则只修改变动字段
-* `POST /{index}/type/{id}/_update`
-
-```json
-post /index/type/id/_update 
-{
-   "doc": {
-      "field": "value"
-   }
-}
-```
-
-
-
-## 脚本
-
-
-
-* ES可以内置脚本执行复杂操作,例如painless脚本.groovy脚本在ES6以后就不支持了,原因是耗内存,不安全远程注入漏洞
-
-
-
-### 内置脚本
-
-
-
-* 修改文档6的num字段,+1
-
-```json
-POST /test_index/_doc/6/_update
-{
-   "script" : "ctx._source.num+=1"
-}
-```
-
-* 搜索所有文档,将num字段乘以2输出
-
-```json
-GET /test_index/_search
-{
-  "script_fields": {
-    "my_doubled_field": {
-      "script": {
-       "lang": "expression",
-        "source": "doc['num'] * multiplier",
-        "params": {
-          "multiplier": 2
-        }
-      }
-    }
-  }
-}
-```
-
-* 返回
-
-```json
-{
-    "_index" : "test_index",
-    "_type" : "_doc",
-    "_id" : "7",
-    "_score" : 1.0,
-    "fields" : {
-        "my_doubled_field" : [
-            10.0
-        ]
-    }
-}
-```
-
-
-
-### 外部脚本
-
-
-
-* [官方文档](https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-scripting-using.html)
-* Painless是内置支持的,脚本内容可以通过多种途径传给 es,包括 rest 接口,或者放到 config/scripts目录等,默认开启
-* 脚本性能低下,且容易发生注入,不建议使用
-
-
-
-## ES并发
-
-
-
-* 如同秒杀,多线程情况下,es同样会出现并发冲突问题
-* es内部主从同步时,是多线程异步,乐观锁机制
-
-
-
-### 基于_version乐观锁
-
-
-
-* ES对于文档的增删改都是基于版本号.新增多次文档,返回版本号递增
-
-
-
-### 案例
-
-
-
-* 客户端基于_version并发操作流程
-* 新建文档
-
-```json
-PUT /test_index/_doc/5
-{
-  "test_field": "test001"
-}
-```
-
-* 返回:  
-
-```json
-{
-  "_index" : "test_index",
-  "_type" : "_doc",
-  "_id" : "3",
-  "_version" : 1,
-  "result" : "created",
-  "_shards" : {
-    "total" : 2,
-    "successful" : 1,
-    "failed" : 0
-  },
-  "_seq_no" : 8,
-  "_primary_term" : 1
-}
-```
-
-* 客户端1修改,带版本号1
-* 先获取数据的当前版本号
-
-```
-GET /test_index/_doc/5
-```
-
-* 更新文档
-
-```
-PUT /test_index/_doc/5?version=1
-{
-  "test_field": "test001"
-}
-PUT /test_index/_doc/5?if_seq_no=21&if_primary_term=1
-{
-  "test_field": "test001"
-}
-```
-
-* 客户端2并发修改,带版本号1
-
-```
-PUT /test_index/_doc/5?version=1
-{
-  "test_field": "test001"
-}
-PUT /test_index/_doc/5?if_seq_no=21&if_primary_term=1
-{
-  "test_field": "test001"
-}
-```
-
-* 报错
-* 客户端2重新查询,得到最新版本为2,seq_no=22
-
-```
-GET /test_index/_doc/4
-```
-
-* 客户端2并发修改,带版本号2
-
-```
-PUT /test_index/_doc/4?version=2
-{
-  "test_field": "test001"
-}
-es7
-PUT /test_index/_doc/5?if_seq_no=22&if_primary_term=1
-{
-  "test_field": "test001"
-}
-```
-
-* 修改成功
-
-
-
-## 手动控制版本号
-
-
-
-* 已有数据是在数据库中,有自己手动维护的版本号的情况下,可以使用external version控制
-* 修改时external version要大于当前文档的_version
-* 基于_version时,修改的文档version等于当前文档的版本号
-* `?version=1&version_type=external`
-* 新建文档
-
-```
-PUT /test_index/_doc/4
-{
-  "test_field": "test001"
-}
-```
-
-* 客户端1修改文档
-
-```
-PUT /test_index/_doc/4?version=2&version_type=external
-{
-  "test_field": "test001"
-}
-```
-
-* 客户端2同时修改
-
-```
-PUT /test_index/_doc/4?version=2&version_type=external
-{
-  "test_field": "test002"
-}
-```
-
-* 返回: 
-
-```json
-{
-    "error": {
-        "root_cause": [
-            {
-                "type": "version_conflict_engine_exception",
-                "reason": "[4]: version conflict, current version [2] is higher or equal to the one provided [2]",
-                "index_uuid": "-rqYZ2EcSPqL6pu8Gi35jw",
-                "shard": "1",
-                "index": "test_index"
-            }
-        ],
-        "type": "version_conflict_engine_exception",
-        "reason": "[4]: version conflict, current version [2] is higher or equal to the one provided [2]",
-        "index_uuid": "-rqYZ2EcSPqL6pu8Gi35jw",
-        "shard": "1",
-        "index": "test_index"
-    },
-    "status": 409
-}
-```
-
-* 客户端2重新查询数据: `GET /test_index/_doc/4`
-* 客户端2重新修改数据
-
-```
-PUT /test_index/_doc/4?version=3&version_type=external
-{
-  "test_field": "test002"
-}
-```
-
-
-
-## retry_on_conflict
-
-
-
-* 更新时指定重试次数: `POST /test_index/_doc/5/_update?retry_on_conflict=3`
-
-```json
-{
-    "doc": {
-        "test_field": "test001"
-    }
-}
-```
-
-* 与 _version结合使用: `POST /test_index/_doc/5/_update?retry_on_conflict=3&version=22&version_type=external`
-
-```json
-{
-    "doc": {
-        "test_field": "test001"
-    }
-}
-```
-
-
-
-## 批量查询
-
-
-
-### mget
-
-
-
-* `GET /_mget`
-
-```json
-{
-    "docs" : [
-        {
-            "_index" : "test_index",
-            "_type" :  "_doc",
-            "_id" :    1
-        },
-        {
-            "_index" : "test_index",
-            "_type" :  "_doc",
-            "_id" :    7
-        }
-    ]
-}
-```
-
-* 返回: 
-
-```json
-{
-    "docs" : [
-        {
-            "_index" : "test_index",
-            "_type" : "_doc",
-            "_id" : "2",
-            "_version" : 6,
-            "_seq_no" : 12,
-            "_primary_term" : 1,
-            "found" : true,
-            "_source" : {
-                "test_field" : "test12333123321321"
-            }
-        },
-        {
-            "_index" : "test_index",
-            "_type" : "_doc",
-            "_id" : "3",
-            "_version" : 6,
-            "_seq_no" : 18,
-            "_primary_term" : 1,
-            "found" : true,
-            "_source" : {
-                "test_field" : "test3213"
-            }
-        }
-    ]
-}
-```
-
-
-
-### 同一索引下批量查询
-
-
-
-* `GET /test_index/_mget`
-
-```json
-{
-    "docs" : [
-        {
-            "_id" :    2
-        },
-        {
-            "_id" :    3
-        }
-    ]
-}
-```
-
-
-
-### 搜索
-
-
-
-* `POST /test_index/_doc/_search`
-
-```json
-{
-    "query": {
-        "ids" : {
-            "values" : ["1", "7"]
-        }
-    }
-}
-```
-
-
-
-## 批量增删改
-
-
-
-* Bulk 操作解释将文档的增删改查一些列操作,通过一次请求全都做完,减少网络传输次数
-
-```
-POST /_bulk
-{"action": {"metadata"}}
-{"data"}
-```
-
-* 如下操作,删除5,新增14,修改2
-
-```
-POST /_bulk
-{ "delete": { "_index": "test_index",  "_id": "5" }} 
-{ "create": { "_index": "test_index",  "_id": "14" }}
-{ "test_field": "test14" }
-{ "update": { "_index": "test_index",  "_id": "2"} }
-{ "doc" : {"test_field" : "bulk test"} } 
-```
-
--  delete: 删除一个文档,只要1个json串就可以了
--  create: 相当于强制创建`PUT /index/type/id/_create`
--  index: 普通的put操作,可以是创建文档,也可以是全量替换文档
--  update: 执行的是局部更新partial update操作
--  格式: 每个json不能换行,相邻json必须换行
--  隔离: 每个操作互不影响,操作失败的行会返回其失败信息
--  bulk请求一次不要太大,否则一下积压到内存中,性能会下降,一次请求几千个操作、大小在几M正好
-
-
-
-# Index索引
-
-
-
-## 索引管理
-
-
-
-### 创建索引
+## 创建索引
 
 
 
 * 直接put数据 PUT index/_doc/1,es会自动生成索引,并建立动态映射dynamic mapping
 * 在生产上,需要自己手动建立索引和映射,是为了更好地管理索引,就像数据库的建表语句一样
-
-
-
-### 创建索引
-
+* `PUT /{index_name}`: 创建索引
+  * number_of_shards: 主分片数
+  * number_of_replicas: 每个主分片的副本数
 
 
 ```json
-// PUT /my_index
+// PUT /test_index
 {
     "settings": {
         "number_of_shards": 1,
@@ -2573,9 +916,19 @@ POST /_bulk
 }
 ```
 
+* 创建成功
+
+```json
+{
+    "acknowledged": true,
+    "shards_acknowledged": true,
+    "index": "test_index"
+}
+```
 
 
-### 插入数据
+
+## 插入数据
 
 
 
@@ -2589,16 +942,17 @@ POST /my_index/_doc/1
 
 
 
-### 查询
+## 查询索引
 
 
 
-* `GET /my_index/_doc/1`,`GET /default_index/_doc/1`:查询数据
+* `GET /my_index`: 查询索引信息
+
 * `GET /my_index/_mapping`,`GET /my_index/_setting`: 查询索引结构信息
 
 
 
-### 修改索引
+## 修改索引
 
 
 
@@ -2613,7 +967,7 @@ PUT /my_index/_settings
 
 
 
-### 删除索引
+## 删除索引
 
 
 
@@ -2621,14 +975,7 @@ PUT /my_index/_settings
 * `DELETE /index_one,index_two`: 同时删除2个索引
 * `DELETE /index_*`: 删除index_开头的索引
 * `DELETE /_all`: 删除所有索引
-
-
-
-为了安全起见,防止恶意删除索引,删除时必须指定索引名: 
-
-elasticsearch.yml
-
-action.destructive_requires_name: true
+* 为了安全起见,防止恶意删除索引,删除时必须指定索引名: 在配置文件`elasticsearch.yml`中添加配置`action.destructive_requires_name: true`
 
 
 
@@ -3158,7 +1505,8 @@ GET /prod_index/_search
 
 
 
-* 自动或手动为index中的_doc建立的一种数据结构和相关配置
+* 映射是定义文档的过程,文档包含哪些字段,这些字段是否保存,是否索引,是否分词等,相当于数据库中的表结构
+* 自动或手动为index中的_doc建立的一种数据结构和相关配置.若是手动添加,必须在添加数据之前完成
 * 动态映射: dynamic mapping,自动建立index以及对应的mapping,mapping中包含了每个field对应的数据类型,以及如何分词等设置
 * 往es里面直接插入数据,es会自动建立索引,同时建立对应的mapping(dynamic mapping)
 * mapping中就自动定义了每个field的数据类型
@@ -3169,104 +1517,38 @@ GET /prod_index/_search
 
 
 
-## 精确匹配与全文搜索
-
-
-
-### exact value
-
-
-
-* 精确匹配,顾名思义,完全相同才可以查到数据
-
-
-
-### full text
-
-
-
-* 全文检索,并不是单纯的只匹配完整的一个值,而是可以对值进行分词后匹配,也可以通过缩写、时态、大小写、同义词等进行匹配,深入 NPL,自然语义处理
-
-
-
-## 全文检索原理
-
-
-
-* 分词,初步建立倒排索引
-* 重建倒排索引,加入normalization
-  * normalization: 正规化,建立倒排索引的时候,会对拆分出的各个单词进行处理,以提升搜索的时候能够搜索到相关联的文档的概率.如时态的转换,单复数的转换,同义词的转换,大小写的转换等
-
-
-
-## analyzer
-
-
-
-* 分词器,切分词语,normalization(提升recall召回率)
-* 将句子拆分成一个一个的单词,同时对每个单词进行normalization(时态转换,单复数转换)
-* recall,召回率: 搜索的时候,增加能够搜索到的结果的数量
-* analyzer 组成部分: 
-  * character filter: 在一段文本进行分词之前,先进行预处理,比如过滤html标签`<span>hello<span> --> hello,& --> and I&you --> I and you`
-  * tokenizer: 分词,hello you and me --> hello, you, and, me
-  * token filter: lowercase,stop word,synonymom,dogs --> dog,liked --> like,Tom --> tom,a/the/an --> 干掉,mother --> mom,small --> little
-
- 
-
-### 内置分词器
-
-
-
-* [官网](https://www.elastic.co/guide/en/elasticsearch/reference/7.4/analysis-analyzers.html)
-* standard analyzer标准分词器: set, the, shape, to, semi, transparent, by, calling, set_trans, 5(默认的是standard)
-* simple analyzer简单分词器: set, the, shape, to, semi, transparent, by, calling, set, trans
-* whitespace analyzer: Set, the, shape, to, semi-transparent, by, calling, set_trans(5)
-* language analyzer(特定语言分词器,比如english,英语分词器): set, shape, semi, transpar, call, set_tran, 5
-
-
-
-## query string
-
-
-
-* 根据字段分词策略
-* 必须以和index建立时相同的analyzer进行分词
-* 对exact value和full text的区别对待.如:  date: exact value 精确匹配;text: full text 全文检索
-
-
-
-## 数据类型
+## 字段映射
 
 
 
 * [文档](https://www.elastic.co/guide/en/elasticsearch/reference/7.3/mapping-types.html)
-* string :text and keyword
-* byte,short,integer,long,float,double
-* boolean
-* date
+
+* string:text和keyword,keyword在进行搜索时不会对值存储在ES中的值进行分词,是通过整体搜索
+* number:long,integer,short,byte,double,float,half_float,scaled_float
+* date:date
+* boolean:boolean
+* binary:binary
+* range:integer_range,float_range,long_range,double_range,date_range
 
 
 
-## dynamic mapping 推测规则
+## 创建映射
 
 
 
-* true or false   --> boolean
-* 123     --> long
-* 123.45      --> double
-* 2019-01-01  --> date
-* "hello world"   --> text/keywod
+* `PUT /{index}/_mapping`: 创建mapping,需要先创建索引,且还没有插入数据
+* 字段名:类似于列名,properties下可以指定许多字段,每个字段可以有很多属性
 
-
-
-## 创建索引
-
-
+  - type:类型,可以是text,long,short,date,integer,object等
+  - index:是否索引,默认为true.指添加新字段时是否自动将新字段添加到mapping中,true添加,false不添加
+  - store:是否存储,默认为false
+  - analyzer:分词器,默认英文分词器(english).中文可以使用ik分词器(需要自行下载):`ik_max_word`或者`ik_smart`
 
 ```json
-// PUT /book/_mapping
+PUT /book/_mapping
 {
     "properties": {
+        // 字段名
         "name": {
             "type": "text"
         },
@@ -3347,6 +1629,37 @@ GET /prod_index/_search
     "scaling_factor": 100
 },
 ```
+
+
+
+## 重建映射
+
+
+
+* 不能更新映射,因为修改映射会对数据的检索方式造成很大的变动,只能数据迁移.需要先重新新增正确的映射方式,之后使用_reindex对数据重新建立索引
+
+  ```json
+  // 重新建立索引,在kibana中直接使用_reindex接口即可
+  {
+      "source":{
+          "index":"oldindexname"
+      },
+      "dest":{
+          "index":"newindexname"
+      }
+  }
+  ```
+
+  
+
+
+
+## 查看映射
+
+
+
+* `GET /_mapping`: 查看所有映射
+* `GET /{index}/_mapping`:查看指定索引映射
 
 
 
@@ -3493,11 +1806,790 @@ PUT /company/_doc/1
 
 
 
+## exact value
+
+
+
+* 精确匹配,顾名思义,完全相同才可以查到数据
+
+
+
+## full text
+
+
+
+* 全文检索,并不是单纯的只匹配完整的一个值,而是可以对值进行分词后匹配,也可以通过缩写、时态、大小写、同义词等进行匹配,深入 NPL,自然语义处理
+
+
+
+### 原理
+
+
+
+* 分词,初步建立倒排索引
+* 重建倒排索引,加入normalization
+  * normalization: 正规化,建立倒排索引的时候,会对拆分出的各个单词进行处理,以提升搜索的时候能够搜索到相关联的文档的概率.如时态的转换,单复数的转换,同义词的转换,大小写的转换等
+
+
+
+## analyzer
+
+
+
+* 分词器,切分词语,normalization(提升recall召回率)
+* 将句子拆分成一个一个的单词,同时对每个单词进行normalization(时态转换,单复数转换)
+* recall,召回率: 搜索的时候,增加能够搜索到的结果的数量
+* analyzer 组成部分: 
+  * character filter: 在一段文本进行分词之前,先进行预处理,比如过滤html标签`<span>hello<span> --> hello,& --> and I&you --> I and you`
+  * tokenizer: 分词,hello you and me --> hello, you, and, me
+  * token filter: lowercase,stop word,synonymom,dogs --> dog,liked --> like,Tom --> tom,a/the/an --> 干掉,mother --> mom,small --> little
+
+ 
+
+### 内置分词器
+
+
+
+* [官网](https://www.elastic.co/guide/en/elasticsearch/reference/7.4/analysis-analyzers.html)
+* standard analyzer标准分词器: set, the, shape, to, semi, transparent, by, calling, set_trans, 5(默认的是standard)
+* simple analyzer简单分词器: set, the, shape, to, semi, transparent, by, calling, set, trans
+* whitespace analyzer: Set, the, shape, to, semi-transparent, by, calling, set_trans(5)
+* language analyzer(特定语言分词器,比如english,英语分词器): set, shape, semi, transpar, call, set_tran, 5
+
+
+
+## dynamic mapping推测规则
+
+
+
+* true or false   --> boolean
+* 123     --> long
+* 123.45      --> double
+* 2019-01-01  --> date
+* "hello world"   --> text/keywod
+
+
+
+# Document
+
+
+
+## 查询
+
+
+
+* `GET /{index}/_search`: 查询所有数据
+
+* `GET /{index}/_doc/{id}`:查询单条索引数据,返回全部的字段
+
+  ```json
+  {
+      "_index" : "book",
+      "_type" : "_doc",
+      "_id" : "1",
+      "_version" : 1,
+      "_seq_no" : 10,
+      "_primary_term" : 1,
+      "found" : true,
+      "_source" : {
+          "name" : "Bootstrap开发教程1",
+          "description" : "Bootstrap是由Twitter推出的一个前台页面开发css框架",
+          "studymodel" : "201002",
+          "price" : 38.6,
+          "timestamp" : "2019-08-25 19:11:35",
+          "pic" : "group1/M00/00/00/wKhlQFs6RCeAY0pHAAJx5ZjNDEM428.jpg",
+          "tags" : [
+              "bootstrap",
+              "开发"
+          ]
+      }
+  }
+  ```
+
+* `_index`: 此文档属于哪个索引
+
+* `_type`: 类别,以后的es9将彻底删除此字段
+
+* `_id`: 文档的唯一标识,类似表的主键,结合索引可以标识和定义一个文档
+
+* `_version`: 版本号,每修改一次就加1
+
+* `_seq_no`: 并发控制字段,每次更新就会+1,用来做乐观锁,可以写在url后
+
+* `_primary_term`: 同上,主分片重新分配,如重启就会变化
+
+* `_source`:源文档信息,所有的数据都在里面.插入数据时的所有字段和值,在get获取数据时,在_source字段中原样返回
+
+
+
+## 新增或更新
+
+
+
+* `PUT /{index}/_doc/[{id}]`: 新增或更新文档,参数都相同,更新是整体覆盖
+
+* 若id不指定,则会自动生成id.自动id长度为20个字符,URL安全,base64编码,GUID,分布式生成不冲突
+
+  ```json
+  // PUT /test_index/_doc/1
+  {
+      "name": "Bootstrap开发",
+      "description": "spring 在java领域非常流行,java程序员都在用。",
+      "studymodel": "201002",
+      "price":38.6,
+      "timestamp":"2019-08-25 19:11:35",
+      "pic":"group1/M00/00/00/wKhlQFs6RCeAY0pHAAJx5ZjNDEM428.jpg",
+      "tags": [ "bootstrap", "dev"]
+  }
+  ```
+
+* 返回
+
+  ```json
+  {
+      "_index" : "test_index",
+      "_type" : "_doc",
+      // 自动生成的id
+      "_id" : "x29LOm0BPsY0gSJFYZAl",
+      "_version" : 1,
+      "result" : "created",
+      "_shards" : {
+          "total" : 2,
+          "successful" : 1,
+          "failed" : 0
+      },
+      "_seq_no" : 0,
+      "_primary_term" : 1
+  }
+  ```
+
+
+
+## 强制新增
+
+
+
+* 为防止覆盖原有数据,在新增时,设置为强制创建,不会覆盖原有文档,已有相同数据时会返回错误
+* `PUT /{index}/_doc/{id}/_create`: 强制创建,若存在相同id的值,不会更新,会报错
+
+```json
+PUT /test_index/_doc/1/_create
+{
+  "test_field": "test"
+}
+```
+
+* 错误返回
+
+```json
+{
+    "error": {
+        "root_cause": [
+            {
+                "type": "version_conflict_engine_exception",
+                "reason": "[2]: version conflict, document already exists (current version [1])",
+                "index_uuid": "lqzVqxZLQuCnd6LYtZsMkg",
+                "shard": "0",
+                "index": "test_index"
+            }
+        ],
+        "type": "version_conflict_engine_exception",
+        "reason": "[2]: version conflict, document already exists (current version [1])",
+        "index_uuid": "lqzVqxZLQuCnd6LYtZsMkg",
+        "shard": "0",
+        "index": "test_index"
+    },
+    "status": 409
+}
+```
+
+
+
+## 更新
+
+
+
+* `POST  /{index}/_update/{id}`: 更新.若第一次更新,`_version,_seq_no`等会变化,但是多次更新内容连续且相同时,这些元数据不会再变化.不带`_update`的方式这些元数据都会变化
+
+  ```json
+  POST /book/_update/1/ 
+  {
+      "doc": {
+          "name": " Bootstrap开发教程高级"
+      }
+  }
+  ```
+
+
+
+## 删除
+
+
+
+* `DELETE /{index}/_doc/{id}`
+* 旧文档的内容不会立即删除,只是标记为deleted,适当的时机,集群会将这些文档删除
+
+
+
+## 局部更新
+
+
+
+* 使用`PUT /index/type/id` 为文档全量替换,需要将文档所有数据提交,而partial update局部替换则只修改变动字段
+* `POST /{index}/type/{id}/_update`
+
+```json
+post /index/type/id/_update 
+{
+   "doc": {
+      "field": "value"
+   }
+}
+```
+
+
+
+## 脚本
+
+
+
+* ES可以内置脚本执行复杂操作,例如painless脚本.groovy脚本在ES6以后就不支持了,原因是耗内存,不安全远程注入漏洞
+
+
+
+### 内置脚本
+
+
+
+* 修改文档6的num字段,+1
+
+```json
+POST /test_index/_doc/6/_update
+{
+   "script" : "ctx._source.num+=1"
+}
+```
+
+* 搜索所有文档,将num字段乘以2输出
+
+```json
+GET /test_index/_search
+{
+  "script_fields": {
+    "my_doubled_field": {
+      "script": {
+       "lang": "expression",
+        "source": "doc['num'] * multiplier",
+        "params": {
+          "multiplier": 2
+        }
+      }
+    }
+  }
+}
+```
+
+* 返回
+
+```json
+{
+    "_index" : "test_index",
+    "_type" : "_doc",
+    "_id" : "7",
+    "_score" : 1.0,
+    "fields" : {
+        "my_doubled_field" : [
+            10.0
+        ]
+    }
+}
+```
+
+
+
+### 外部脚本
+
+
+
+* [官方文档](https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-scripting-using.html)
+* Painless是内置支持的,脚本内容可以通过多种途径传给 es,包括 rest 接口,或者放到 config/scripts目录等,默认开启
+* 脚本性能低下,且容易发生注入,不建议使用
+
+
+
+## ES并发
+
+
+
+* 如同秒杀,多线程情况下,es同样会出现并发冲突问题
+* es内部主从同步时,是多线程异步,乐观锁机制
+
+
+
+### 基于_version乐观锁
+
+
+
+* ES对于文档的增删改都是基于版本号.新增多次文档,返回版本号递增
+
+
+
+### 案例
+
+
+
+* 客户端基于_version并发操作流程
+* 新建文档
+
+```json
+PUT /test_index/_doc/5
+{
+  "test_field": "test001"
+}
+```
+
+* 返回:  
+
+```json
+{
+  "_index" : "test_index",
+  "_type" : "_doc",
+  "_id" : "3",
+  "_version" : 1,
+  "result" : "created",
+  "_shards" : {
+    "total" : 2,
+    "successful" : 1,
+    "failed" : 0
+  },
+  "_seq_no" : 8,
+  "_primary_term" : 1
+}
+```
+
+* 客户端1修改,带版本号1
+* 先获取数据的当前版本号
+
+```
+GET /test_index/_doc/5
+```
+
+* 更新文档
+
+```
+PUT /test_index/_doc/5?version=1
+{
+  "test_field": "test001"
+}
+PUT /test_index/_doc/5?if_seq_no=21&if_primary_term=1
+{
+  "test_field": "test001"
+}
+```
+
+* 客户端2并发修改,带版本号1
+
+```
+PUT /test_index/_doc/5?version=1
+{
+  "test_field": "test001"
+}
+PUT /test_index/_doc/5?if_seq_no=21&if_primary_term=1
+{
+  "test_field": "test001"
+}
+```
+
+* 报错
+* 客户端2重新查询,得到最新版本为2,seq_no=22
+
+```
+GET /test_index/_doc/4
+```
+
+* 客户端2并发修改,带版本号2
+
+```
+PUT /test_index/_doc/4?version=2
+{
+  "test_field": "test001"
+}
+es7
+PUT /test_index/_doc/5?if_seq_no=22&if_primary_term=1
+{
+  "test_field": "test001"
+}
+```
+
+* 修改成功
+
+
+
+## 手动控制版本号
+
+
+
+* 已有数据是在数据库中,有自己手动维护的版本号的情况下,可以使用external version控制
+* 修改时external version要大于当前文档的_version
+* 基于_version时,修改的文档version等于当前文档的版本号
+* `?version=1&version_type=external`
+* 新建文档
+
+```
+PUT /test_index/_doc/4
+{
+  "test_field": "test001"
+}
+```
+
+* 客户端1修改文档
+
+```
+PUT /test_index/_doc/4?version=2&version_type=external
+{
+  "test_field": "test001"
+}
+```
+
+* 客户端2同时修改
+
+```
+PUT /test_index/_doc/4?version=2&version_type=external
+{
+  "test_field": "test002"
+}
+```
+
+* 返回: 
+
+```json
+{
+    "error": {
+        "root_cause": [
+            {
+                "type": "version_conflict_engine_exception",
+                "reason": "[4]: version conflict, current version [2] is higher or equal to the one provided [2]",
+                "index_uuid": "-rqYZ2EcSPqL6pu8Gi35jw",
+                "shard": "1",
+                "index": "test_index"
+            }
+        ],
+        "type": "version_conflict_engine_exception",
+        "reason": "[4]: version conflict, current version [2] is higher or equal to the one provided [2]",
+        "index_uuid": "-rqYZ2EcSPqL6pu8Gi35jw",
+        "shard": "1",
+        "index": "test_index"
+    },
+    "status": 409
+}
+```
+
+* 客户端2重新查询数据: `GET /test_index/_doc/4`
+* 客户端2重新修改数据
+
+```
+PUT /test_index/_doc/4?version=3&version_type=external
+{
+  "test_field": "test002"
+}
+```
+
+
+
+## retry_on_conflict
+
+
+
+* 更新时指定重试次数: `POST /test_index/_doc/5/_update?retry_on_conflict=3`
+
+```json
+{
+    "doc": {
+        "test_field": "test001"
+    }
+}
+```
+
+* 与 _version结合使用: `POST /test_index/_doc/5/_update?retry_on_conflict=3&version=22&version_type=external`
+
+```json
+{
+    "doc": {
+        "test_field": "test001"
+    }
+}
+```
+
+
+
+## 批量查询
+
+
+
+### mget
+
+
+
+* `GET /_mget`
+
+```json
+{
+    "docs" : [
+        {
+            "_index" : "test_index",
+            "_type" :  "_doc",
+            "_id" :    1
+        },
+        {
+            "_index" : "test_index",
+            "_type" :  "_doc",
+            "_id" :    7
+        }
+    ]
+}
+```
+
+* 返回: 
+
+```json
+{
+    "docs" : [
+        {
+            "_index" : "test_index",
+            "_type" : "_doc",
+            "_id" : "2",
+            "_version" : 6,
+            "_seq_no" : 12,
+            "_primary_term" : 1,
+            "found" : true,
+            "_source" : {
+                "test_field" : "test12333123321321"
+            }
+        },
+        {
+            "_index" : "test_index",
+            "_type" : "_doc",
+            "_id" : "3",
+            "_version" : 6,
+            "_seq_no" : 18,
+            "_primary_term" : 1,
+            "found" : true,
+            "_source" : {
+                "test_field" : "test3213"
+            }
+        }
+    ]
+}
+```
+
+
+
+### 同一索引下批量查询
+
+
+
+* `GET /test_index/_mget`
+
+```json
+{
+    "docs" : [
+        {
+            "_id" :    2
+        },
+        {
+            "_id" :    3
+        }
+    ]
+}
+```
+
+
+
+### 搜索
+
+
+
+* `POST /test_index/_doc/_search`
+
+```json
+{
+    "query": {
+        "ids" : {
+            "values" : ["1", "7"]
+        }
+    }
+}
+```
+
+
+
+# Bulk
+
+
+
+* 批量增删改查,通过一次请求全都做完,减少网络传输次数
+
+```json
+POST /_bulk
+{ "delete": { "_index": "test_index",  "_id": "5" }} 
+{ "create": { "_index": "test_index",  "_id": "14" }}
+// 需要新增的内容
+{ "test_field": "test14" }
+{ "update": { "_index": "test_index",  "_id": "2"} }
+// 更新更新的内容
+{ "doc" : {"test_field" : "bulk test"} }
+{"index":"_id":"1"} 
+{
+	// 需要更新的内容key-value
+}	
+```
+
+* delete: 删除一个文档
+* create: 相当于强制创建`PUT /index/type/id/_create`
+* update: 执行的是局部更新partial update操作
+* index: 普通的PUT新增数据
+* 每个json不能换行,相邻json必须换行.对每两个一组的json,读取meta,进行document路由
+* 每个操作互不影响,操作失败的行会返回其失败信息
+* bulk中的每个操作都可能要转发到不同的node的shard去执行
+* bulk size最佳大小一般建议在几千条,大小在10MB左右.如果并发太高,会极大的消耗内存,可能会积压其他请求的内存使用量,导致性能急速下降
+* 占用内存更多会导致java虚拟机的垃圾回收次数更多,更频繁,每次要回收的垃圾对象更多,耗费的时间更多
+
+
+
+# 文档存储机制
+
+
+
+## 数据路由
+
+
+
+* 一个文档,最终会落在主分片的一个分片上,数据路由决定文档最终落在那个分片上
+
+
+
+### 路由算法
+
+
+
+* 哈希值对主分片数取模
+
+```
+shard = hash(routing) % number_of_primary_shards
+```
+
+* 对一个文档进行CRUDd时,都会带一个路由值 routing number,默认为文档_id(可能是手动指定,也可能是自动生成)
+* 存储1号文档,经过哈希计算,哈希值为2,此索引有3个主分片,那么计算2%3=2,就算出此文档在P2分片上
+* 决定一个document在哪个shard上,最重要的一个值就是routing值,默认是_id,也可以手动指定,相同的routing值,计算的hash值是相同的
+
+
+
+### 手动指定routing number
+
+
+
+```
+PUT /test_index/_doc/15?routing=num
+{
+  "num": 0,
+  "tags": []
+}
+```
+
+* 可以指定已有数据的一个属性为路由值,好处是可以定制一类文档数据存储到一个分片中,缺点是设计不好,会造成数据倾斜
+* 不同文档尽量放到不同的索引中,剩下的事情交给es集群自己处理
+
+
+
+### 主分片数量不可变
+
+
+
+## 文档增删改
+
+
+
+* 增删改可以看做update,都是对数据的改动,一个改动请求发送到es集群,经历以下四个步骤:
+  * 客户端选择一个node发送请求过去,这个node就是coordinating node(协调节点)
+  * coordinating node,对document进行路由,将请求转发给对应的node(有primary shard)
+  * 实际的node上的primary shard处理请求,然后将数据同步到replica node
+  * coordinating node,如果发现primary node和所有replica node都搞定之后,就返回响应结果给客户端
+
+
+
+## 文档查询
+
+
+
+* 客户端发送请求到任意一个node,成为coordinate node
+* coordinate node对document进行路由,将请求转发到对应的node,此时会使用round-robin随机轮询算法,在primary shard以及其所有replica中随机选择一个,让读请求负载均衡
+* 接收请求的node返回document给coordinate node
+* coordinate node返回document给客户端
+* 特殊情况: document如果还在建立索引过程中,可能只有primary shard有,任何一个replica shard都没有,此时可能会导致无法读取到document,但是document完成索引建立之后,primary shard和replica shard就都有了
+
+
+
+## 核心流程
+
+
+
+* 一条新接收的数据进入内存buffer中,同时将数据写入到translog中,防止数据丢失
+* 每隔1S数据从buffer写入到segment(分段文件)上
+* 内存buffer生成一个新的segment,刷到文件系统缓存(os cache)中,Lucene即可检索这个新的segment.此时,memorybuffer被清空
+* 刷新segment到磁盘
+* translog中保存的数据被清
+* translog中记录增删改操作日志,并持久化到磁盘,用于故障数据恢复
+* 归并segment
+* 删除旧的segment
+
+
+
 # Aggregations
 
 
 
 * 聚合,主要对查询提供分组和提取数据的能力,类似于数据库中的max,avg,group by等函数
+
+
+
+## bucket
+
+
+
+* 一个数据分组,按照某种方式对数据进行分组,每一组数据在ES中称为一个`桶`
+* Elasticsearch中提供的划分桶的方式有很多:
+
+  - Date Histogram Aggregation:根据日期阶梯分组,例如给定阶梯为周,会自动每周分为一组
+  - Histogram Aggregation:根据数值阶梯分组,与日期类似
+  - Terms Aggregation:根据词条内容分组,词条内容完全匹配的为一组
+  - Range Aggregation:数值和日期的范围分组,指定开始和结束,然后按段分组
+* bucket 只负责对数据进行分组,并不进行计算,因此bucket中往往会嵌套另一种聚合:metrics,即度量
+
+
+
+## metric
+
+
+
+* 度量,对一个bucket执行的某种聚合分析的操作,比如说求平均值,求最大值,求最小值.如`select count(*) from book group column1`
+* bucket: group by column1 --> 那些column1 相同的数据,就会被划分到一个bucket中
+* metric: count(*),对每个user_id bucket中所有的数据,计算一个数量,还有avg(),sum(),max(),min()
+* 比较常用的一些度量聚合方式:
+
+  - Avg Aggregation:求平均值
+  - Max Aggregation:求最大值
+  - Min Aggregation:求最小值
+  - Percentiles Aggregation:求百分比
+  - Stats Aggregation:同时返回avg,max,min,sum,count等
+  - Sum Aggregation:求和
+  - Top hits Aggregation:求前几
+  - Value Count Aggregation:求总数
+
+
+
+## 语法
+
+
 
 ```json
 {
@@ -3506,11 +2598,13 @@ PUT /company/_doc/1
             "fieldname1":"value1 value2"
         }
     },
+    // 查询条数,设置为0,因为不关心搜索到的数据,只关心聚合结果,提高效率
+    "size" : 0,
     // 固定写法,表示聚合查询
     "aggs":{
         // 聚合名称,自定义,会返回到结果集中
         "aggTerms":{
-            // 聚合类型,可从官网中查看,terms表示统计分组
+            // 聚合类型,可从官网中查看,terms表示根据词条划分,统计分组
             "terms":{
                 // 从查询结果的字段中进行分析
                 "field":"fildname1",
@@ -3523,9 +2617,11 @@ PUT /company/_doc/1
                 "group_by_model": {
                     "terms": { "field": "fildname1" }
                 },
+                // 再次聚合的名称,自定义
                 "aggAvgTerms":{
-                    // 对统计分析的结果再次求平均值
+                    // avg为度量类型,对统计分析的结果再次求平均值
                     "avg":{
+                        // 度量运算的字段
                         "field":"fildname1"
                     }
                 }
@@ -3544,7 +2640,53 @@ PUT /company/_doc/1
 }
 ```
 
+* 结果
+  * hits: 查询结果为空,因为我们设置了size为0
+  * aggregations: 聚合的结果
+  * aggTerms: 自定义的聚合名称
+  * buckets: 查找到的桶,每个不同的品牌字段值都会形成一个桶
+    - key: 这个桶对应的品牌字段的值
+    - doc_count: 这个桶中的文档数量
 
+```json
+{
+    "took" : 124,
+    "timed_out" : false,
+    "_shards" : {
+        "total" : 2,
+        "successful" : 2,
+        "skipped" : 0,
+        "failed" : 0
+    },
+    "hits" : {
+        "total" : 10,
+        "max_score" : 0.0,
+        "hits" : [ ]
+    },
+    "aggregations" : {
+        "aggTerms" : {
+            "doc_count_error_upper_bound" : 0,
+            "sum_other_doc_count" : 0,
+            "buckets" : [
+                {
+                    "key" : "key1",
+                    "doc_count" : 4,
+                    "aggAvgTerms": {
+                        "value": "value1"
+                    }
+                },
+                {
+                    "key" : "key2",
+                    "doc_count" : 4,
+                    "aggAvgTerms": {
+                        "value": "value2"
+                    }
+                }
+            ]
+        }
+    }
+}
+```
 
 * 计算每个tags下的商品数量
 
@@ -3674,25 +2816,6 @@ PUT /company/_doc/1
     }
 }
 ```
-
-
-
-## bucket
-
-
-
-* 一个数据分组
-
-
-
-## metric
-
-
-
-* 对一个bucket执行的某种聚合分析的操作,比如说求平均值,求最大值,求最小值
-* `select count(*) from book group column1`
-* bucket: group by column1 --> 那些column1 相同的数据,就会被划分到一个bucket中
-* metric: count(*),对每个user_id bucket中所有的数据,计算一个数量,还有avg(),sum(),max(),min()
 
 
 
@@ -4283,6 +3406,8 @@ PUT /company/_doc/1
 
 ## 快速入门
 
+
+
 ```
 POST /_sql?format=txt
 {
@@ -4314,7 +3439,7 @@ POST /_sql?format=txt
 
 
 
-```
+```json
 POST /_sql/translate
 {
     "query": "SELECT * FROM tvs "
@@ -4323,44 +3448,44 @@ POST /_sql/translate
 
 
 
-```
+```json
 {
-  "size" : 1000,
-  "_source" : false,
-  "stored_fields" : "_none_",
-  "docvalue_fields" : [
-    {
-      "field" : "brand"
-    },
-    {
-      "field" : "color"
-    },
-    {
-      "field" : "price"
-    },
-    {
-      "field" : "sold_date",
-      "format" : "epoch_millis"
-    }
-  ],
-  "sort" : [
-    {
-      "_doc" : {
-        "order" : "asc"
-      }
-    }
-  ]
+    "size" : 1000,
+    "_source" : false,
+    "stored_fields" : "_none_",
+    "docvalue_fields" : [
+        {
+            "field" : "brand"
+        },
+        {
+            "field" : "color"
+        },
+        {
+            "field" : "price"
+        },
+        {
+            "field" : "sold_date",
+            "format" : "epoch_millis"
+        }
+    ],
+    "sort" : [
+        {
+            "_doc" : {
+                "order" : "asc"
+            }
+        }
+    ]
 }
 ```
 
 
 
-## 与其他DSL结合
+## 与DSL结合
 
 
 
-```
-POST /_sql?format=txt
+```json
+`POST /_sql?format=txt`
 {
     "query": "SELECT * FROM tvs",
     "filter": {
@@ -4389,12 +3514,24 @@ POST /_sql?format=txt
 
 
 
-## 扩容
+## 垂直水平扩容
 
 
 
 * 垂直扩容: 使用更加强大的服务器替代老服务器.但单机存储及运算能力有上限,且成本直线上升
 * 水平扩容: 采购更多服务器,加入集群,大数据
+
+
+
+## 横向扩容
+
+
+
+- 分片自动负载均衡,分片向空闲机器转移
+- 每个节点存储更少分片,系统资源给与每个分片的资源更多,整体集群性能提高
+- 扩容极限: 节点数大于整体分片数,则必有空闲机器
+- 超出扩容极限时,可以增加副本数,如设置副本数为2,总共3*3=9个分片,9台机器同时运行,存储和搜索性能更强,容错性更好
+- 容错性: 只要一个索引的所有主分片在,集群就就可以运行
 
 
 
@@ -4443,18 +3580,6 @@ POST /_sql?format=txt
 
 
 
-## 横向扩容
-
-
-
-- 分片自动负载均衡,分片向空闲机器转移
-- 每个节点存储更少分片,系统资源给与每个分片的资源更多,整体集群性能提高
-- 扩容极限: 节点数大于整体分片数,则必有空闲机器
-- 超出扩容极限时,可以增加副本数,如设置副本数为2,总共3*3=9个分片,9台机器同时运行,存储和搜索性能更强,容错性更好
-- 容错性: 只要一个索引的所有主分片在,集群就就可以运行
-
-
-
 ## 容错
 
 
@@ -4466,75 +3591,11 @@ POST /_sql?format=txt
 
 
 
-# Springboot
+# Score
 
 
 
-* Springboot2直接利用JPA整合了Elasticsearch进行操作,repository直接继承ElasticsearchRepository即可
-* Java High Level Rest Client调用,官方推荐使用
-* DSL:以json格式定义关键字来搜索关键字,调用API查询
-  * SearchRequest:主要的查询类,所有个有关查询的设置都需要在这个类里
-  * SearchSourceBuilder:源字段过滤,设置那些字段显示,那些字段不显示
-  * 分页采用from,size,和mysql类型,from是从第几条开始,不是从第几页开始
-  * TermQuery,id:精准查询,TermQuery不会对需要搜索的关键字进行拆分,而是直接利用关键字搜索
-  * MatchQuery:全文检索,将搜索的关键字拆分之后进行检索,搜索多个关键字还需要进行占比的计算
-  * MultiQuery:同时可对多个关键字进行搜索,而Term和Match只能对一个关键字进行搜索
-  * Boolean:多条件查询,可以将Term,Match,Multi3个结合起来查询,必须结合must,should,must_not关键字进行关联,类似and,or的意思
-  * HighlightBuilder:高亮,必须根据关键字来搜索,设置在SearchSourceBuilder中
-  * 排序:sort,可以在一个字段上添加一个或多个排序,支持在keyword,date,number等类型,但不支持text
-  * SearchResponse:经过ES的搜素之后的结果集,包含源字段以及其他信息
-  * SearchHists:搜索的匹配结果集,其他相关信息
-  * SearchHit:只包含在SearchSourceBuilder中设置的源字段信息
-* 搜索单个索引文档,代码见**dream-study-java/dream-study-search/com.wy.service**
-* 搜索多个索引文档,代码见**dream-study-java/dream-study-search/com.wy.service**
-* 更新文档update,代码见**dream-study-java/dream-study-search/com.wy.service**
-* 更新文档upsert,代码见**dream-study-java/dream-study-search/com.wy.service**
-* 删除文档delete,代码见**dream-study-java/dream-study-search/com.wy.service**
-
-
-
-# Java原生API
-
-
-
-* 所有代码见**dream-study-java/dream-study-search/com.wy.service.ElasticSearchService**
-
-* 查询所有(matchAllQuery)
-
-![img](ESMatchallQuery.png)
-
-* 对所有字段分词查询(queryStringQuery)
-
-![img](ESQueryStringQuery.png)
-
-* 通配符查询(wildcardQuery)
-  * *:表示多个任意的字符
-  * ?:表示单个字符
-
-![img](ESWildcardQuery.png)
-
-* 词条查询(TermQuery)
-
-![img](ESTermQuery.png)
-
-* 模糊查询(fuzzy)
-
-
-
-
-# 过滤器
-
-* 过滤器是针对搜索结果进行的,主要是判断文档是否匹配,并不计算和判断文档的匹配得分,所有比查询的性能要高,且方便缓存,尽量使用过滤器去实现查询或者过滤器和查询共同使用
-* 针对范围进行过滤(range),一次只能对一个Field过滤
-* 针对项进行精准过滤,一次只能对一个Field过滤
-
-
-
-# 评分
-
-
-
-## 评分算法
+## Score算法
 
 
 
@@ -4568,10 +3629,6 @@ POST /_sql?format=txt
 
 
 * Field-length norm: field长度,field越长,相关度越弱
-
-
-
-### _score计算
 
 
 
@@ -4734,59 +3791,6 @@ POST /_sql?format=txt
 
 
 
-# 集群
-
-* ES自带集群,一个运行中的ES实例称为一个节点,而集群是由一个或多个拥有相同cluster.name配置的节点组成,当有新节点加入集群时,集群将会自动重新平均分布所有的数据
-* 当一个节点被选举为主节点时,它将负责管理集群范围内的所有变更.
-* 主节点并不需要涉及到文档级别的变更和搜索等操作,所有当集群只有一个主节点时,即使流量的增加它也不会成为瓶颈
-* 任何节点都可以成为主节点
-* 客户端发送请求到集群中的任何节点都能感知文档所处的位置,并且正确处理请求并返回数据
-* 集群健康状态:get,地址/_cluster/\_health,返回结果的status字段中展示为green,yellow,red
-  * status:表示当前集群在总体上是否正常工作
-  * green:所有的主分片和副本分片都正常运行
-  * yellow:所有的主分片都正常运行,但不是所有的副本分片都正常运行
-  * red:有主分片没正常运行
-
-
-
-## 主节点异常
-
-* 立刻会选举一个新的节点作为主节点
-* 由于在其他节点上存在完整的主分片,所以数据不会丢失
-
-
-
-## 候选节点
-
-* 当主节点异常时,那些节点可以升级为主节点,只需要配置node.master=true即可
-
-
-
-## 数据节点
-
-* 数据节点通常只负责数据的增删改查等,只需要配置node.data=true即可
-* 一个节点最好不要同时是候选节点和数据节点,否则大并发情况下对服务器造成的压力较大
-
-
-
-## 客户端节点
-
-* node.master和node.data都是false,这样的节点只负责请求的分发,汇总等
-* 该类型的节点主要是为了负载均衡
-
-
-
-## 脑裂
-
-* 网络不通或其他情况下导致集群中部分节点和另外部分节点无法通信,出现多个主节点
-* 当主节点即是master又为data时,若访问量较大,可能造成短暂的无响应而造成延迟
-* data节点上的ES进程占用的内存较大,引发JVM大规模内存回收造成ES时区响应
-* 减少脑裂应该进行角色分离,主节点和数据节点分开
-* 减少误判,延长主节点的心跳超时响应时间:discovery.zen.ping_timeout
-* 选举触发:discovery.zen.minimum_master_nodes,该属性定义在集群中有候选节点且相互连接的节点的最小数量为多少时,才能形成新的集群
-
-
-
 # 案例
 
 
@@ -4871,50 +3875,3 @@ POST /_sql?format=txt
 * Logstash每个执行完成会在/config/logstash_metadata记录执行时间下次以此时间为基准进行增量同步数据到索引库
 * 启动: `.\logstash.bat -f ..\config\mysql.conf`
 * 后台代码见**dream-study-search/**
-
-7后端代码
-
-7.1Controller
-
-```java
-@RestController
-@RequestMapping("/search/course")
-public class EsCourseController  {
-    @Autowired
-    EsCourseService esCourseService;
-
-    @GetMapping(value="/list/{page}/{size}")
-    public QueryResponseResult<CoursePub> list(@PathVariable("page") int page, @PathVariable("size") int size, CourseSearchParam courseSearchParam) {
-        return esCourseService.list(page,size,courseSearchParam);
-    }
-
-}
-```
-
-7.2
-
-```
-@Service
-public class EsCourseService {
-   
-}
-```
-
-
-
-
-
-# Docker中使用
-
-* docker中安装ES7,启动命令如下
-
-```shell
-docker run -p 9200:9200 -p 9300:0300 --name elasticsearch -e "discovery.type=single-node" -e ES_JAVA_OPS="-Xms64m -Xmx128m" -v /app/elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml -v /app/elasticsearch/data:/usr/share/elasticsearch/data -v /app/elasticsearch/plugins:/usr/share/elasticsearch/plugins -d elasticsearch:7.4.2
-```
-
-* docker中启动ES插件Kibana:ES的可视化插件
-
-```shell
-docker run --name kibana -e ELASTICSEARCH_HOSTS=ip:port -p 5601:5601 -d kibana:7.4.2
-```
-

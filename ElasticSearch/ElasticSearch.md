@@ -203,6 +203,8 @@ product document:{"product_id":"1","product_name":"高露洁牙膏","product_des
 
 * ES提供了一套cat api,可以查看ES中各种各样的数据
 
+* `GET /_cat`: 查询所有cat接口提供的监控信息接口地址
+
 * `GET /_cat/health?v`:查看集群状态
 
   * green: 每个索引的primary shard和replica shard都是active状态的,集群状态正常
@@ -359,8 +361,10 @@ GET /book/_search
 
 
 * `GET /book/_search?q=name:java&sort=price:desc`: 类似于sql->` select * from book where name like ’ %java%’ order by price desc`
-* `GET /book/_search?q=+name:java`
-* `GET /book/_search?q=-name:java`
+* `GET /book/_search?q=+name:java`: `+`类似于SQL中的like,只有包含java的都查出来
+* `GET /book/_search?q=-name:java`: `-`类似于SQL中的NOT,只查询不带java的数据
+* `GET /book/_search?q=java`: 该方式不指定字段,是在`_all`的元数据中搜索.ES在建立索引的时候,每新增一条数据,都会将所有的field分词,并将这些分词放到`_all` field中.在搜索的时候,若不指定搜索字段,则在`_all`中搜索
+* `POST /book/_search?explain=true`: 查询数据的同时还会多一个`_explanation`,该字段会解析数据查询的详情,评分等,用来优化查询
 
 
 
@@ -372,7 +376,7 @@ GET /book/_search
 * DSL:Domain Specified Language,特定领域的语言,es特有的搜索语言,可在请求体中携带搜索条件,功能强大
 * query: 代表查询对象
 * match_all:  匹配所有,具体查询类型,全文检索,会根据空格等进行分词
-* match: 条件匹配,里面是每个字段需要匹配的值,以空格进行分词,默认匹配是or
+* match: 全文检索匹配,会对需要搜索的词进行分词,多个值也会以空格进行分词,默认匹配是or
 * match_phrase: 短语匹配,和match不同的是,里面的短语不会以空格进行分词
 * multi_match: 多字段匹配.只要有一个字段中包含搜索关键字即可,同样会进行分词
 * range: 范围查询,可选字段有`gt,gte,lt,lte`
@@ -668,9 +672,41 @@ GET /book/_search
 
 
 * 两个document排序,field值相同,不同的shard上,可能排序不同: 每次请求轮询到不同的replica上;每次得到的搜索结果的排序都不一样
-* 这个问题出现最多的地方就是timestamp进行排序
+* 这个问题出现最多的地方就是timestamp进行排序以及主副本分片数据不同步
 * 当使用一个timestamp字段对结果进行排序,因为es中时间格式为`%Y-%m-%d`,那么同样时间的数据会有很多.es如果不做任何设置,将会按round-robin的方式从primary和replica里取了再排序,这样结果就不能保证每次都一样的.因为primary有的relica里不一定有,尤其是在不停往es里存放数据的情况
 * 如果有两份文档拥有相同的timestamp,因为搜索请求是以一种循环(Round-robin)的方式被可用的分片拷贝进行处理的,因此这两份文档的返回顺序可能因为处理的分片不一样而不同,比如主分片处理的顺序和副本分片处理的顺序就可能不一样,这就是结果跳跃问题: 每次用户刷新页面都会发现结果的顺序不一样
+
+
+
+## 搜索参数
+
+
+
+### preference
+
+
+
+* 决定了哪些shard会被用来执行搜索操作:`_primary, _primary_first, _local, _only_node:xyz, _prefer_node:xyz, _shards:2,3`
+* bouncing results问题,两个document排序,field值相同;不同的shard上,可能排序不同;每次请求轮询打到不同的replica shard上;每次页面上看到的搜索结果的排序都不一样.这就是bouncing result,也就是跳跃的结果
+* 搜索的时候,是轮询将搜索请求发送到每一个replica shard(primary shard),但是在不同的shard上,可能document的排序不同
+* 解决方案: 将preference设置为一个字符串,比如user_id,让每个user每次搜索都使用同一个replica shard执行,就不会看到bouncing results
+
+
+
+### routing
+
+
+
+* document文档路由,_id路由,routing=user_id,这样的话可以让同一个user对应的数据到一个shard上去
+
+
+
+### search_type
+
+
+
+* default: query_then_fetch
+* dfs_query_then_fetch: 可以提升revelance sort精准度
 
 
 
@@ -738,35 +774,32 @@ GET /book/_search
 
 
 
-## Text字段排序问题
+## Text字段排序
 
 
 
-* 如果对一个text field进行排序,结果往往不准确,因为分词后是多个单词,再排序就不是我们想要的结果了
-* 通常解决方案是将一个text field建立两次索引,一个分词,用来进行搜索;一个不分词,用来进行排序
+* 如果对一个text field进行排序,结果往往不准确,因为分词后是多个单词,再排序就不是预期的结果了
+* 解决方法1: 在建立mapping的时候将text类型字段添加`fielddata:true`的属性,此方法不会进行评分,且会造成内存浪费
+* 解决方案2: 将一个text field建立两次索引,一个分词,用来进行搜索;一个不分词,用来进行排序
 
 ```json
-// PUT /website 
+PUT /website
 {
     "mappings": {
         "properties": {
             "title": {
                 "type": "text",
                 "fields": {
+                    // 增加一个keyword的属性,固定写法,用来排序
                     "keyword": {
+                        // 必须是keyword,因为keyword不会进行分词
                         "type": "keyword"
                     }        
                 }      
             },
-            "content": {
-                "type": "text"
-            },
-            "post_date": {
-                "type": "date"
-            },
-            "author_id": {
-                "type": "long"
-            }
+            "content": {"type": "text"},
+            "post_date": {"type": "date"},
+            "author_id": {"type": "long"}
         }
     }
 }
@@ -775,35 +808,35 @@ GET /book/_search
 * 插入数据
 
 ```json
-// PUT /website/_doc/1
+PUT /website/_doc/1
 {
-  "title": "first article",
-  "content": "this is my second article",
-  "post_date": "2022-01-01",
-  "author_id": 110
+    "title": "first article",
+    "content": "this is my second article",
+    "post_date": "2022-01-01",
+    "author_id": 110
 }
 
 PUT /website/_doc/2
 {
     "title": "second article",
     "content": "this is my second article",
-     "post_date": "2022-01-01",
+    "post_date": "2022-01-01",
     "author_id": 110
 }
 
 PUT /website/_doc/3
 {
-     "title": "third article",
-     "content": "this is my third article",
-     "post_date": "2022-01-02",
-     "author_id": 110
+    "title": "third article",
+    "content": "this is my third article",
+    "post_date": "2022-01-02",
+    "author_id": 110
 }
 ```
 
 * 搜索
 
 ```json
-// GET /website/_search
+GET /website/_search
 {
     "query": {
         "match_all": {}
@@ -824,25 +857,24 @@ PUT /website/_doc/3
 
 
 
-* 应用场景: 下载某一个索引中1亿条数据,到文件或是数据库
-* 不能一下全查出来,系统内存溢出,所以使用scroll滚动搜索技术,一批一批查询
-* scroll搜索会在第一次搜索的时候,保存一个当时的视图快照,之后只会基于该旧的视图快照提供数据搜索,如果这个期间数据变更,是不会让用户看到的
-* 每次发送scroll请求,还需要指定一个scroll参数,指定一个时间窗口,每次搜索请求只要在这个时间窗口内能完成就可以
+* 如果在短时间内加载大量数据,直接会内存溢出,必须使用scroll滚动搜索技术,一批一批查询
+* scroll搜索会在第一次搜索时,保存一个当时的视图快照,之后会基于该旧的视图快照进行搜索,如果这个期间数据变更,用户并不会察觉
+* scroll第一次请求需要指定一个时间窗口参数,搜索请求只要在这个时间内完成即可.如1m,即1分钟内查询完
+* 再后面的查询则需要将第一次scroll查询的`_scroll_id`参数做参照
 
 ```json
-// GET /book/_search?scroll=1m
+`GET /book/_search?scroll=1m`
 {
     "query": {
         "match_all": {}
     },
-    "size": 3
+    "size": 10000
 }
 ```
 
-
+* 返回
 
 ```json
-// 返回
 {
     "_scroll_id" : "DXF1ZXJ5QW5kRmV0Y2gBAAAAAAAAMOkWTURBNDUtcjZTVUdKMFp5cXloVElOQQ==",
     "took" : 3,
@@ -866,10 +898,10 @@ PUT /website/_doc/3
 }
 ```
 
-* 获得的结果会有一个scroll_id,下一次再发送scoll请求的时候,必须带上这个scoll_id
+* 获得的结果会有一个`_scroll_id`,下一次再发送scoll请求的时候,必须带上这个scroll_id
 
 ```json
-// GET /_search/scroll
+GET /_search/scroll
 {
     "scroll": "1m", 
     "scroll_id" : "DXF1ZXJ5QW5kRmV0Y2gBAAAAAAAAMOkWTURBNDUtcjZTVUdKMFp5cXloVElOQQ=="
@@ -877,7 +909,7 @@ PUT /website/_doc/3
 ```
 
 * 与分页区别: 
-  * 分页给用户看的  deep paging
+  * 分页给用户看的
   * scroll是用户系统内部操作,如下载批量数据,数据转移.零停机改变索引映射
 
 
@@ -1818,7 +1850,7 @@ PUT /company/_doc/1
 
 
 
-* 全文检索,并不是单纯的只匹配完整的一个值,而是可以对值进行分词后匹配,也可以通过缩写、时态、大小写、同义词等进行匹配,深入 NPL,自然语义处理
+* 全文检索,并不是匹配完整的一个值,而是对值进行分词后匹配,也可以通过缩写、时态、大小写、同义词等进行匹配,深入 NPL,自然语义处理
 
 
 
@@ -2521,7 +2553,7 @@ PUT /test_index/_doc/15?routing=num
 
 
 
-* 客户端发送请求到任意一个node,成为coordinate node
+* 客户端发送请求到任意一个node,该node成为coordinate node
 * coordinate node对document进行路由,将请求转发到对应的node,此时会使用round-robin随机轮询算法,在primary shard以及其所有replica中随机选择一个,让读请求负载均衡
 * 接收请求的node返回document给coordinate node
 * coordinate node返回document给客户端
@@ -2549,6 +2581,8 @@ PUT /test_index/_doc/15?routing=num
 
 
 * 聚合,主要对查询提供分组和提取数据的能力,类似于数据库中的max,avg,group by等函数
+* 如果需要对数组进行聚合,则需要在建立mapping的时候给字段设置`fielddata:true`
+* 聚合可以嵌套,外面的查询可以调用里面的聚合结果
 
 
 
@@ -2828,8 +2862,8 @@ PUT /test_index/_doc/15?routing=num
 
 
 ```json
-// PUT /tvs
-// PUT /tvs/_search
+PUT /tvs
+PUT /tvs/_search
 {			
     "properties": {
         "price": {
@@ -2855,7 +2889,7 @@ PUT /test_index/_doc/15?routing=num
 
 
 ```json
-// POST /tvs/_bulk
+POST /tvs/_bulk
 { "index": {}}
 { "price" : 1000, "color" : "红色", "brand" : "长虹", "sold_date" : "2019-10-28" }
 { "index": {}}
@@ -2874,8 +2908,6 @@ PUT /test_index/_doc/15?routing=num
 { "price" : 2500, "color" : "蓝色", "brand" : "小米", "sold_date" : "2020-02-12" }
 ```
 
-
-
 * 统计哪种颜色的电视销量最高
   * size: 只获取聚合结果,而不要执行聚合的原始数据
   * aggs: 固定语法,要对一份数据执行分组聚合操作
@@ -2884,7 +2916,7 @@ PUT /test_index/_doc/15?routing=num
   * field: 根据指定的字段的值进行分组
 
 ```json
-// GET /tvs/_search
+GET /tvs/_search
 {
     "size" : 0,
     "aggs" : { 
@@ -2896,8 +2928,6 @@ PUT /test_index/_doc/15?routing=num
     }
 }
 ```
-
-
 
 * 返回
   * hits.hits: 指定了size是0,所以hits.hits就是空的
@@ -2939,12 +2969,10 @@ PUT /test_index/_doc/15?routing=num
 }
 ```
 
-
-
 * 统计每种颜色电视平均价格.在一个aggs执行的bucket操作(terms),平级的json结构下,再加一个aggs,这个第二个aggs内部,同样取个名字,执行一个metric操作,avg,对之前的每个bucket中的数据的指定的field,price field,求一个平均值
 
 ```json
-// GET /tvs/_search
+GET /tvs/_search
 {
     "size" : 0,
     "aggs": {
@@ -2963,8 +2991,6 @@ PUT /test_index/_doc/15?routing=num
     }
 }
 ```
-
-
 
 * 返回
   * buckets,除了key和doc_count
@@ -3021,12 +3047,10 @@ PUT /test_index/_doc/15?routing=num
 }
 ```
 
-
-
 * 每个颜色下,平均价格及每个颜色下,每个品牌的平均价格
 
 ```json
-// GET /tvs/_search 
+GET /tvs/_search 
 {
     "size": 0,
     "aggs": {
@@ -3058,8 +3082,6 @@ PUT /test_index/_doc/15?routing=num
 }
 ```
 
-
-
 * 更多的metric
   * count: bucket,terms,自动就会有一个doc_count,就相当于是count
   * avg: avg aggs,求平均值
@@ -3068,7 +3090,7 @@ PUT /test_index/_doc/15?routing=num
   * sum: 求一个bucket内,指定field值的总和
 
 ```json
-// GET /tvs/_search
+GET /tvs/_search
 {
     "size" : 0,
     "aggs": {
@@ -3086,8 +3108,6 @@ PUT /test_index/_doc/15?routing=num
     }
 }
 ```
-
-
 
 * 划分范围 histogram
 * histogram: 类似于terms,也是进行bucket分组操作,接收一个field,按照这个field的值的各个范围区间,进行bucket分组操作
@@ -3195,7 +3215,7 @@ PUT /test_index/_doc/15?routing=num
 * es: aggregation,scope,任何的聚合,都必须在搜索出来的结果数据中之行,搜索结果,就是聚合分析操作的scope
 
 ```json
-// GET /tvs/_search 
+GET /tvs/_search 
 {
     "size": 0,
     "query": {
@@ -3225,7 +3245,7 @@ PUT /test_index/_doc/15?routing=num
 * 出来两个结果,一个结果,是基于query搜索结果来聚合的; 一个结果,是对所有数据执行聚合的
 
 ```json
-// GET /tvs/_search 
+GET /tvs/_search 
 {
     "size": 0, 
     "query": {
@@ -3256,7 +3276,7 @@ PUT /test_index/_doc/15?routing=num
 
 
 ```json
-// GET /tvs/_search 
+GET /tvs/_search 
 {
     "size": 0,
     "query": {
@@ -3286,7 +3306,7 @@ PUT /test_index/_doc/15?routing=num
 * bucket filter: 对不同的bucket下的aggs,进行filter
 
 ```json
-// GET /tvs/_search 
+GET /tvs/_search 
 {
   "size": 0,
   "query": {
@@ -3340,7 +3360,7 @@ PUT /test_index/_doc/15?routing=num
 ### 排序1
 
 ```json
-// GET /tvs/_search 
+GET /tvs/_search 
 {
     "size": 0,
     "aggs": {
@@ -3368,7 +3388,7 @@ PUT /test_index/_doc/15?routing=num
 ### 排序2
 
 ```json
-// GET /tvs/_search  
+GET /tvs/_search  
 {
     "size": 0,
     "aggs": {
@@ -3421,13 +3441,16 @@ POST /_sql?format=txt
 
 
 
-* http 请求
-* 客户端: elasticsearch-sql-cli.bat
-* 代码
+* 类似快速入门中的http请求
+* 客户端: elasticsearch-sql-cli.bat,在es/bin目录中启动即可
 
 
 
 ## 显示方式
+
+
+
+* `POST /_sql?format=txt`: format参数就是结果的显示方式,官网支持的显示方式如下图
 
 
 
@@ -3439,6 +3462,8 @@ POST /_sql?format=txt
 
 
 
+* 将sql语句翻译成原生的es查询语句
+
 ```json
 POST /_sql/translate
 {
@@ -3446,7 +3471,7 @@ POST /_sql/translate
 }
 ```
 
-
+* 翻译后的结果
 
 ```json
 {
@@ -3604,12 +3629,6 @@ POST /_sql/translate
   * TF词频(Term Frequency)
   * IDF逆向文件频率(Inverse Document Frequency)
 
-
-
-### TF
-
-
-
 * Term frequency: 搜索文本中的各个词条在field文本中出现了多少次,出现次数越多,就越相关
 
 
@@ -3629,6 +3648,7 @@ POST /_sql/translate
 
 
 * Field-length norm: field长度,field越长,相关度越弱
+* ES对用户输入关键词分词,每个分词分别计算对每个匹配文档的tf和idf,综合每个分词的tf,idf值,利用公式计算每个文档总分
 
 
 
@@ -3636,8 +3656,8 @@ POST /_sql/translate
 
 
 
-* 搜索的时候,要依靠倒排索引;排序的时候,需要依靠正排索引,看到每个document的每个field,然后进行排序,正排索引,其实就是doc values
-* 在建立索引的时候,一方面会建立倒排索引,以供搜索用;一方面会建立正排索引,也就是doc values,以供排序,聚合,过滤等操作使用
+* 正排索引
+* 在建立索引的时候,一方面会建立倒排索引,以供搜索用;一方面会建立正排索引,即doc values,以供排序,聚合,过滤等操作使用
 * doc values是被保存在磁盘上的,此时如果内存足够,os会自动将其缓存在内存中,性能还是会很高;如果内存不足够,os会将其写入磁盘上
 
 
@@ -3646,21 +3666,10 @@ POST /_sql/translate
 
 
 
-* 工作流程:
-
-  * 搜索请求发送到某一个coordinate node,构建一个priority queue,长度以paging操作from和size为准,默认为10
-
-  * coordinate node将请求转发到所有shard,每个shard本地搜索,并构建一个本地的priority queue
-
-  * 各个shard将自己的priority queue返回给coordinate node,并构建一个全局的priority queue
-
-
-
-### replica shard提升吞吐量
-
-
-
-* 一次请求要打到所有shard的一个replica/primary上,如果每个shard都有多个replica,那么同时并发过来的搜索请求可以同时打到其他的replica上
+* search phase,搜索阶段
+* 在搜索请求发送到某一个coordinate node时,会构建一个priority queue,长度以paging操作from和size为准,默认为10
+* coordinate node将请求转发到所有shard,每个shard本地搜索,并构建一个本地的priority queue
+* 各个shard将自己的priority queue返回给coordinate node,并构建一个全局的priority queue
 
 
 
@@ -3668,44 +3677,15 @@ POST /_sql/translate
 
 
 
-* 工作流程:
-  * coordinate node构建完priority queue之后,就发送mget请求去所有shard上获取对应的document
-  * 各个shard将document返回给coordinate node
-  * coordinate node将合并后的document结果返回给client客户端
-
+* 获取阶段,将结果返回给客户端
+  
+* coordinate node构建完priority queue之后,就发送mget请求去所有shard上获取对应的document
+  
+* 各个shard将document返回给coordinate node
+  
+* coordinate node将合并后的document结果返回给client客户端
+  
 * 一般搜索,如果不加from和size,就默认搜索前10条,按照_score排序
-
-
-
-## 搜索参数
-
-
-
-### preference
-
-
-
-* 决定了哪些shard会被用来执行搜索操作:`_primary, _primary_first, _local, _only_node:xyz, _prefer_node:xyz, _shards:2,3`
-* bouncing results问题,两个document排序,field值相同;不同的shard上,可能排序不同;每次请求轮询打到不同的replica shard上;每次页面上看到的搜索结果的排序都不一样.这就是bouncing result,也就是跳跃的结果
-* 搜索的时候,是轮询将搜索请求发送到每一个replica shard(primary shard),但是在不同的shard上,可能document的排序不同
-* 解决方案: 将preference设置为一个字符串,比如user_id,让每个user每次搜索都使用同一个replica shard执行,就不会看到bouncing results
-
-
-
-### routing
-
-
-
-* document文档路由,_id路由,routing=user_id,这样的话可以让同一个user对应的数据到一个shard上去
-
-
-
-### search_type
-
-
-
-* default: query_then_fetch
-* dfs_query_then_fetch: 可以提升revelance sort精准度
 
 
 

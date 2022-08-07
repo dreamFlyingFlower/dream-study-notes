@@ -196,25 +196,35 @@
 ```nginx
 server{
     listen 12345;
-	server_name localhost;
+    server_name localhost;
+    auth_basic "Protection";
+    auth_basic_user_file nginx/password/passwords;
     # 处理ip:port/a的请求
-	location /a{
+    location /a{
         autoindex on;
         root /a;
         # add_header Content-Type "text/plain;charset=utf8;"; # 设置请求头的某些属性
         index index.html index.htm;
         rewrite ^(.*)\.vue$ /index.html; # 任何以vue结尾的都跳到index
-        proxy_set_header Host 域名
+        proxy_set_header Host; # 域名
         proxy_pass http://ip:port/; # 或者可以写成proxy_pass name
     }
     # 处理ip:port/b的请求
-	location /b{
+    location /b{
         autoindex on;
         root /b;
         index index.html index.htm;
         rewrite ^(.*)\.vue$ /index.html; # 任何以vue结尾的都跳到index
-        proxy_set_header Host 域名
-        proxy_pass http://ip:port/; # 或者可以写成proxy_pass name   
+        proxy_set_header Host; # 域名
+        proxy_pass http://ip:port/; # 或者可以写成proxy_pass name
+        # 允许跨域访问
+        if($request_method = 'OPTIONS'){
+            add_header 'Access-Control-Allow-Origin' '*';
+            add_header 'Access-Control-Allow-Methods' 'GET,POST,PUT,OPTIONS';
+            add_header 'Access-Control-Allow-Headers' 'Accept, Authorization, Cache-Control, Content-Disposition, Content-Range, Content-Type, DNT, Expires, If-Modified-Since, Keep-Alive, Last-Modified, No-Cache, Origin, Pragma, Range, X-CustomHeader, X-E4M-With, X-Requested-With, User-Agent, userId, token';
+            add_header 'Access-Control-Max-Age' 1728000;
+            return 204;
+        }
     }
 }
 ```
@@ -243,6 +253,17 @@ server{
 * error_page 500 502 503 504 /50x.html:错误页面
 
 * if:同Java中的if,只能在server和location中用,配合内置函数使用,详细语法见Nginx官方文档
+
+* auth_basic: 指定经过nginx的请求需要用户名密码验证.在网页中访问该地址时,若不加用户名密码参数,则会提示需要输入用户名密码
+
+  ```shell
+  # 生成用户名密码
+  printf "username:$(openssl passwd -crypt password)\n" > nginx/password/passwords
+  # 在网页中访问直接拼接用户名密码
+  ip:port/a?auth_user=username&auth_password=password
+  ```
+
+* auth_basic_user_file: 当开启auth_basic验证时,用户名和密码存储的文件地址.
 
 
 

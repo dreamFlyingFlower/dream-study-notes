@@ -54,7 +54,7 @@ output {
 
 
 
-* 启动: `logstash.bat -e 'input{stdin{}} output{stdout{}}'`
+* 启动: `logstash.bat -e 'input{stdin{}} output{stdout{}}'`,数据从控制台输入,从控制台输出
 * 指定配置文件启动: `logstash.bat -f ../config/test1.conf`
 
 
@@ -64,6 +64,7 @@ output {
 
 
 * [下载地址](https://www.elastic.co/guide/en/logstash/current/input-plugins.html)
+* 输入方式可以参照下载地址页面
 
 
 
@@ -98,7 +99,9 @@ output {
 ```
 input {
     file {
+        // 文件地址
         path => ["/var/*/*"]
+        // 从头开始读取
         start_position => "beginning"
     }
 }
@@ -502,7 +505,7 @@ filter {
         match => { "message" => "%{IP:clientip}\ \[%{HTTPDATE:timestamp}\]\ %{QS:referrer}\ %{NUMBER:response}\ %{NUMBER:bytes}" }
         remove_field => [ "message" ]
    }
-	date {
+    date {
         match => ["timestamp", "dd/MMM/yyyy:HH:mm:ss Z"]
     }
 	mutate {
@@ -526,49 +529,6 @@ elasticsearch {
 
 }
 ```
-
-
-
-# Kibana
-
-
-
-* [下载地址](https://www.elastic.co/cn/downloads/kibana)
-
-* 基于nodejs,可视化日志Web展示工具,对ES中存储的日志进行展示,还可以生成相应的图标
-* 建立索引模式,index partten;discover 中使用DSL搜索
-
-
-
-## 可视化
-
-
-
-* 绘制图形
-
-
-
-## 仪表盘
-
-
-
-* 将各种可视化图形放入,形成大屏幕
-
-
-
-## 使用模板数据指导绘图
-
-
-
-* 点击主页的添加模板数据,可以看到很多模板数据以及绘图
-
-
-
-## 其他功能
-
-
-
-* 监控,日志,APM等功能非常丰富
 
 
 

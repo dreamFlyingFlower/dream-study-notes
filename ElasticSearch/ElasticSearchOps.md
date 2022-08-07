@@ -232,6 +232,17 @@ http.cors.allow-origin: /.*/
 
 
 
+* [下载地址](https://www.elastic.co/cn/downloads/kibana)
+
+* 基于nodejs,可视化日志Web展示工具,对ES中存储的日志进行展示,还可以生成相应的图标
+* 建立索引模式,index partten;discover 中使用DSL搜索
+* 可视化: 绘制图形
+* 仪表盘: 将各种可视化图形放入,形成大屏幕
+* 使用模板数据指导绘图: 点击主页的添加模板数据,可以看到很多模板数据以及绘图
+* 其他功能: 监控,日志,APM等功能非常丰富
+
+
+
 ## Windows安装
 
 
@@ -474,11 +485,41 @@ http.cors.allow-origin: "*"
 
 * [下载源码](https://github.com/medcl/elasticsearch-analysis-ik/releases)
 * ik分词器是个标准的java maven工程,直接导入IDE就可以看到源码
-* 修改源`org.wltea.analyzer.dic.Dictionary`类,160行Dictionary单例类的初始化方法,在这里需要创建一个自定义的线程,并且启动它
-* `org.wltea.analyzer.dic.HotDictReloadThread`: 就是死循环,不断调用Dictionary.getSingleton().reLoadMainDict(),去重新加载词典
-* `Dictionary类399行`: this.loadMySQLExtDict(); 加载mymsql字典
-* `Dictionary类609行`: this.loadMySQLStopwordDict();加载mysql停用词
-* config下jdbc-reload.properties是mysql配置文件
+* 修改源`org.wltea.analyzer.dic.Dictionary#initial()`,该方法为词典初始化方法
+* 参照该方法中加载主词典和停用词等方法,自定义加载MySQL数据,利用多线程或队列实现
+
+```java
+public static synchronized void initial(Configuration cfg) {
+    if (singleton == null) {
+        synchronized (Dictionary.class) {
+            if (singleton == null) {
+
+                singleton = new Dictionary(cfg);
+                singleton.loadMainDict();
+                singleton.loadSurnameDict();
+                singleton.loadQuantifierDict();
+                singleton.loadSuffixDict();
+                singleton.loadPrepDict();
+                singleton.loadStopWordDict();
+                // 可以在此处自定义加载MySQL数据的方法,主要是参照loadMainDict()和loadStopWordDict();
+
+                if(cfg.isEnableRemoteDict()){
+                    // 建立监控线程
+                    for (String location : singleton.getRemoteExtDictionarys()) {
+                        // 10 秒是初始延迟可以修改的 60是间隔时间 单位秒
+                        pool.scheduleAtFixedRate(new Monitor(location), 10, 60, TimeUnit.SECONDS);
+                    }
+                    for (String location : singleton.getRemoteExtStopWordDictionarys()) {
+                        pool.scheduleAtFixedRate(new Monitor(location), 10, 60, TimeUnit.SECONDS);
+                    }
+                }
+
+            }
+        }
+    }
+}
+```
+
 * 修改完之后用命令`mvn clean package`打包:target\releases\elasticsearch-analysis-ik-7.3.0.zip
 * 解压缩ik压缩包,将mysql驱动jar,放入ik的目录下
 * 修改jdbc相关配置

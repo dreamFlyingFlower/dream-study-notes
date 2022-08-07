@@ -490,15 +490,7 @@ vi /etc/rc.d/rc.local
   * logs/storaged.log:storage server日志文件
   * logs/trackerd.log:tracker server日志文件
   
-* log_level:日志等级,大小写敏感
-  * emerg
-  * alert
-  * crit
-  * error
-  * warn
-  * notice
-  * info
-  * debug
+* log_level:日志等级,大小写敏感.`emerg > alert > crit > error > warn > notice > info > debug`
 * allow_hosts:可访问的域名,主机名或ip地址,*表示所有ip都可访问.可以写ip段,如10.10.10.[1-15,20],或者主机名段,如host[1-6,12]
 * port:tracker.conf独有,访问服务时的端口
 * store_lookup:存储策略
@@ -701,6 +693,8 @@ vi /etc/rc.d/rc.local
 
 ## 安装
 
+
+
 ```shell
 git clone https://gitee.com/fastdfs100/fastdfs-nginx-module.git
 cd fastdfs-nginx-module
@@ -719,11 +713,13 @@ vi /etc/fdfs/mod_fastdfs.conf
 
 ## Nginx安装
 
+
+
 * 安装见Nginx文档,此处只写关于module的配置
 
 * 在使用configure安装时需要添加额外的模块,参数:--add-module=/app/fastdfs-nginx-module/src
 
-* 最后的module目录按照实际情况填写.
+* 最后的module目录按照实际情况填写
 
 * 若Nginx已经安装,可使用命令添加,不需要重新安装nginx,见Nginx文档
 
@@ -747,6 +743,8 @@ vi /etc/fdfs/mod_fastdfs.conf
 
 
 ## 配置
+
+
 
 * 直接在Tracker配置文件:/etc/fdfs/mod_fastdfs.conf
 * storage_id:Storage的id,Tracker可以对Storage定义一组ip到id的映射,以id的形式对Storage进行管理.而文件名写入的不再是storage的ip而是id,这样的方式对于数据迁移十分有利

@@ -21,11 +21,104 @@ https://www.yuque.com/leifengyang/oncloud
 
 
 
+![](img/001.png)
+
+
+
+## 控制平面组件
+
+
+
+* 控制平面组件(Control Plane Components)对集群做出全局决策(比如调度),以及检测和响应集群事件(例如,当不满足部署的 `replicas` 字段时,启动新的 [pod](https://kubernetes.io/docs/concepts/workloads/pods/pod-overview/))
+* 控制平面组件可以在集群中的任何节点上运行, 然而,为了简单起见,设置脚本通常会在同一个计算机上启动所有控制平面组件, 并且不会在此计算机上运行用户容器.请参阅[使用 kubeadm 构建高可用性集群](https://kubernetes.io/zh/docs/setup/production-environment/tools/kubeadm/high-availability/) 中关于多 VM 控制平面设置的示例
+
+
+
+## ApiServer
+
+
+
+* API 服务器是 Kubernetes [控制面](https://kubernetes.io/zh/docs/reference/glossary/?all=true#term-control-plane)的组件, 该组件公开了 Kubernetes API, API 服务器是 Kubernetes 控制面的前端
+* Kubernetes API 服务器的主要实现是 [kube-apiserver](https://kubernetes.io/zh/docs/reference/command-line-tools-reference/kube-apiserver/), kube-apiserver 可以通过部署多个实例进行水平伸缩,可以运行 kube-apiserver 的多个实例,并在这些实例之间平衡流量
+
+
+
+## Etcd
+
+
+
+* etcd 是兼具一致性和高可用性的键值数据库,可以作为保存 Kubernetes 所有集群数据的后台数据库,请参考 [etcd 文档](https://etcd.io/docs/)
+
+
+
+## Scheduler
+
+
+
+* 控制平面组件,负责监视新创建的、未指定运行[节点(node)](https://kubernetes.io/zh/docs/concepts/architecture/nodes/)的 [Pods](https://kubernetes.io/docs/concepts/workloads/pods/pod-overview/),选择节点让 Pod 在上面运行
+* 调度决策考虑的因素包括单个 Pod 和 Pod 集合的资源需求,软硬件/策略约束,亲和性和反亲和性规范,数据位置,工作负载间的干扰和最后时限
+
+
+
+## ControllerManager(CM)
+
+
+
+* 在主节点上运行 [控制器](https://kubernetes.io/zh/docs/concepts/architecture/controller/) 的组件,每个[控制器](https://kubernetes.io/zh/docs/concepts/architecture/controller/)都是一个单独的进程, 但是为了降低复杂性,它们都被编译到同一个可执行文件,并在一个进程中运行
+* 控制器包括:
+  * 节点控制器(Node Controller): 负责在节点出现故障时进行通知和响应
+  * 任务控制器(Job controller): 监测代表一次性任务的 Job 对象,然后创建 Pods 来运行这些任务直至完成
+  * 端点控制器(Endpoints Controller): 填充端点(Endpoints)对象(即加入 Service 与 Pod)
+  * 服务帐户和令牌控制器(Service Account & Token Controllers): 为新的命名空间创建默认帐户和 API 访问令牌
+
+
+
+## CloudControllerManager
+
+
+
+* 云控制器管理器是指嵌入特定云的控制逻辑的 [控制平面](https://kubernetes.io/zh/docs/reference/glossary/?all=true#term-control-plane)组件,云控制器管理器允许链接集群到云提供商的应用编程接口中, 并把和该云平台交互的组件与只和您的集群交互的组件分离开
+* `cloud-controller-manager` 仅运行特定于云平台的控制回路.如果在自己的环境中运行 Kubernetes,或者在本地计算机中运行学习环境, 所部署的环境中不需要云控制器管理器
+* 与 `kube-controller-manager` 类似,`cloud-controller-manager` 将若干逻辑上独立的控制回路组合到同一个可执行文件中,供用户以同一进程的方式运行,用户可以对其执行水平扩容以提升性能或者增强容错能力
+* 下面的控制器都包含对云平台驱动的依赖:
+  * 节点控制器(Node Controller): 用于在节点终止响应后检查云提供商以确定节点是否已被删除
+  * 路由控制器(Route Controller): 用于在底层云基础架构中设置路由
+  * 服务控制器(Service Controller): 用于创建、更新和删除云提供商负载均衡器
+
+
+
+## Node
+
+
+
+* 节点组件在每个节点上运行,维护运行的 Pod 并提供 Kubernetes 运行环境
+
+
+
+## Kubelet
+
+
+
+* 一个在集群中每个[节点(node)](https://kubernetes.io/zh/docs/concepts/architecture/nodes/)上运行的代理,它保证[容器(containers)](https://kubernetes.io/zh/docs/concepts/overview/what-is-kubernetes/#why-containers)都 运行在 [Pod](https://kubernetes.io/docs/concepts/workloads/pods/pod-overview/) 中
+* kubelet 接收一组通过各类机制提供给它的 PodSpecs,确保这些 PodSpecs 中描述的容器处于运行状态且健康,kubelet 不会管理不是由 Kubernetes 创建的容器
+
+
+
+## Kube-proxy
+
+
+
+* [kube-proxy](https://kubernetes.io/zh/docs/reference/command-line-tools-reference/kube-proxy/) 是集群中每个节点上运行的网络代理, 实现 Kubernetes [服务(Service)](https://kubernetes.io/zh/docs/concepts/services-networking/service/) 概念的一部分
+* kube-proxy 维护节点上的网络规则,这些网络规则允许从集群内部或外部的网络会话与 Pod 进行网络通信
+* 如果操作系统提供了数据包过滤层并可用的话,kube-proxy 会通过它来实现网络规则,否则, kube-proxy 仅转发流量本身
+
+
+
 ## POD
 
 
 
-* 副本.包含多个镜像的容器,类似于一个微型服务器
+* 副本.包含多个镜像的容器,类似于一个微型服务器,是k8s中应用的最小单元
 * 包含一个Pause镜像,该镜像将其他镜像容器关联起来集中管理,类似于Docker Compose
 
 
@@ -48,29 +141,29 @@ https://www.yuque.com/leifengyang/oncloud
 
 
 
-## ApiServer
-
-
-
-## Scheduler
-
-
-
-## ControllerManager(CM)
-
 
 
 ## Replication Controller(RC)
 
 ## Kubeadm
 
-## Kubelet
+
+
+## Namespace
+
+
+
+* 命名空间,隔离资源
+* `kubectl create ns hello`: 创建命令空间
+* `kubectl delete ns hello`: 删除命名空间
 
 
 
 ## Kubectl
 
 
+
+* k8s的命令函数
 
 * kubectl get namespaces:查看所有的命令空间
 
@@ -85,15 +178,6 @@ https://www.yuque.com/leifengyang/oncloud
   	name: dev
   ```
 
-  
-
-
-
-## Namespace
-
-
-
-* 命名空间
 
 
 
@@ -125,7 +209,9 @@ https://www.yuque.com/leifengyang/oncloud
 * CM通过Label标签查询到关联的Pod实例,然后生成Service的Endpoints信息,并通过APIServer写入到etcd中
 * 所有Node上运行的Proxy进程通过APIServer查询并监听Service对象与其对应的Endpoinsts信息,建立一个软件方式的负载均衡器来实现Service访问到后端Pod的流量转发功能
 
-![](K8S-01.png)
+
+
+![](img/002.png)
 
 
 
@@ -338,13 +424,151 @@ kubeadm token create --print-join-command
 * [kubernetes官方提供的可视化界面](https://github.com/kubernetes/dashboard)
 
 ```shell
-# 主节点下载运行dashboard配置文件
+# 主节点下载运行dashboard配置文件,修改type: ClusterIP 改为 type: NodePort
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.3.1/aio/deploy/recommended.yaml
 # 设置访问端口
 kubectl edit svc kubernetes-dashboard -n kubernetes-dashboard
+# 找到端口,在安全组放行
+kubectl get svc -A |grep kubernetes-dashboard
+```
+
+* 创建访问账号
+
+```yaml
+# 创建访问账号,准备一个yaml文件: vi dash.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: admin-user
+  namespace: kubernetes-dashboard
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: admin-user
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: admin-user
+  namespace: kubernetes-dashboard
+```
+
+* 运行配置文件并获取令牌
+
+```shell
+# 运行配置文件
+kubectl apply -f dash.yaml
+# 获取令牌
+kubectl -n kubernetes-dashboard get secret $(kubectl -n kubernetes-dashboard get sa/admin-user -o jsonpath="{.secrets[0].name}") -o go-template="{{.data.token | base64decode}}"
+```
+
+* 在Web访问`https://集群任意IP:端口`
+
+
+
+# 运行
+
+
+
+## 创建NameSpace
+
+
+
+```yaml
+# kubectl create ns hello:创建命名空间,下方为创建ns的配置文件,必须有
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hello
 ```
 
 
+
+## 创建Pod
+
+
+
+* 命名空间配置文件
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: mynginx
+  name: mynginx
+spec:
+  containers:
+  - image: nginx
+    name: mynginx
+```
+
+* shell脚本,执行完之后应用还不能外部访问
+
+```shell
+#创建一个的nginx的pod
+kubectl run mynginx --image=nginx
+# 查看default名称空间的Pod
+kubectl get pod 
+# 描述
+kubectl describe pod 你自己的Pod名字
+# 删除
+kubectl delete pod Pod名字
+# 查看Pod的运行日志
+kubectl logs Pod名字
+# 每个Pod - k8s都会分配一个ip
+kubectl get pod -owide
+# 使用Pod的ip+pod里面运行容器的端口,集群中的任意一个机器以及任意的应用都能通过Pod分配的ip来访问这个Pod
+curl 192.168.169.136
+```
+
+* 创建一个拥有自愈能力且带副本的pod: `kubectl create deployment mynginx --image=nginx --replicas=3`
+
+```yaml
+# 配置文件
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: mynginx
+  name: mynginx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: mynginx
+  template:
+    metadata:
+      labels:
+        app: mynginx
+    spec:
+      containers:
+      - image: nginx
+        name: nginx
+```
+
+* 滚动更新
+
+```shell
+kubectl set image deployment/mynginx nginx=nginx:1.16.1 --record
+kubectl rollout status deployment/mynginx
+```
+
+* 版本回退
+
+```shell
+# 历史记录
+kubectl rollout history deployment/mynginx
+# 查看某个历史详情
+kubectl rollout history deployment/mynginx --revision=2
+# 回滚(回到上次)
+kubectl rollout undo deployment/mynginx
+# 回滚(回到指定版本)
+kubectl rollout undo deployment/mynginx --to-revision=2
+```
 
 
 
@@ -353,12 +577,44 @@ kubectl edit svc kubernetes-dashboard -n kubernetes-dashboard
 
 
 * `kubectl get nodes`: 查看集群所有节点,只能在主节点运行
+
 * `kubectl apply -f xxxx.yaml`: 根据配置文件,给集群创建资源
+
 * `kubectl get pods -A`: 查看集群部署了哪些应用
+
 * `kubectl get pods -A`: 运行中的应用在docker里面叫容器,在k8s里面叫Pod
+
 * `kubeadm token create --print-join-command`: 主节点运行,创建新令牌
 
+* `kubectl create deployment mynginx --image=nginx`: 创建一个拥有自愈能力nginx的pod
 
+* `kubectl create deployment mynginx --image=nginx --replicas=3`: 创建带副本的pod
+
+* `kubectl run mynginx --image=nginx`: 创建一个nginx的pod
+
+* `kubectl scale --replicas=5 deployment/mynginx`: 扩缩容
+
+* `kubectl edit deployment mynginx`: 修改 replicas
+
+* `kubectl get pod `: 查看default名称空间的Pod
+
+* `kubectl describe pod 自定义的Pod名字`: 描述Pod
+
+* `kubectl delete pod Pod名字`: 删除Pod
+
+* `kubectl logs Pod名字`: 查看Pod的运行日志
+
+* `kubectl get pod -owide`: 每个Pod - k8s都会分配一个ip
+
+* `kubectl rollout history deployment/mynginx`: 历史记录
+
+* `kubectl rollout history deployment/mynginx --revision=2`: 查看某个历史详情
+
+* `kubectl rollout undo deployment/mynginx`: 回滚(回到上次)
+
+* `kubectl rollout undo deployment/mynginx --to-revision=2`: 回滚(回到指定版本)
+
+  
 
 
 
@@ -374,11 +630,65 @@ kubectl edit svc kubernetes-dashboard -n kubernetes-dashboard
 
 
 
-## 安装
+## Linux单节点安装
 
 
 
 * 最新安装的要求可在kubersphere[官网](https://kubesphere.com.cn/docs/installing-on-kubernetes/on-prem-kubernetes/install-ks-on-linux-airgapped/)查看
+
+* 指定hostname: `hostnamectl set-hostname node1`
+
+* 准备KubeKey
+
+  ```bash
+  export KKZONE=cn
+  curl -sfL https://get-kk.kubesphere.io | VERSION=v1.1.1 sh -
+  chmod +x kk
+  ```
+
+* 使用KubeKey引导安装集群
+
+  ```shell
+  # 可能需要下面命令
+  yum install -y conntrack
+  ./kk create cluster --with-kubernetes v1.20.4 --with-kubesphere v3.1.1
+  ```
+
+* 安装后开启功能
+
+  ![](img/003.png)
+
+
+
+## Linux多节点安装
+
+
+
+* 准备多台服务器,内网互通,每个机器有自己域名,开发防火墙
+
+* 使用KubeKey创建集群
+
+* 下载KubeKey
+
+  ```shell
+  export KKZONE=cn
+  curl -sfL https://get-kk.kubesphere.io | VERSION=v1.1.1 sh -
+  chmod +x kk
+  ```
+
+* 创建集群配置文件: `./kk create config --with-kubernetes v1.20.4 --with-kubesphere v3.1.1`
+
+* 创建集群: `./kk create cluster -f config-sample.yaml`
+
+* 查看进度: `kubectl logs -n kubesphere-system $(kubectl get pod -n kubesphere-system -l app=ks-install -o jsonpath='{.items[0].metadata.name}') -f`
+
+
+
+## K8S安装
+
+
+
+
 
 
 

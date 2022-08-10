@@ -74,6 +74,8 @@
 
 # Shell
 
+
+
 * systemctl start/stop/status/restart docker:linux上启动/停止/状态/重启docker
 
 * systemctl enable docker:linux开机自启动docker
@@ -186,10 +188,11 @@
 
 * docker load < mysql.tar.gz:将镜像导入到docker中,或者docker load -i < mysql.tar.gz
 
-* docker build -t 镜像名:版本 .:将执行目录下的Dockerfile指定的项目打包成镜像
+* `docker build --build-arg argname=argvalue -t 镜像名:版本 .`:将指定目录下的Dockerfile打包成镜像
 
-  * -t:指定镜像名的名字
-  * .:表示当前目录,也可以是其他目录
+  * `--build-arg argname=argvalue`: 打包dockerfile的时候指定参数,该参数可以在dockerfile中以`${argname}`使用
+  * `-t 镜像名:版本`: 指定镜像名的名字
+  * .:表示dockerfile所在目录,.表示当前目录,也可以是其他目录
   
 * docker cp file1 containerid:file2:将linux中的文件拷贝到docker容器中的指定目录中
 

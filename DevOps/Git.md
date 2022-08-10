@@ -18,7 +18,9 @@ Head:指向当前分支,并非指向master.切换到那个分支就是指向那�
 
 
 
-# 常用命令
+# Shell
+
+
 
 * git init:将一个目录初始化为git仓库,必须是空目录
 
@@ -62,7 +64,9 @@ Head:指向当前分支,并非指向master.切换到那个分支就是指向那�
 
 
 
-# git config
+## git config
+
+
 
 * --local:只对某个仓库有效
 * --global:当前用户所有仓库有效
@@ -88,7 +92,9 @@ Head:指向当前分支,并非指向master.切换到那个分支就是指向那�
 
 
 
-# git remote
+## git remote
+
+
 
 * 查看本地库对应的远程仓库名称,默认都是origin,是一个标签
 
@@ -109,7 +115,9 @@ Head:指向当前分支,并非指向master.切换到那个分支就是指向那�
 
 
 
-# git branch
+## git branch
+
+
 
 * `git branch []`:查看本地仓库当前分支
   * -a:查看所有分支
@@ -128,7 +136,9 @@ Head:指向当前分支,并非指向master.切换到那个分支就是指向那�
 
 
 
-# git log
+## git log
+
+
 
 * `git log`: 显示历史日志
 * `--all`:查看所有的历史日志,包括分支的创建等
@@ -145,7 +155,9 @@ Head:指向当前分支,并非指向master.切换到那个分支就是指向那�
 
 
 
-# git stash
+## git stash
+
+
 
 * git stash [save message]:执行存储时,保存当前工作进度,将工作区和暂存区恢复到修改之前
   * 该命令会将当前所有修改过的文件都恢复到没有修改之前,不能单独指定
@@ -163,7 +175,9 @@ Head:指向当前分支,并非指向master.切换到那个分支就是指向那�
 
 
 
-# git update-index
+## git update-index
+
+
 
 * git update-index --skip-worktree path:将某个已经添加到工作区的文件从工作区忽略,但是有不同的更新出现时,会造成冲突.即本地忽略提交,但是pull到不同内容还是会冲突
 * git update-index --no-skip-worktree path:将已经skip的文件重新添加到工作区
@@ -199,7 +213,9 @@ Head:指向当前分支,并非指向master.切换到那个分支就是指向那�
 
 
 
-# git diff
+## git diff
+
+
 
 * git diff <filename>: 显示与上一次提交之间的差异
 * git diff <revision> <filename>: 显示某个文件两个版本之间的差异
@@ -210,7 +226,9 @@ Head:指向当前分支,并非指向master.切换到那个分支就是指向那�
 
 
 
-# git reset
+## git reset
+
+
 
 * git reset HEAD <file>:将当前分支暂存区的文件恢复到上一个版本,即将已经add的文件从暂存区退回到工作区,但是修改仍然存在.和checkout不同的是:
   * reset恢复的是已经add到暂存区的,且恢复之后修改仍然存在,只是重新回到了工作区
@@ -224,7 +242,9 @@ Head:指向当前分支,并非指向master.切换到那个分支就是指向那�
 
 
 
-# git bisect
+## git bisect
+
+
 
 * 主要是问题定位.当commit很多时,可以通过类似2分法的操作,从一个good版本和一个bad版本中间开始查找有问题的版本
 * git bisect start:开始定位问题,此时会对指定commit版本进行标记,只有good和bad
@@ -239,7 +259,9 @@ Head:指向当前分支,并非指向master.切换到那个分支就是指向那�
 
 
 
-# git blame
+## git blame
+
+
 
 * 定位代码的修改人,修改时间,由那一个commitid提交
 * git blame filename:显示指定文件的修改人等信息
@@ -248,7 +270,9 @@ Head:指向当前分支,并非指向master.切换到那个分支就是指向那�
 
 
 
-# git grep
+## git grep
+
+
 
 * 功能和linux上的grep类型
 * git grep str:从当前分支的所有文件中查找str字符串
@@ -368,6 +392,8 @@ git grep -e 'abc' --and \( -e 'bfdfd' --or --not -e 'fdsfd' \)
 
 # 本地.git清理
 
+
+
 * 本地.git目录会越用越大,需要清理
 * git verify-pack -v .git/objects/pack/pack-*.idx | sort -k 3 -g | tail -5:找出大文件前5个
   * git verify-pack -v .git/objects/pack/pack-*.idx:查看本地.git目录中的pack文件,所有的历史修改都会打包到该文件中
@@ -413,6 +439,8 @@ git push --force
 
 # 多GIT仓库
 
+
+
 * 若有多个远程仓库需要提交,可以使用git remote命令添加多个地址
 
   ```shell
@@ -432,6 +460,8 @@ git push --force
 
 
 # Fork
+
+
 
 * 从其他仓库fork的代码,原仓库更新后如何和本地仓库保持同步
 
@@ -455,12 +485,16 @@ git push --force
 
 # 本地备份
 
+
+
 * git clone --bare src/.git dest:在dest目录中执行,将src项目备份到当前目录中
 * git clone --bare file///src/.git dest:同上,但是会有压缩,进度条等.更智能,通常使用该方式
 
 
 
 # 其他
+
+
 
 - `git add -p`: 交互式暂存
 - `git blame`: 查看最后修改某行的人
@@ -470,6 +504,8 @@ git push --force
 
 
 # SSH
+
+
 
 * 打开git bash,直接输入ssh-keygen -t rsa -C "email地址",回车
   * 之后会输入key的名称,不输则默认为id
@@ -482,17 +518,27 @@ git push --force
 
 # Gitlab
 
+
+
 ## 安装
+
+
 
 ### yum安装
 
+
+
 * yum install git
+
+
 
 ### 压缩包安装
 
 
 
 ## 备份
+
+
 
 1. 备份时需要保持gitlab处于正常运行状态,直接执行gitlab-rake gitlab:backup:create进行备份
 
@@ -522,6 +568,8 @@ git push --force
 
 ## 迁移恢复
 
+
+
 1. 在新服务器上安装相同版本的gitlab
 
 2. 将备份生成的文件发送到新服务器的相同目录下
@@ -544,6 +592,8 @@ git push --force
 
 ## 升级
 
+
+
 1. 停止gitlab并备份
 
    ```shell
@@ -563,6 +613,8 @@ git push --force
 
 
 ## 其他问题
+
+
 
 * 当push成功之后发现web管理界面没有改变,是需要清理缓存的原因
 

@@ -114,12 +114,20 @@ https://www.yuque.com/leifengyang/oncloud
 
 
 
-## POD
+## Pod
 
 
 
-* 副本.包含多个镜像的容器,类似于一个微型服务器,是k8s中应用的最小单元
+* 包含多个容器的单元,类似于一个微型服务器,是k8s中应用的最小单元
 * 包含一个Pause镜像,该镜像将其他镜像容器关联起来集中管理,类似于Docker Compose
+
+
+
+## Service
+
+
+
+* 将一组 [Pods](https://kubernetes.io/docs/concepts/workloads/pods/pod-overview/) 公开为网络服务的抽象方法
 
 
 
@@ -153,7 +161,7 @@ https://www.yuque.com/leifengyang/oncloud
 
 
 
-* 命名空间,隔离资源
+* 命名空间,隔离资源,但不隔离网络
 * `kubectl create ns hello`: 创建命令空间
 * `kubectl delete ns hello`: 删除命名空间
 
@@ -428,17 +436,19 @@ kubeadm token create --print-join-command
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.3.1/aio/deploy/recommended.yaml
 # 设置访问端口
 kubectl edit svc kubernetes-dashboard -n kubernetes-dashboard
-# 找到端口,在安全组放行
+# 根据以下命令找到端口,在安全组放行
 kubectl get svc -A |grep kubernetes-dashboard
+# 在web端访问ip:port
 ```
 
-* 创建访问账号
+* 访问web页面时需要一个token令牌,由以下命令创建访问账号
 
 ```yaml
 # 创建访问账号,准备一个yaml文件: vi dash.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
+  # 创建token时的账号
   name: admin-user
   namespace: kubernetes-dashboard
 ---
@@ -465,7 +475,7 @@ kubectl apply -f dash.yaml
 kubectl -n kubernetes-dashboard get secret $(kubectl -n kubernetes-dashboard get sa/admin-user -o jsonpath="{.secrets[0].name}") -o go-template="{{.data.token | base64decode}}"
 ```
 
-* 在Web访问`https://集群任意IP:端口`
+* 在Web访问`https://集群任意IP:端口`,账号就是配置文件中的`admin-user`,密码就是令牌
 
 
 
@@ -477,10 +487,18 @@ kubectl -n kubernetes-dashboard get secret $(kubectl -n kubernetes-dashboard get
 
 
 
+* `kubectl create ns hello`: 使用Shell命令创建命名空间
+* `kubectl delete ns hello`: 使用Shell命令删除命名空间
+* `kubectl apply -f hello.yaml`: 使用资源文件创建命名空间
+* `kubectl delete -f hello.yaml`: 使用资源文件删除命名空间
+
 ```yaml
-# kubectl create ns hello:创建命名空间,下方为创建ns的配置文件,必须有
+# hello.yaml
+# 版本
 apiVersion: v1
+# 资源类型,固定写法
 kind: Namespace
+# 元数据
 metadata:
   name: hello
 ```
@@ -491,7 +509,9 @@ metadata:
 
 
 
-* 命名空间配置文件
+* `kubectl run mynginx --image=nginx -n {ns}`: 使用Shell命令创建Pod,若不指定命名空间,则默认在default命名空间创建
+
+* `kubectl apply -f mynginx.yaml`: 使用资源文件创建Pod
 
 ```yaml
 apiVersion: v1
@@ -499,30 +519,37 @@ kind: Pod
 metadata:
   labels:
     run: mynginx
+  # Pod名称,自定义
   name: mynginx
+  # 若不指定命名空间,则默认在default中创建
+  namespace: default
+# 其他信息
 spec:
+  # 容器
   containers:
+  # 镜像名
   - image: nginx
+    # 容器名,自定义
     name: mynginx
 ```
 
-* shell脚本,执行完之后应用还不能外部访问
+* 使用Shell命令查看Pod状态
+  * ready: Pod中正常运行的镜像数目/Pod中所有镜像数目
+  * status: Pod状态,为running时表示Pod已经创建完毕
+  * node: Pod在哪个集群中的哪个节点上
+
+
+
+
+![](img/004.png)
+
+
+
+* 执行完之后应用还不能外部访问
 
 ```shell
-#创建一个的nginx的pod
-kubectl run mynginx --image=nginx
-# 查看default名称空间的Pod
-kubectl get pod 
-# 描述
-kubectl describe pod 你自己的Pod名字
-# 删除
-kubectl delete pod Pod名字
-# 查看Pod的运行日志
-kubectl logs Pod名字
-# 每个Pod - k8s都会分配一个ip
-kubectl get pod -owide
 # 使用Pod的ip+pod里面运行容器的端口,集群中的任意一个机器以及任意的应用都能通过Pod分配的ip来访问这个Pod
-curl 192.168.169.136
+curl 192.168.169.136:8080
 ```
 
 * 创建一个拥有自愈能力且带副本的pod: `kubectl create deployment mynginx --image=nginx --replicas=3`
@@ -572,6 +599,625 @@ kubectl rollout undo deployment/mynginx --to-revision=2
 
 
 
+## 创建Service
+
+
+
+```shell
+# 暴露Deploy
+kubectl expose deployment mynginx --port=8000 --target-port=80
+
+# 使用标签检索Pod
+kubectl get pod -l app=mynginx
+```
+
+
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: mynginx
+  name: mynginx
+spec:
+  selector:
+    app: mynginx
+  ports:
+  - port: 8000
+    protocol: TCP
+    targetPort: 80
+```
+
+
+
+### ClusterIP
+
+
+
+```shell
+# 等同于没有--type的
+kubectl expose deployment mynginx --port=8000 --target-port=80 --type=ClusterIP
+```
+
+
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: mynginx
+  name: mynginx
+spec:
+  ports:
+  - port: 8000
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: mynginx
+  type: ClusterIP
+```
+
+
+
+### NodePort
+
+
+
+```shell
+kubectl expose deployment mynginx --port=8000 --target-port=80 --type=NodePort
+```
+
+
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: mynginx
+  name: mynginx
+spec:
+  ports:
+  - port: 8000
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: mynginx
+  type: NodePort
+```
+
+
+
+## Ingress
+
+
+
+### 安装
+
+
+
+```shell
+wget https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v0.47.0/deploy/static/provider/baremetal/deploy.yaml
+#修改镜像
+vi deploy.yaml
+#将image的值改为如下值：
+registry.cn-hangzhou.aliyuncs.com/lfy_k8s_images/ingress-nginx-controller:v0.46.0
+# 检查安装的结果,开放svc端口
+kubectl get pod,svc -n ingress-nginx
+```
+
+
+
+### 使用
+
+
+
+* [官网地址](https://kubernetes.github.io/ingress-nginx/)
+* https://139.198.163.211:32401/
+* [http://139.198.163.211:31405/](https://139.198.163.211:32401/)
+
+
+
+### 测试环境
+
+
+
+* 应用如下yaml,准备好测试环境
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: hello-server
+  template:
+    metadata:
+      labels:
+        app: hello-server
+    spec:
+      containers:
+      - name: hello-server
+        image: registry.cn-hangzhou.aliyuncs.com/lfy_k8s_images/hello-server
+        ports:
+        - containerPort: 9000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: nginx-demo
+  name: nginx-demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx-demo
+  template:
+    metadata:
+      labels:
+        app: nginx-demo
+    spec:
+      containers:
+      - image: nginx
+        name: nginx
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: nginx-demo
+  name: nginx-demo
+spec:
+  selector:
+    app: nginx-demo
+  ports:
+  - port: 8000
+    protocol: TCP
+    targetPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: hello-server
+  name: hello-server
+spec:
+  selector:
+    app: hello-server
+  ports:
+  - port: 8000
+    protocol: TCP
+    targetPort: 9000
+```
+
+
+
+### 域名访问
+
+
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress  
+metadata:
+  name: ingress-host-bar
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: "hello.dream.com"
+    http:
+      paths:
+      - pathType: Prefix
+        path: "/"
+        backend:
+          service:
+            name: hello-server
+            port:
+              number: 8000
+  - host: "demo.dream.com"
+    http:
+      paths:
+      - pathType: Prefix
+        path: "/nginx"  # 把请求会转给下面的服务,下面的服务一定要能处理这个路径,不能处理就是404
+        backend:
+          service:
+            name: nginx-demo  # java,比如使用路径重写,去掉前缀nginx
+            port:
+              number: 8000
+```
+
+
+
+### 路径重写
+
+
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress  
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+  name: ingress-host-bar
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: "hello.dream.com"
+    http:
+      paths:
+      - pathType: Prefix
+        path: "/"
+        backend:
+          service:
+            name: hello-server
+            port:
+              number: 8000
+  - host: "demo.dream.com"
+    http:
+      paths:
+      - pathType: Prefix
+        path: "/nginx(/|$)(.*)"  # 把请求会转给下面的服务,下面的服务一定要能处理这个路径,不能处理就是404
+        backend:
+          service:
+            name: nginx-demo  # java,比如使用路径重写,去掉前缀nginx
+            port:
+              number: 8000
+```
+
+
+
+### 流量限制
+
+
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress-limit-rate
+  annotations:
+    nginx.ingress.kubernetes.io/limit-rps: "1"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: "haha.dream.com"
+    http:
+      paths:
+      - pathType: Exact
+        path: "/"
+        backend:
+          service:
+            name: nginx-demo
+            port:
+              number: 8000
+```
+
+
+
+## 存储抽象
+
+
+
+### 安装
+
+
+
+```shell
+# 所有机器安装
+yum install -y nfs-utils
+
+# nfs主节点
+echo "/nfs/data/ *(insecure,rw,sync,no_root_squash)" > /etc/exports
+mkdir -p /nfs/data
+systemctl enable rpcbind --now
+systemctl enable nfs-server --now
+# 配置生效
+exportfs -r
+
+# 从节点安装
+showmount -e 172.31.0.4
+# 执行以下命令挂载 nfs 服务器上的共享目录到本机路径 /root/nfsmount
+mkdir -p /nfs/data
+mount -t nfs 172.31.0.4:/nfs/data /nfs/data
+# 写入一个测试文件
+echo "hello nfs server" > /nfs/data/test.txt
+```
+
+
+
+### 数据挂载
+
+
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: nginx-pv-demo
+  name: nginx-pv-demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx-pv-demo
+  template:
+    metadata:
+      labels:
+        app: nginx-pv-demo
+    spec:
+      containers:
+      - image: nginx
+        name: nginx
+        volumeMounts:
+        - name: html
+          mountPath: /usr/share/nginx/html
+      volumes:
+        - name: html
+          nfs:
+            server: 172.31.0.4
+            path: /nfs/data/nginx-pv
+```
+
+
+
+### PV&PVC
+
+
+
+* PV: 持久卷(Persistent Volume),将应用需要持久化的数据保存到指定位置
+* PVC: 持久卷申明(Persistent Volume Claim),申明需要使用的持久卷规格
+
+
+
+#### 创建pv池
+
+
+
+```shell
+# nfs主节点
+mkdir -p /nfs/data/01
+mkdir -p /nfs/data/02
+mkdir -p /nfs/data/03
+```
+
+
+
+```yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv01-10m
+spec:
+  capacity:
+    storage: 10M
+  accessModes:
+    - ReadWriteMany
+  storageClassName: nfs
+  nfs:
+    path: /nfs/data/01
+    server: 172.31.0.4
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv02-1gi
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteMany
+  storageClassName: nfs
+  nfs:
+    path: /nfs/data/02
+    server: 172.31.0.4
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv03-3gi
+spec:
+  capacity:
+    storage: 3Gi
+  accessModes:
+    - ReadWriteMany
+  storageClassName: nfs
+  nfs:
+    path: /nfs/data/03
+    server: 172.31.0.4
+```
+
+
+
+#### PVC创建与绑定
+
+
+
+* 创建PVC
+
+```yaml
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: nginx-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 200Mi
+  storageClassName: nfs
+```
+
+* 创建Pod绑定PVC
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: nginx-deploy-pvc
+  name: nginx-deploy-pvc
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx-deploy-pvc
+  template:
+    metadata:
+      labels:
+        app: nginx-deploy-pvc
+    spec:
+      containers:
+      - image: nginx
+        name: nginx
+        volumeMounts:
+        - name: html
+          mountPath: /usr/share/nginx/html
+      volumes:
+        - name: html
+          persistentVolumeClaim:
+            claimName: nginx-pvc
+```
+
+
+
+### ConfigMap
+
+
+
+* 抽取应用配置,并且可以自动更新
+
+
+
+```yaml
+# 以redis为例,创建配置,redis保存到k8s的etcd
+kubectl create cm redis-conf --from-file=redis.conf
+```
+
+
+
+```yaml
+apiVersion: v1
+data:    #data是所有真正的数据,key:默认是文件名, value:配置文件的内容
+  redis.conf: |
+    appendonly yes
+kind: ConfigMap
+metadata:
+  name: redis-conf
+  namespace: default
+```
+
+* 创建Pod
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: redis
+spec:
+  containers:
+  - name: redis
+    image: redis
+    command:
+      - redis-server
+      - "/redis-master/redis.conf"  #指的是redis容器内部的位置
+    ports:
+    - containerPort: 6379
+    volumeMounts:
+    - mountPath: /data
+      name: data
+    - mountPath: /redis-master
+      name: config
+  volumes:
+    - name: data
+      emptyDir: {}
+    - name: config
+      configMap:
+        name: redis-conf
+        items:
+        - key: redis.conf
+          path: redis.conf
+```
+
+* 检查默认配置
+
+```shell
+kubectl exec -it redis -- redis-cli
+
+CONFIG GET appendonly
+CONFIG GET requirepass
+```
+
+* 修改ConfigMap
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: example-redis-config
+data:
+  redis-config: |
+    maxmemory 2mb
+    maxmemory-policy allkeys-lru 
+```
+
+* 检查配置是否更新
+
+```shell
+kubectl exec -it redis -- redis-cli
+
+CONFIG GET maxmemory
+CONFIG GET maxmemory-policy
+```
+
+* 检查指定文件内容是否已经更新,修改了CM,Pod里面的配置文件会跟着变
+* 配置值未更改,因为需要重新启动 Pod 才能从关联的 ConfigMap 中获取更新的值.因为Pod部署的中间件自己本身没有热更新能力
+
+
+
+### Secret
+
+
+
+> Secret对象类型用来保存敏感信息,例如密码,OAuth 令牌和 SSH 密钥,将这些信息放在 secret 中比放在 [Pod](https://kubernetes.io/docs/concepts/workloads/pods/pod-overview/) 或者 [容器镜像](https://kubernetes.io/zh/docs/reference/glossary/?all=true#term-image) 中更加安全和灵活
+
+
+
+```shell
+kubectl create secret docker-registry dream-docker --docker-username=root --docker-password=123456 --docker-email=12345678@qq.com
+
+# 命令格式
+kubectl create secret docker-registry regcred 
+  --docker-server=<你的镜像仓库服务器> 
+  --docker-username=<你的用户名> 
+  --docker-password=<你的密码> 
+  --docker-email=<你的邮箱地址>
+```
+
+
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: private-nginx
+spec:
+  containers:
+  - name: private-nginx
+    image: dream/guignginx:v1.0
+  imagePullSecrets:
+  - name: dream-docker
+```
+
+
+
 # Shell
 
 
@@ -579,10 +1225,6 @@ kubectl rollout undo deployment/mynginx --to-revision=2
 * `kubectl get nodes`: 查看集群所有节点,只能在主节点运行
 
 * `kubectl apply -f xxxx.yaml`: 根据配置文件,给集群创建资源
-
-* `kubectl get pods -A`: 查看集群部署了哪些应用
-
-* `kubectl get pods -A`: 运行中的应用在docker里面叫容器,在k8s里面叫Pod
 
 * `kubeadm token create --print-join-command`: 主节点运行,创建新令牌
 
@@ -596,15 +1238,27 @@ kubectl rollout undo deployment/mynginx --to-revision=2
 
 * `kubectl edit deployment mynginx`: 修改 replicas
 
-* `kubectl get pod `: 查看default名称空间的Pod
+* `kubectl get pods -A`: 查看集群部署了哪些应用,运行中的应用在docker里面叫容器,在k8s里面叫Pod
 
-* `kubectl describe pod 自定义的Pod名字`: 描述Pod
+* `kubectl get pods `: 查看default名称空间的Pod
 
-* `kubectl delete pod Pod名字`: 删除Pod
+* `kubectl get pod -n {ns}`: 查看指定命名空间中的Pod,若不指定ns,则查看default命名空间中的Pod
+
+* `kubectl describe pod {PodName}`: 查看Pod详情,主要查看Events的信息
+
+  
+
+  ![](img/005.png)
+
+  
+
+* `kubectl delete pod Pod名字 -n {ns}`: 删除Pod,若不指定ns,则删除default命名空间中的Pod
 
 * `kubectl logs Pod名字`: 查看Pod的运行日志
 
-* `kubectl get pod -owide`: 每个Pod - k8s都会分配一个ip
+* `kubectl get pod -owide`: 查看Pod详情,主要是查看Pod Ip
+
+* `kubectl exec -it {podname} -- /bin/bash`: 进入Pod的内部控制台,类似Docker中的exec命令
 
 * `kubectl rollout history deployment/mynginx`: 历史记录
 
@@ -613,6 +1267,12 @@ kubectl rollout undo deployment/mynginx --to-revision=2
 * `kubectl rollout undo deployment/mynginx`: 回滚(回到上次)
 
 * `kubectl rollout undo deployment/mynginx --to-revision=2`: 回滚(回到指定版本)
+
+* `kubectl get ns`: 获得所有命令空间
+
+* `kubectl create ns {name}`: 创建名称为name的命名空间
+
+* `kubectl delete ns {ns}`: 删除指定命名空间,同时会删除该命名空间下的所有Pod
 
   
 

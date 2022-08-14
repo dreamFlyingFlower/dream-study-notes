@@ -404,11 +404,16 @@ init num:控制台中直接修改运行级别
 
 ## 软件安装
 
+
+
 ### yum
+
+
 
 * yum -y install xxx:下载安装软件,需要联网,-y表示不需要确认,直接安装
 * yum install --downloadonly[=/app]:只下载文件,不安装;指定下载的地址
-* yum list:列出可以安装的软件列表
+* yum list [java]:列出可以安装的软件列表,若指定了软件名称则只列出相关软件安装列表
+* yum list --showduplicates java| expand: 查看java所有可安装版本
 * yum list installed:列出已经安装了的软件
 * yum info xxx:查看软件包信息
 * yum check-update xxx:检测软件是否需要更新.若有新的更新,则直接更新
@@ -416,10 +421,13 @@ init num:控制台中直接修改运行级别
 * yum remove xxx:卸载软件
 * yum search xxx:搜索软件
 * yum clean packages:清理软件缓存
+* rpm -qa | grep jdk: 检查已安装软件版本
 
 
 
 ### yum源
+
+
 
 * /etc/yum.repos.d:该目录下存放所有的yum源文件
 

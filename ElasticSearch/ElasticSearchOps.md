@@ -609,7 +609,17 @@ GET /_analyze
 * docker中安装ES7,启动命令如下
 
 ```shell
-docker run -p 9200:9200 -p 9300:0300 --name elasticsearch -e "discovery.type=single-node" -e ES_JAVA_OPS="-Xms64m -Xmx128m" -v /app/elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml -v /app/elasticsearch/data:/usr/share/elasticsearch/data -v /app/elasticsearch/plugins:/usr/share/elasticsearch/plugins -d elasticsearch:7.4.2
+docker run --name elasticsearch  --restart=always 
+# 端口映射:服务器端口:docker端口
+-p 9200:9200 -p 9300:0300 
+# 指定运行参数
+-e "discovery.type=single-node" -e ES_JAVA_OPS="-Xms64m -Xmx128m" 
+# 配置文件目录映射:服务器目录:docker目录
+-v /app/elasticsearch/config:/usr/share/elasticsearch/config 
+# 存储数据目录映射
+-v /app/elasticsearch/data:/usr/share/elasticsearch/data 
+# 插件目录映射
+-v /app/elasticsearch/plugins:/usr/share/elasticsearch/plugins -d elasticsearch:7.4.2
 ```
 
 * docker中启动ES插件Kibana:ES的可视化插件

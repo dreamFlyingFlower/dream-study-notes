@@ -1778,9 +1778,30 @@ net {
 
 # Docker中使用
 
+
+
 ```shell
-docker run -p 3306:3306 --name mysql-master -v /app/mysql/master/log:/var/log/mysql -v /app/mysql/master/data:/var/lib/mysql -v /app/mysql/master/conf:/etc/mysql -e MYSQL_ROOT_PASSWORD=root -d mysql
+docker run -p 3306:3306 --name mysql-master -v /app/mysql/master/log:/var/log/mysql -v /app/mysql/master/data:/var/lib/mysql -v /app/mysql/master/conf:/etc/mysql -e MYSQL_ROOT_PASSWORD=root --restart=always -d mysql
 ```
+
+
+
+```ini
+[client]
+default-character-set=utf8mb4
+ 
+[mysql]
+default-character-set=utf8mb4
+ 
+[mysqld]
+init_connect='SET collation_connection = utf8mb4_unicode_ci'
+init_connect='SET NAMES utf8mb4'
+character-set-server=utf8mb4
+collation-server=utf8mb4_unicode_ci
+skip-character-set-client-handshake
+skip-name-resolve
+```
+
 
 
 # 性能优化

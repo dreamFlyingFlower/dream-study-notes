@@ -702,3 +702,19 @@
   * -t:仅运行以逗号分隔的测试命令列表
   * -I:Idle模式,仅打开N个idle连接并等待
 * monitor:打印服务器调试信息
+
+
+
+# Docker中使用
+
+
+
+```shell
+#docker启动redis
+docker run -d -p 6379:6379 --restart=always \
+-v /app/redis/conf/redis.conf:/etc/redis/redis.conf \
+-v  /app/redis-01/data:/data \
+ --name redis-01 redis:6.2.5 \
+ redis-server /etc/redis/redis.conf
+```
+

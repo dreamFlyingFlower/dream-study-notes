@@ -395,6 +395,8 @@
 
 ## Maven
 
+
+
 * Maven home path:配置Maven目录地址
 * User settings file:Maven配置文件地址
 * Local repository:本地Maven仓库地址
@@ -403,8 +405,18 @@
 
 ### Importing
 
+
+
 * Automatically download:自动下载资源,可选
 * JDK for importer:设置JDK版本
+
+
+
+### Runner
+
+
+
+* Skip tests:勾选,跳过测试
 
 
 

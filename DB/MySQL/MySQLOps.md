@@ -1820,3 +1820,59 @@ skip-name-resolve
 	* 唯一的办法-----监测并观察服务器的状态:`show status;show processlist;`
 * 减少无关请求(业务逻辑层面,其实是最有效的手段)
 * 如果请求数是一定的,不可减少的,则要尽量让请求数平稳,不要有剧烈波动,比如秒杀时段请求数过高.使用缓存或队列改变尽量减少波动.缓存需要注意击穿,雪崩等
+
+
+
+# 故障解决
+
+
+
+## 断电恢复
+
+
+
+* 在没有备份数据的情况下,突然断电导致表损坏,打不开数据库,查看数据库日志提示表空间不存在
+* 以下方法只适用于表的frm和ibd物理文件完好,但数据库服务找不到表空间的情况,且需要表结构原始语句仍存在
+
+
+
+```bash
+# 假设旧表为city,新表为city_new.找一台新的数据库重新建新表,表结构需要和以前的相同
+CREATE TABLE `city_new` (
+  `ID` int(11) NOT NULL AUTO_INCREMENT,
+  `Name` char(35) NOT NULL DEFAULT '',
+  `CountryCode` char(3) NOT NULL DEFAULT '',
+  `District` char(20) NOT NULL DEFAULT '',
+  `Population` int(11) NOT NULL DEFAULT '0',
+  PRIMARY KEY (`ID`),
+  KEY `CountryCode` (`CountryCode`),
+  KEY `index_key` (`Name`),
+  KEY `idx_key` (`ID`),
+  KEY `population_key` (`Population`),
+  KEY `District_key` (`District`)
+) ENGINE=InnoDB AUTO_INCREMENT=4080 DEFAULT CHARSET=utf8;
+
+# 数据库操作city_new清除自己的表空间
+mysql> alter table city_new discard tablespace;
+
+# 物理拷贝旧表city的数据文件.以.frm结尾的是表结构文件,以.ibd结尾的是数据文件,.frm的文件不需要拷贝
+cp city.ibd city_new.ibd
+# 重新给新表的数据文件赋用户和用户组,必须有,否则恢复表空间数据时会找不到文件
+chown -R mysql.mysql city_new.ibd
+
+# city_new读取自己的表空间数据
+mysql> alter table city_new import tablespace;
+
+# 数据查询
+mysql> select * from city_new;
+
+# 在数据库中删除损坏的旧表,虽然会报错,但是仍然会删除旧的表空间
+mysql> drop table city;
+ERROR 1051 (42S02): Unknown table 'world.city'		#只是说不认识,没说不能删除,其实仍然会删除数据文件.frm
+
+# 删除数据库数据目录中损坏的表数据
+rm city.ibd
+
+# 修改表名
+mysql> alter table city_new rename city;
+```

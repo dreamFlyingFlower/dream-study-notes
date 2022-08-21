@@ -341,7 +341,7 @@ kubeadm init \
 --image-repository registry.cn-hangzhou.aliyuncs.com/lfy_k8s_images \
 # k8s
 --kubernetes-version v1.20.9 \
-# k8s内部通讯网络范围,需根据实际情况修改
+# k8s内部Service服务网络范围,主要是负载均衡,需根据实际情况修改
 --service-cidr=10.96.0.0/16 \
 --pod-network-cidr=192.168.1.0/16
 
@@ -479,7 +479,7 @@ kubectl -n kubernetes-dashboard get secret $(kubectl -n kubernetes-dashboard get
 
 
 
-# 运行
+# 使用
 
 
 
@@ -552,6 +552,15 @@ spec:
 curl 192.168.169.136:8080
 ```
 
+
+
+### Deployment
+
+
+
+* 无状态应用部署,如微服务,提供多副本等功能
+* 用deployment创建的Pod在被删除之后会自动从原镜像中创建一个新的Pod并重启新Pod
+
 * 创建一个拥有自愈能力且带副本的pod: `kubectl create deployment mynginx --image=nginx --replicas=3`
 
 ```yaml
@@ -577,9 +586,10 @@ spec:
         name: nginx
 ```
 
-* 滚动更新
+* 滚动更新: 修改镜像版本,会在创建新的Pod之后关闭老的Pod
 
 ```shell
+# nginx为要更新的镜像名称,record表示记录日志
 kubectl set image deployment/mynginx nginx=nginx:1.16.1 --record
 kubectl rollout status deployment/mynginx
 ```
@@ -597,18 +607,48 @@ kubectl rollout undo deployment/mynginx
 kubectl rollout undo deployment/mynginx --to-revision=2
 ```
 
+* `kubectl delete deploy mynginx`:删除deployment
+
+
+
+### StatefulSet
+
+
+
+* 和deployment类似,但部署的是有状态的应用,如redis,会提供稳定的存储,网络等功能
+
+
+
+### DaemonSet
+
+
+
+* 和deployment类似,部署守护型应用,如日志手机组件,在每个组件都运行一份
+
+
+
+### Job/CronJob
+
+
+
+* 定时任务部署,如垃圾清理组件,可以在指定时间运行
+
 
 
 ## 创建Service
 
 
 
-```shell
-# 暴露Deploy
-kubectl expose deployment mynginx --port=8000 --target-port=80
+* 将一组Pod公开为网络服务的抽象方法,相当于单个服务的负载均衡
+* 利用Service创建的服务的会自动发现
 
+```shell
+# 暴露指定Pod的端口,port为外部访问Pod的端口,target-port为Pod的端口,单个Pod的副本内部访问端口相同
+kubectl expose deploy mynginx --port=8000 --target-port=80
 # 使用标签检索Pod
 kubectl get pod -l app=mynginx
+# 可以使用IP访问,在内部也可以使用服务名方式访问,固定格式:Pod名称.Pod所在命名空间名称.svc:端口
+curl mynginx.default.svc:8000
 ```
 
 
@@ -621,6 +661,7 @@ metadata:
     app: mynginx
   name: mynginx
 spec:
+  # 选择标签中的key-value为app=mynginx的Pod
   selector:
     app: mynginx
   ports:
@@ -635,8 +676,10 @@ spec:
 
 
 
+* 默认方式,只能集群内的服务相互访问,集群外的应用不可访问
+
 ```shell
-# 等同于没有--type的
+# 暴露服务时,默认是集群IP,等同于没有--type
 kubectl expose deployment mynginx --port=8000 --target-port=80 --type=ClusterIP
 ```
 
@@ -665,6 +708,8 @@ spec:
 
 
 
+* 集群外的应用也可以访问集群内的服务
+
 ```shell
 kubectl expose deployment mynginx --port=8000 --target-port=80 --type=NodePort
 ```
@@ -690,7 +735,21 @@ spec:
 
 
 
+![](img/006.png)
+
+
+
+* 查看服务,可以看到2个端口8000:30948,内部访问8000,外部访问30948,且每个Pod服务都会开30948端口
+* 外部端口是随机打开,一般范围在30000-32767之间
+
+
+
 ## Ingress
+
+
+
+* [官网地址](https://kubernetes.github.io/ingress-nginx/)
+* 集群所有Service统一网关入口,所有调用Service的请求由Ingress进行转发,功能相当于nginx
 
 
 
@@ -714,9 +773,11 @@ kubectl get pod,svc -n ingress-nginx
 
 
 
-* [官网地址](https://kubernetes.github.io/ingress-nginx/)
-* https://139.198.163.211:32401/
-* [http://139.198.163.211:31405/](https://139.198.163.211:32401/)
+![](img/007.png)
+
+
+
+* 查看ingress服务的port,80:31405表示外部端口31405对应内部端口80,32401对应内部端口443
 
 
 
@@ -810,11 +871,13 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
+  # 域名
   - host: "hello.dream.com"
     http:
       paths:
       - pathType: Prefix
         path: "/"
+        # 后台服务
         backend:
           service:
             name: hello-server
@@ -824,10 +887,12 @@ spec:
     http:
       paths:
       - pathType: Prefix
-        path: "/nginx"  # 把请求会转给下面的服务,下面的服务一定要能处理这个路径,不能处理就是404
+        # 将请求转给下面的服务,下面的服务一定要能处理这个路径,不能处理就是404
+        path: "/nginx"
         backend:
           service:
-            name: nginx-demo  # java,比如使用路径重写,去掉前缀nginx
+            # Pod服务名,也可以使用路径重写,见官网
+            name: nginx-demo  
             port:
               number: 8000
 ```
@@ -838,34 +903,28 @@ spec:
 
 
 
+* [annotations用法](https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/annotations)
+
 ```yaml
 apiVersion: networking.k8s.io/v1
 kind: Ingress  
 metadata:
+  # 路径重写,会将下方path中的正则的值取出转发到内网的实际URL,下方的正则访问如nginx/create->create
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /$2
   name: ingress-host-bar
 spec:
   ingressClassName: nginx
   rules:
-  - host: "hello.dream.com"
-    http:
-      paths:
-      - pathType: Prefix
-        path: "/"
-        backend:
-          service:
-            name: hello-server
-            port:
-              number: 8000
   - host: "demo.dream.com"
     http:
       paths:
       - pathType: Prefix
-        path: "/nginx(/|$)(.*)"  # 把请求会转给下面的服务,下面的服务一定要能处理这个路径,不能处理就是404
+        # 该路径会将/nginx开头的路径转发到去掉nginx的URL,如nginx/create->create
+        path: "/nginx(/|$)(.*)"
         backend:
           service:
-            name: nginx-demo  # java,比如使用路径重写,去掉前缀nginx
+            name: nginx-demo
             port:
               number: 8000
 ```
@@ -876,11 +935,14 @@ spec:
 
 
 
+* [annotations用法](https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/annotations)
+
 ```yaml
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: ingress-limit-rate
+  # 流量限流
   annotations:
     nginx.ingress.kubernetes.io/limit-rps: "1"
 spec:
@@ -889,6 +951,7 @@ spec:
   - host: "haha.dream.com"
     http:
       paths:
+      # 限流方式
       - pathType: Exact
         path: "/"
         backend:
@@ -904,6 +967,10 @@ spec:
 
 
 
+* 管理所有的文件存储,分布式
+
+
+
 ### 安装
 
 
@@ -914,16 +981,18 @@ yum install -y nfs-utils
 
 # nfs主节点
 echo "/nfs/data/ *(insecure,rw,sync,no_root_squash)" > /etc/exports
+# 文件存储目录,自定义
 mkdir -p /nfs/data
 systemctl enable rpcbind --now
 systemctl enable nfs-server --now
 # 配置生效
 exportfs -r
 
-# 从节点安装
+# 从节点显示主节点的存储情况,ip为主节点ip
 showmount -e 172.31.0.4
 # 执行以下命令挂载 nfs 服务器上的共享目录到本机路径 /root/nfsmount
 mkdir -p /nfs/data
+# 同步主节点的存储和本节点存储目录:主节点ip:主节点存储目录;本节点(从节点)目录
 mount -t nfs 172.31.0.4:/nfs/data /nfs/data
 # 写入一个测试文件
 echo "hello nfs server" > /nfs/data/test.txt
@@ -936,6 +1005,7 @@ echo "hello nfs server" > /nfs/data/test.txt
 
 
 ```yaml
+# 原生方式挂载数据
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -955,12 +1025,15 @@ spec:
       containers:
       - image: nginx
         name: nginx
+        # nginx挂载路径
         volumeMounts:
         - name: html
           mountPath: /usr/share/nginx/html
       volumes:
+        # nginx中名为html的路径在文件系统中的实际映射路径
         - name: html
           nfs:
+            # 主节点IP
             server: 172.31.0.4
             path: /nfs/data/nginx-pv
 ```
@@ -980,6 +1053,8 @@ spec:
 
 
 
+* 创建存储地址
+
 ```shell
 # nfs主节点
 mkdir -p /nfs/data/01
@@ -987,21 +1062,28 @@ mkdir -p /nfs/data/02
 mkdir -p /nfs/data/03
 ```
 
-
+* 创建PV
 
 ```yaml
 apiVersion: v1
+# 资源类型
 kind: PersistentVolume
 metadata:
+  # 存储卷名称,自定义
   name: pv01-10m
 spec:
   capacity:
+    # 申请的容量大小
     storage: 10M
   accessModes:
+  	# 读写模式
     - ReadWriteMany
+  # 存储类名,自定义,创建的PVC中的同名属性值需要和该值相同,相当于一个标识
   storageClassName: nfs
   nfs:
+    # 存储地址
     path: /nfs/data/01
+    # 主节点IP
     server: 172.31.0.4
 ---
 apiVersion: v1
@@ -1042,9 +1124,11 @@ spec:
 * 创建PVC
 
 ```yaml
+# 资源类型
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
+  # PVC名称
   name: nginx-pvc
 spec:
   accessModes:
@@ -1082,6 +1166,7 @@ spec:
           mountPath: /usr/share/nginx/html
       volumes:
         - name: html
+          # Pod绑定的PVC名称
           persistentVolumeClaim:
             claimName: nginx-pvc
 ```
@@ -1094,18 +1179,17 @@ spec:
 
 * 抽取应用配置,并且可以自动更新
 
-
-
 ```yaml
 # 以redis为例,创建配置,redis保存到k8s的etcd
 kubectl create cm redis-conf --from-file=redis.conf
 ```
 
-
+* 创建配置文件
 
 ```yaml
 apiVersion: v1
-data:    #data是所有真正的数据,key:默认是文件名, value:配置文件的内容
+# data是所有真正的数据,key:默认是文件名, value:配置文件的内容
+data: 
   redis.conf: |
     appendonly yes
 kind: ConfigMap
@@ -1127,13 +1211,15 @@ spec:
     image: redis
     command:
       - redis-server
-      - "/redis-master/redis.conf"  #指的是redis容器内部的位置
+      #指的是redis容器内部的位置
+      - "/redis-master/redis.conf"
     ports:
     - containerPort: 6379
     volumeMounts:
     - mountPath: /data
       name: data
     - mountPath: /redis-master
+      # 名为config的配置是下方volumes下的name属性为config的配置
       name: config
   volumes:
     - name: data
@@ -1234,7 +1320,7 @@ spec:
 
 * `kubectl run mynginx --image=nginx`: 创建一个nginx的pod
 
-* `kubectl scale --replicas=5 deployment/mynginx`: 扩缩容
+* `kubectl scale --replicas=5 deployment/mynginx`: 增大或减小replicas的值进行副本扩缩荣
 
 * `kubectl edit deployment mynginx`: 修改 replicas
 
@@ -1243,6 +1329,10 @@ spec:
 * `kubectl get pods `: 查看default名称空间的Pod
 
 * `kubectl get pod -n {ns}`: 查看指定命名空间中的Pod,若不指定ns,则查看default命名空间中的Pod
+
+* `kubectl get pod -owide`: 查看Pod详情,主要是查看Pod Ip
+
+* `kubectl get pod -w`: 实时监控Pod状态
 
 * `kubectl describe pod {PodName}`: 查看Pod详情,主要查看Events的信息
 
@@ -1255,8 +1345,6 @@ spec:
 * `kubectl delete pod Pod名字 -n {ns}`: 删除Pod,若不指定ns,则删除default命名空间中的Pod
 
 * `kubectl logs Pod名字`: 查看Pod的运行日志
-
-* `kubectl get pod -owide`: 查看Pod详情,主要是查看Pod Ip
 
 * `kubectl exec -it {podname} -- /bin/bash`: 进入Pod的内部控制台,类似Docker中的exec命令
 
@@ -1356,16 +1444,16 @@ spec:
 sudo yum remove docker*
 sudo yum install -y yum-utils
 
-#配置docker的yum地址
+# 配置docker的yum地址
 sudo yum-config-manager \
 --add-repo \
 http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
 
 
-#安装指定版本
+# 安装指定版本
 sudo yum install -y docker-ce-20.10.7 docker-ce-cli-20.10.7 containerd.io-1.4.6
 
-#	启动&开机启动docker
+# 启动&开机启动docker
 systemctl enable docker --now
 
 # docker加速配置
@@ -1534,6 +1622,8 @@ kubectl apply -f calico.yaml
 ##### 安装nfs-server
 
 
+
+* 动态增减存储
 
 ```shell
 # 在每个机器
@@ -1940,19 +2030,13 @@ kubectl apply -f cluster-configuration.yaml
 kubectl logs -n kubesphere-system $(kubectl get pod -n kubesphere-system -l app=ks-install -o jsonpath='{.items[0].metadata.name}') -f
 ```
 
-* 访问任意机器的 30880端口,账号: admin,密码: P@88w0rd
+* 当安装完成时,可以从控制台输出看到默认的访问地址,以及帐号密码
 
 * 解决etcd监控证书找不到问题
 
 ```shell
 kubectl -n kubesphere-monitoring-system create secret generic kube-etcd-client-certs  --from-file=etcd-client-ca.crt=/etc/kubernetes/pki/etcd/ca.crt  --from-file=etcd-client.crt=/etc/kubernetes/pki/apiserver-etcd-client.crt  --from-file=etcd-client.key=/etc/kubernetes/pki/apiserver-etcd-client.key
 ```
-
-
-
-
-
-
 
 
 

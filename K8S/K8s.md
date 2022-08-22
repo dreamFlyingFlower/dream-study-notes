@@ -65,6 +65,7 @@
 
 
 * 在主节点上运行 [控制器](https://kubernetes.io/zh/docs/concepts/architecture/controller/) 的组件,每个[控制器](https://kubernetes.io/zh/docs/concepts/architecture/controller/)都是一个单独的进程, 但是为了降低复杂性,它们都被编译到同一个可执行文件,并在一个进程中运行
+* 作为集群内部的管理控制中心,负责集群内的Node,Pod副本,服务端点(Endpoint),命名空间(Namespace),服务账号(ServiceAccount),资源定额(ResourceQuota)的管理,当某个Node意外宕机时,Controller Manager会及时发现并执行自动化修复流程,确保集群始终处于预期的工作状态
 * 控制器包括:
   * 节点控制器(Node Controller): 负责在节点出现故障时进行通知和响应
   * 任务控制器(Job controller): 监测代表一次性任务的 Job 对象,然后创建 Pods 来运行这些任务直至完成

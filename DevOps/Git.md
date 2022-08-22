@@ -524,15 +524,68 @@ git push --force
 
 
 
-### yum安装
+* `yum -y install policycoreutils openssh-server openssh-clients postfix  `: 安装相关依赖
+
+* `systemctl enable sshd && sudo systemctl start sshd`: 启动ssh服务&设置为开机启动
+
+* `systemctl enable postfix && systemctl start postfix`: 设置postfix开机自启,并启动,postfix支持gitlab发信功能
+
+* 开放ssh以及http服务,然后重新加载防火墙列表
+
+  ```shell
+  firewall-cmd --add-service=ssh --permanent
+  firewall-cmd --add-service=http --permanent
+  firewall-cmd --reload
+  ```
+
+* 下载安装包:`wget https://mirrors.tuna.tsinghua.edu.cn/gitlab-ce/yum/el6/gitlab-ce-12.4.2-ce.0.el6.x86_64.rpm`
+
+* 安装: `rpm -i gitlab-ce-12.4.2-ce.0.el6.x86_64.rpm`
+
+* 修改gitlab配置: `vi /etc/gitlab/gitlab.rb`
+
+  ```shell
+  # 修改访问端口,默认为80
+  external_url 'http://192.168.66.100:9000'
+  nginx['listen_port'] = 9000
+  ```
+
+* 重载配置及启动gitlab
+
+  ```shell
+  gitlab-ctl reconfigure
+  gitlab-ctl restart
+  ```
+
+* 把端口添加到防火墙
+
+  ```shell
+  firewall-cmd --zone=public --add-port=9000/tcp --permanent
+  firewall-cmd --reload
+  ```
+
+* Web访问:ip:port
 
 
 
-* yum install git
+## 创建组
 
 
 
-### 压缩包安装
+* 组:相当于同一个项目的程序都放在该组里,一个分类,也可以不新建组,直接放在根下
+
+
+
+## 创建用户
+
+
+
+* Gitlab用户在组里面有5种不同权限:
+* Guest: 可以创建issue,发表评论,不能读写版本库
+* Reporter: 可以克隆代码,不能提交,QA,PM可以赋予这个权限
+* Developer: 可以克隆代码,开发,提交,push,普通开发可以赋予这个权限
+* Maintainer: 可以创建项目,添加tag,保护分支,添加项目成员,编辑项目,核心开发可以赋予这个权限
+* Owner: 可以设置项目访问权限 - Visibility Level,删除项目,迁移项目,管理组成员,开发组组长可以赋予这个权限
 
 
 

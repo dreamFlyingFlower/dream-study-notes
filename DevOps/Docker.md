@@ -486,10 +486,136 @@ services:
 
 # Rancher
 
+
+
 * 对Docker进一步集成的工具,可以更简单的使用Docker
 
 
 
-# Grafana
+# Harbor
 
-* 监控容器的内存数据,并配置警告
+
+
+* 一个用于存储和分发Docker镜像的企业级Registry服务器
+* 除了Harbor这个私有镜像仓库之外,还有Docker官方提供的Registry.相对Registry,Harbor具有很多优势:
+  * 提供分层传输机制,优化网络传输.Docker镜像是是分层的,而如果每次传输都使用全量文件(所以用FTP的方式并不适合),显然不经济.必须提供识别分层传输的机制,以层的UUID为标识,确定传输的对象
+  * 提供WEB界面,优化用户体验.只用镜像的名字来进行上传下载显然很不方便,需要有一个用户界面可以支持登陆、搜索功能,包括区分公有、私有镜像
+  * 支持水平扩展集群.当有用户对镜像的上传下载操作集中在某服务器,需要对相应的访问压力作分解
+  * 良好的安全机制.企业中的开发团队有很多不同的职位,对于不同的职位人员,分配不同的权限,具有更好的安全性
+
+
+
+## 安装
+
+
+
+* 先安装docker-compose
+
+  ```shell
+  sudo curl -L https://github.com/docker/compose/releases/download/1.21.2/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
+  sudo chmod +x /usr/local/bin/docker-compose
+  # 给docker-compose添加执行权限
+  sudo chmod +x /usr/local/bin/docker-compose
+  # 查看docker-compose是否安装成功
+  docker-compose -version
+  ```
+
+* 下载Harbor的压缩包:https://github.com/goharbor/harbor/releases
+
+* 上传压缩包到linux,并解压
+
+  ```shell
+  tar -xzf harbor-oﬄine-installer-v1.9.2.tgz mkdir /opt/harbor
+  mv harbor/* /opt/harbor
+  cd /opt/harbor
+  ```
+
+* 修改Harbor的配置:`vi harbor.yml`,修改hostname和port为当前服务器
+* 安装Harbor:`./	prepare`,`./	install.sh`
+* 启动Harbor: 
+  * docker-compose up -d:启动
+  * docker-compose stop:停止
+  * docker-compose restart:重新启动
+* 访问Harbor:http://192.168.66.102:85,默认账户密码: admin/Harbor12345  
+
+
+
+## 创建项目
+
+
+
+* Harbor的项目分为公开和私有的:
+  * 公开项目: 所有用户都可以访问,通常存放公共的镜像,默认有一个library公开项目
+  * 私有项目: 只有授权用户才可以访问,通常存放项目本身的镜像.创建完私有项目后可以给项目添加成员
+
+
+
+## 新建用户
+
+
+
+* 用户有4种角色:
+  * 访客: 对指定项目拥有只读权限
+  * 开发人员: 对指定项目拥有读写权限
+  * 维护人员: 对指定项目拥有读写权限,创建Webhooks
+  * 项目管理员: 除了读写权限,同时拥有用户管理/镜像扫描等管理权限
+
+
+
+## 镜像上传
+
+
+
+* 给镜像打上标签:` docker tag eureka:v1 192.168.66.102:85/dream/eureka:v1`
+
+* 推送镜像: `docker push 192.168.66.102:85/dream/eureka:v1`
+
+  ```shell
+  The push refers to repository [192.168.66.102:85/dream/eureka]
+  Get https://192.168.66.102:85/v2/: http: server gave HTTP response to HTTPS client
+  ```
+
+* 这时会出现以上报错是因为Docker没有把Harbor加入信任列表中,把Harbor地址加入到Docker信任列表: `vi /etc/docker/daemon.json`
+
+  ```js
+  {
+      "registry-mirrors": ["https://mirrors.tuna.tsinghua.edu.cn"],
+      "insecure-registries": ["192.168.66.102:85"]
+  }
+  ```
+
+* 重启Docker
+
+* 再次执行推送命令,会提示权限不足
+
+  ```
+  denied: requested access to the resource is denied
+  ```
+
+* 需要先登录Harbor,再推送镜像: `docker login -u 用户名 -p 密码 192.168.66.102:85`
+
+
+
+## 下载镜像
+
+
+
+* 在192.168.66.103服务器完成从Harbor下载镜像
+
+* 安装Docker,并启动Docker,修改Docker配置
+
+  ```js
+  {
+      "registry-mirrors": ["https://mirrors.tuna.tsinghua.edu.cn"],
+      "insecure-registries": ["192.168.66.102:85"]
+  }
+  ```
+
+* 重启docker
+
+* 先登录,再从Harbor下载镜像
+
+  ```shell
+  docker login -u 用户名 -p 密码 192.168.66.102:85
+  docker pull 192.168.66.102:85/dream/eureka:v1
+  ```

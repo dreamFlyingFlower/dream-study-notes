@@ -1528,7 +1528,7 @@ gpgkey=http://mirrors.aliyun.com/kubernetes/yum/doc/yum-key.gpg
 EOF
 
 
-#安装 kubelet，kubeadm，kubectl
+#安装 kubelet,kubeadm,kubectl
 sudo yum install -y kubelet-1.20.9 kubeadm-1.20.9 kubectl-1.20.9
 
 #启动kubelet
@@ -1633,7 +1633,7 @@ yum install -y nfs-utils
 # 在master 执行以下命令 
 echo "/nfs/data/ *(insecure,rw,sync,no_root_squash)" > /etc/exports
 
-# 执行以下命令，启动 nfs 服务;创建共享目录
+# 执行以下命令,启动 nfs 服务;创建共享目录
 mkdir -p /nfs/data
 
 # 在master执行
@@ -1679,7 +1679,7 @@ metadata:
     storageclass.kubernetes.io/is-default-class: "true"
 provisioner: k8s-sigs.io/nfs-subdir-external-provisioner
 parameters:
-  archiveOnDelete: "true"  ## 删除pv的时候，pv的内容是否要备份
+  archiveOnDelete: "true"  ## 删除pv的时候,pv的内容是否要备份
 
 ---
 apiVersion: apps/v1
@@ -2081,3 +2081,18 @@ kubectl -n kubesphere-monitoring-system create secret generic kube-etcd-client-c
 * Deployment应带有app以及version标签
 * Applicatin UID:不要使用ID(UID)值为1337的用户来运行应用
 * NET_ADMIN:如果集群中实施了POD安全策略,除非使用Istio CNI插件,POD必须有NET_ADMIN功能
+
+
+
+# Ku8eye-web
+
+
+
+* [官网](https://github.com/bestcloud/ku8eye)
+* 一个谷歌Kubernetes的Web一站式管理系统
+* 图形化一键安装部署多节点的Kubernetes集群.是安装部署谷歌Kubernetes集群的最快以及最佳方式,安装流程会参考当前系统环境,提供默认优化的集群安装参数,实现最佳部署
+* 支持多角色多租户的Portal管理界面.通过一个集中化的Portal界面,运营团队可以很方便的调整集群配置以及管理集群资源,实现跨部门的角色及用户管理、多租户管理,通过自助服务可以很容易完成Kubernetes集群的运维管理工作
+* 制定一个K8S应用的程序发布包标准(ku8package)并提供一个向导工具,使得专门为K8S设计的应用能够很容易从本地环境中发布到公有云和其他环境中,更进一步的,Ku8eye还提供了Kubernetes应用可视化的构建工具,实现Kubernetes Service、RC、Pod以及其他资源的可视化构建和管理功能
+* 可定制化的监控和告警系统.内建很多系统健康检查工具用来检测和发现异常并触发告警事件,不仅可以监控集群中的听有节点和组件(包括Docker与Kubernetes),还能够很容易的监控业务应用的性能,Ku8eye提供了一个强大的Dashboard,可以用来生成各种复杂的监控图表以展示历史信息,并且可以用来白定义相关监控指标的告警阀值
+* 具备综合全面的故障排查能力.平台提供唯一的、集中化的日志管理工具,日志系统从集群中各个节点拉取日志开做聚合分析,拉取的日志包括系统日志和用户程序日志,并且提供全文检案能力以方便故障分析和问题排查,检索的信息包括相关告警信息,而历史视图和相关的度量数据则告诉你,什么时候发生了什么事情,有助于快速了解相关时间内系统的行为特征
+* 实现Dockers与Kubernetes项目的持续集成功能.提供一个可视化工具驱动持续集成的整个流程,包括创建新的Docker镜像,Push镜像到私有仓库中,创建一个K8S测试环境进行测试以及最终滚动升级到生产环境中等各个主要环节

@@ -4,6 +4,8 @@
 
 # 概述
 
+
+
 * 正向代理:用户访问服务器,中间有个代理服务,代理服务器代理的是用户
   * 用户无法直接访问真正的服务器,需要通过代理服务器进行转发才能访问真正的服务器
   * 服务器不能判断用户的真实地址以及其他信息,保护用户
@@ -13,6 +15,10 @@
 * 用户请求通过代理服务器转发给多个服务中的一个,用户并不知道自己访问的真正服务器是那一个
   * 用户无法获得服务的真实信息,保护服务器
 * 反向代理多用来保护内网安全,进行负载均衡,缓存,减少服务器压力
+* Nginx后台进程中包含一个master进程和多个worker进程
+  * master进程主要用来管理worker进程,包含接收外界的信息,并将接收到的信号发送给各个worker进程,监控worker进程状态,当worker进程出现异常退出后,会自动重新启动新的worker进程
+  * worker进程则是专门用来处理用户请求的,各个worker进程之间是平等的并且相互独立,处理请求的机会也是一样的
+
 
 
 
@@ -21,6 +27,8 @@
 
 
 ## yum安装
+
+
 
 * yum install nginx:在centos仓库中没有nginx的安装软件,需如下安装
 
@@ -40,9 +48,13 @@
 
 * nginx -s stop:停止nginx
 
+* kill -QUIT ngxinpid: 优雅停止nginx
+
 
 
 ## 安装包安装
+
+
 
 * 解压到指定目录/app/software/nginx
 
@@ -51,8 +63,8 @@
 * 进入解压后的目录,执行命令:./configure --help,查看该命令的参数,根据需要进行修改
 
   * --prefix=PATH:安装根目录.默认为/usr/local/nginx
-  * --sbin-path=PATH:命令路径.默认为/usr/local/nginx/sbin/nginx
-  * --modules-path=PATH:模块路径.默认为/usr/local/nginx/modules
+  * --sbin-path=PATH:命令执行路径.默认为/usr/local/nginx/sbin/nginx
+  * --modules-path=PATH:动态模块安装路径.默认为/usr/local/nginx/modules
   * --conf-path=PATH:nginx.conf配置文件路径.默认为/usr/local/nginx/conf/nginx.conf
   * --error-log-path=PATH:错误日志路径.默认为/usr/local/nginx/logs/error.log
   * --http-log-path=PATH:访问日志,默认为/var/log/nginx/access.log
@@ -75,19 +87,41 @@
 
 * make && make install
 
-
-
-## 目录
+* nginx -V:查看nginx版本等相关信息
 
 
 
-* auto:存放 Nginx 自动安装的相关文件
+# 目录
+
+
+
+* 如果是简单安装,默认根目录在/usr/local/nginx中,若是自定义安装,需要自己记住
+
+* auto:存放 Nginx 编译的相关文件
 * conf:存放 Nginx 服务器配置文件
+  * CGI(Common Gateway Interface)通用网关接口,主要解决的问题是从客户端发送一个请求和数据,服务端获取到请求和数据后可以调用调用CGI程序处理及相应结果给客户端的一种标准规范
+  * fastcgi.conf:fastcgi相关配置文件
+  * fastcgi.conf.default:fastcgi.conf的备份文件
+  * fastcgi_params:fastcgi的参数文件
+  * fastcgi_params.default:fastcgi的参数备份文件
+  * scgi_params:scgi的参数文件
+  * scgi_params.default:scgi的参数备份文件
+  * uwsgi_params:uwsgi的参数文件
+  * uwsgi_params.default:uwsgi的参数备份文件
+  * mime.types:记录的是HTTP协议中的Content-Type的值和文件后缀名的对应关系
+  * mime.types.default:mime.types的备份文件
+  * nginx.conf:这个是Nginx的核心配置文件,这个文件非常重要,也是我们即将要学习的重点
+  * nginx.conf.default:nginx.conf的备份文件
+  * koi-utf、koi-win、win-utf这三个文件都是与编码转换映射相关的配置文件,用来将一种编码转换成另一种编码
+
 * configure:命令,用于对即将安装的软件的配置,完成 makefile 编译文件的生成
 * contrib:存放由其他机构贡献的文档材料
 * html:存放 Nginx 欢迎页面
 * man:manual,手册,存放 Nginx 帮助文档
 * src:存放 Nginx 源码
+* logs:记录入门的文件,当nginx服务器启动后,这里面会有 access.log error.log 和nginx.pid三个文件出现
+* sbin:是存放执行程序文件,用来控制Nginx的启动和停止等相关的命令
+
 
 
 
@@ -138,6 +172,8 @@
 
 ## 内置变量
 
+
+
 - `$args`:这个变量等于请求行中的参数,同`$query_string`
 - `$content_length`:请求头中的Content-length字段
 - `$content_type`:请求头中的Content-Type字段
@@ -159,6 +195,98 @@
 - `$request_uri`:包含请求参数的原始URI,不包含主机名,如:`/foo/bar.php?arg=baz`
 - `$uri`:不带请求参数的当前URI,`$uri`不包含主机名,如`/foo/bar.html`
 - `$document_uri`:与`$uri`相同
+
+
+
+## 全局块
+
+
+
+### user
+
+
+
+* 用于配置运行Nginx服务器的worker进程的用户和用户组,语法:`user user[group];`,默认为`user nobody;`
+* 该属性也可以在编译的时候指定:`./configure --user=user --group=group`,如果两个地方都进行了设置,配置文件优先级更高
+* 使用user指令可以指定启动运行工作进程的用户及用户组,这样对于系统的权限访问控制的更加精细,也更加安全
+
+
+
+### work process
+
+
+
+```nginx
+master_process on|off;
+worker_process num/auto;
+```
+
+* master_process:用来指定是否开启工作进程
+* worker_processes:用于配置Nginx生成工作进程的数量,建议将该值和服务器CPU的内核数保存一致
+
+
+
+### 其他指令
+
+
+
+```nginx
+daemon on|off;
+pid /usr/local/nginx/logs/nginx.pid;
+# 日志路径 级别
+error_log logs/error.log error;
+```
+
+* daemon: 设定Nginx是否以守护进程的方式启动.守护式进程是linux后台执行的一种服务进程,独立于控制终端,不会随着终端关闭而停止
+* pid: 用来配置Nginx当前master进程的进程号ID存储的文件路径.可以通过`./configure --pid-path=PATH`来指定
+* error_log: 用来配置Nginx的错误日志存放路径以及级别,该属性可以在全局块,http,server,location中出现.可以通过`./configure --error-log-path=PATH`来指定.日志级别的值:debug|info|notice|warn|error|crit|alert|emerg->调试|信息|通知|警告|错误|临界|警报|紧急
+* include:用来引入其他配置文件,使Nginx的配置更加灵活,该属性可以在任意块中出现
+
+
+
+## events
+
+
+
+```nginx
+accept_mutex on|off;
+multi_accept on|off;
+worker_connections 512;
+# 默认值根据系统而定
+use method;
+```
+
+* accept_mutex:设置Nginx网络连接序列化.这个配置主要可以用来解决惊群问题.大致意思是在某个时刻,客户端发来一个请求连接,Nginx后台会有多个worker进程会被同时唤醒,但是最终只会有一个进程可以获取到连接,如果每次唤醒的进程数太多,就会影响Nginx的整体性能.将上述值设置为on,将会对多个Nginx进程接收连接进行序列号,一个个唤醒接收,防止多个进程对连接的争抢
+* multi_accept: 设置是否允许同时接收多个网络连接.如果multi_accept被禁止了,nginx一个工作进程只能同时接受一个新的连接,否则一个工作进程可以同时接受所有的新连接
+* worker_connections: 配置单个worker进程最大的连接数.这里的连接数不仅仅包括和前端用户建立的连接数,而是包括所有可能的连接数.连接数不能大于操作系统支持打开的最大文件句柄数量
+* use: 设置Nginx服务器选择哪种事件驱动来处理网络消息.此处所选择事件处理模型是Nginx优化部分的一个重要内容,method的可选值有select/poll/epoll/kqueue等,在linux上最好使用epoll模式
+* 
+
+另外这些值的选择，我们也可以在编译的时候使用
+
+`--with-select_module`、`--without-select_module`、
+
+` --with-poll_module`、` --without-poll_module`来设置是否需要将对应的事件驱动模块编译到Nginx的内核。
+
+#### events指令配置实例
+
+打开Nginx的配置文件 nginx.conf,添加如下配置
+
+```
+events{
+	accept_mutex on;
+	multi_accept on;
+	worker_commections 1024;
+	use epoll;
+}
+```
+
+启动测试
+
+```
+./nginx -t
+./nginx -s reload
+```
 
 
 
@@ -443,6 +571,106 @@ location / {
 	deny all
 }
 ```
+
+
+
+# Shell
+
+
+
+* -?/-h:显示帮助信息
+* -v:打印版本号信息并退出
+* -V:打印版本号信息和配置信息并退出
+* -t:测试nginx的配置文件语法是否正确并退出
+* -T:测试nginx的配置文件语法是否正确并列出用到的配置文件信息然后退出
+* -q:在配置测试期间禁止显示非错误消息
+* -s []:signal信号,后面可以跟
+  * stop:快速关闭,类似于TERM/INT信号的作用
+  * quit:优雅的关闭,类似于QUIT信号的作用
+  * reopen:重新打开日志文件类似于USR1信号的作用
+  * reload: 类似于HUP信号的作用
+* -p:prefix,指定Nginx的prefix路径
+* -c:filename,指定Nginx的配置文件路径
+* -g:用来补充Nginx配置文件,向Nginx服务指定启动时应用全局的配置
+
+
+
+# 更新升级
+
+
+
+## 环境准备
+
+
+
+* 先准备两个版本的Nginx分别是 1.14.2和1.16.1
+* 使用Nginx源码安装的方式将1.14.2版本安装成功并正确访问
+
+```
+进入安装目录
+./configure
+make && make install
+```
+
+* 将Nginx1.16.1进行参数配置和编译,不需要进行安装
+
+```
+进入安装目录
+./configure
+make 
+```
+
+
+
+## 方案一
+
+
+
+* 使用Nginx服务信号进行升级
+* 将1.14.2版本的sbin目录下的nginx进行备份
+
+```shell
+cd /usr/local/nginx/sbin
+mv nginx nginxold
+```
+
+* 将Nginx1.16.1安装目录编译后的objs目录下的nginx文件,拷贝到原来`/usr/local/nginx/sbin`目录下
+
+```
+cd ~/nginx/core/nginx-1.16.1/objs
+cp nginx /usr/local/nginx/sbin
+```
+
+* 发送信号USR2给Nginx的1.14.2版本对应的master进程
+* 发送信号QUIT给Nginx的1.14.2版本对应的master进程
+
+```
+kill -QUIT `more /usr/local/logs/nginx.pid.oldbin`
+```
+
+
+
+## 方案二
+
+
+
+* 使用Nginx安装目录的make命令完成升级
+* 将1.14.2版本的sbin目录下的nginx进行备份
+
+```
+cd /usr/local/nginx/sbin
+mv nginx nginxold
+```
+
+* 将Nginx1.16.1安装目录编译后的objs目录下的nginx文件,拷贝到原来`/usr/local/nginx/sbin`目录下
+
+```
+cd ~/nginx/core/nginx-1.16.1/objs
+cp nginx /usr/local/nginx/sbin
+```
+
+* 进入到安装目录,执行`make upgrade`
+* 查看是否更新成功: `./nginx -v`
 
 
 

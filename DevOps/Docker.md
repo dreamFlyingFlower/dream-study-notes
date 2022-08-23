@@ -34,10 +34,14 @@
 
 # 安装
 
-* 修改docker远程仓库的原地址,修改/etc/default/docker,添加如下:
 
-  ```shell
-  DOCKER_OPTS="--registry-mirror=新的远程仓库地址"
+
+* 修改docker远程仓库的原地址,修改/etc/docker/daemon.json,添加如下,若文件不存在,可新建:
+
+  ```json
+  {
+      "registry-mirrors":["新的远程仓库地址"]
+  }
   ```
   
 * 查找Docker-CE的版本
@@ -69,6 +73,18 @@
   ```shell
   yum -y install docker-ce-[Version] # 若不指定版本,默认安装最新版本
   ```
+  
+* 查看日志: `tail -f /var/log/message`
+
+* 主要文件默认在/var/lib/docker目录
+
+
+
+# 配置文件
+
+
+
+* 配置文件:/usr/lib/systemd/system/docker.service  
 
 
 
@@ -125,6 +141,7 @@
     * tar cvf...:容器中备份时执行的命令;若是还原,则将cvf改成xvf即可
     * datavolumn:容器中需要备份的数据卷目录,多个用空格隔开
   * --link=cname:alias:由于docker容器重启之后ip都会改变,若是有使用ip的操作,重启之后就会失效.该参数就是给需要通过ip操作的docker容器起一个别名,所有通过ip的操作可以通过别名来完成,类似于主机名.cname是另外一个容器的名称,alias是给该容器起的别名
+  * -icc=true:docker默认是允许container互通,通过-icc=false关闭互通.一旦关闭互通,只能通过-link name:alias命令连接指定container
 
 * docker ps []:查看所有正在运行的容器
 
@@ -211,9 +228,13 @@
 
 # 镜像构建
 
+
+
 ## Docker Commit
 
-* 通过容器构建
+
+
+* 通过容器构建,无法自动化
 * docker commit [] CONTAINER [REPOSITORY[:TAG]]:构建镜像
   * -a author:作者名称
   * -m msg:镜像信息
@@ -222,6 +243,8 @@
 
 
 ## Docker Build
+
+
 
 * 通过Dockerfile文件构建镜像
 
@@ -264,6 +287,8 @@
 
 
 # 数据卷
+
+
 
 * 数据卷是经过特殊设计的目录,可以绕过联合文件系统(UFS),为一个或多个容器提供访问
 * 数据卷的设计目的在于数据持久化,完全独立于容器个生命周期,因此,docker不会在容器删除时删除其挂载的数据卷
@@ -446,6 +471,8 @@ services:
 
 
 # Maven中使用
+
+
 
 ```xml
 <plugin>

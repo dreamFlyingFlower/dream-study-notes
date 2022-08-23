@@ -299,6 +299,7 @@ https://mirrors.tuna.tsinghua.edu.cn/jenkins/updates/update-center.json
 
 
 * 和其他模式的区别在于多了流水线模块,该模块集中了其他模块的代码拉取,构建等等模块,需要构建比较复杂的脚本内容
+* 流水线语法可以在选择不同语法时点击进入查看
 
 
 
@@ -370,9 +371,9 @@ https://mirrors.tuna.tsinghua.edu.cn/jenkins/updates/update-center.json
 
 
 
-* 直接在Jenkins的UI界面编写Pipeline代码,这样不方便脚本维护,建议把Pipeline脚本放在项目中,一起进行版本控制
+* 直接在Jenkins的UI界面编写Pipeline代码,不方便脚本维护,建议把Pipeline脚本放在项目中,一起进行版本控制
 * 在项目根目录建立Jenkinsfile文件,把内容复制到该文件中,把Jenkinsfile上传到Gitlab
-* 在项目中引用该文件
+* 定义里选择Pipeline script from SCM,填入Gitlab地址
 
 ![](img/jenkins037.jpg)
 
@@ -455,11 +456,25 @@ https://mirrors.tuna.tsinghua.edu.cn/jenkins/updates/update-center.json
 
 
 
-* GitLab项目需要先设置好Webhook,在网址里填写构建触发中的地址,勾选推送事件
+* 在Gitlab主界面的头部选择Admin Area(超级管理员控制)->Settings->Network->Outbound requests,勾选allow...web hooks and services
+* 在GitLab项目需要先设置好Webhook,在网址里填写构建触发中的地址,勾选推送事件(只要有新的推送就触发Webhook),勾选其他事件也会在触发之后推送Webhook事件
 
 
 
 ![](img/jenkins007.jpg)
+
+
+
+### 参数构建
+
+
+
+![](img/jenkins038.jpg)
+
+* 在general中可选择参数构建(this project is parameterized),在进行构建时可以根据参数不同而进行不同构建行为
+* 在脚本中可以使用`${key}`来使用参数的值
+
+
 
 
 

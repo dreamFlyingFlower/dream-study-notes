@@ -91,6 +91,19 @@
 
 
 
+## 配置到环境变量
+
+
+
+```nginx
+vim /etc/profile
+# 在最后一行添加nginx安装目录到sbin的路径
+export PATH=$PATH:/usr/local/nginx/sbin
+source /etc/profile
+```
+
+
+
 # 目录
 
 
@@ -249,44 +262,19 @@ error_log logs/error.log error;
 
 
 ```nginx
-accept_mutex on|off;
-multi_accept on|off;
-worker_connections 512;
-# 默认值根据系统而定
-use method;
+events {
+    accept_mutex on|off;
+    multi_accept on|off;
+    worker_connections 1024;
+    # 默认值根据系统而定
+    use epoll;
+}
 ```
 
 * accept_mutex:设置Nginx网络连接序列化.这个配置主要可以用来解决惊群问题.大致意思是在某个时刻,客户端发来一个请求连接,Nginx后台会有多个worker进程会被同时唤醒,但是最终只会有一个进程可以获取到连接,如果每次唤醒的进程数太多,就会影响Nginx的整体性能.将上述值设置为on,将会对多个Nginx进程接收连接进行序列号,一个个唤醒接收,防止多个进程对连接的争抢
 * multi_accept: 设置是否允许同时接收多个网络连接.如果multi_accept被禁止了,nginx一个工作进程只能同时接受一个新的连接,否则一个工作进程可以同时接受所有的新连接
 * worker_connections: 配置单个worker进程最大的连接数.这里的连接数不仅仅包括和前端用户建立的连接数,而是包括所有可能的连接数.连接数不能大于操作系统支持打开的最大文件句柄数量
-* use: 设置Nginx服务器选择哪种事件驱动来处理网络消息.此处所选择事件处理模型是Nginx优化部分的一个重要内容,method的可选值有select/poll/epoll/kqueue等,在linux上最好使用epoll模式
-* 
-
-另外这些值的选择，我们也可以在编译的时候使用
-
-`--with-select_module`、`--without-select_module`、
-
-` --with-poll_module`、` --without-poll_module`来设置是否需要将对应的事件驱动模块编译到Nginx的内核。
-
-#### events指令配置实例
-
-打开Nginx的配置文件 nginx.conf,添加如下配置
-
-```
-events{
-	accept_mutex on;
-	multi_accept on;
-	worker_commections 1024;
-	use epoll;
-}
-```
-
-启动测试
-
-```
-./nginx -t
-./nginx -s reload
-```
+* use: 设置Nginx服务器选择哪种事件驱动来处理网络消息.此处所选择事件处理模型是Nginx优化部分的一个重要内容,method的可选值有select/poll/epoll/kqueue等,在linux上最好使用epoll模式.这些值的选择也可以在编译的时候使用:`--with-select_module`,`--without-select_module`,` --with-poll_module`,` --without-poll_module`
 
 
 
@@ -295,28 +283,177 @@ events{
 
 
 * 定义http服务器内容
-* include:加载响应类型
-* default_type:默认使用 IO 流实现请求/应答
+
+* include: 加载响应类型.默认会将mime.types文件中MIME类型与相关类型文件的文件后缀名的对应关系加入到当前的配置文件
+
+* default_type: 配置Nginx响应前端请求默认的MIME类型,默认使用 IO 流实现请求/应答,出现在http,server,location
+
 * log_format main:在ngxin.conf.default中可以看到该参数,表示日志的输出格式,可以根据默认配置文件中的说明进行配置.main是一个标识,在access_log中要用到.更多参数参考nginx官网
+
 * access_log foldername main:将nginx的日志以main格式输入到指定目录的文件中
-* sendfile on/off:是否支持文件传输
+
+* sendfile on|off:是否支持文件传输,该属性可以大大提高Nginx处理静态资源的性能
+
+* tcp_nopush on\|off;: 该指令必须在sendfile打开的状态下才会生效,主要是用来提升网络包的传输效率
+
+* tcp_nodelay on\|off;: 该指令必须在keep-alive连接开启的情况下才生效,来提高网络包传输的实时性
+
 * keepalive_timeout:保持连接的最大时间
-* gzip:是否开启数据压缩
+
 * server_tokens off:隐藏nginx版本号
+
 * limit_req_zone:限流,定义在http块中
-	* zone:定义IP状态及URL访问频率的共享内存区域.zone=keyword标识区域的名字,以及冒号后面跟区域大小.16000个IP地址的状态信息约1MB,所以示例中区域可以存储160000个IP地址
-	* rate:定义最大请求速率.示例中速率不能超过每秒100个请求
-	```nginx
-	# 定义限流.:$binary_remote_addr表示保存客户端IP地址的二进制形式
-	limit_req_zone $binary_remote_addr zone=mylimit:10m rate=100r/s
-	
-	# 在location中设置限流.burst排队大小,nodelay不限制单个请求间的时间
-	localtion / {
-		limit_req zone=mylit burst=20 nodelay;
-	}
-	```
+  * zone:定义IP状态及URL访问频率的共享内存区域.zone=keyword标识区域的名字,以及冒号后面跟区域大小.16000个IP地址的状态信息约1MB,所以示例中区域可以存储160000个IP地址
+  * rate:定义最大请求速率.示例中速率不能超过每秒100个请求
+  ```nginx
+  # 定义限流.:$binary_remote_addr表示保存客户端IP地址的二进制形式
+  limit_req_zone $binary_remote_addr zone=mylimit:10m rate=100r/s
+  
+  # 在location中设置限流.burst排队大小,nodelay不限制单个请求间的时间
+  localtion / {
+  	limit_req zone=mylit burst=20 nodelay;
+  }
+  ```
+
+
+
+## gzip
+
+
+
+* gzip on\|off:是否开启数据压缩,可以在http,server,location设置,以下参数只在gzip开启时有效
+* gzip_types: 可以根据响应页的MIME类型选择性地开启Gzip压缩功能
+* gzip_comp_level: 设置Gzip压缩程度,级别从1-9,1表示压缩程度最低,但效率最高,9刚好相反,压缩程度最高,但是效率最低
+* gzip_vary on\|off: 设置使用Gzip进行压缩发送是否携带Vary:Accept-Encoding头域的响应头部.主要是告诉接收方发送的数据经过了Gzip压缩处理
+* gzip_buffers number size: 用于处理请求压缩的缓冲区数量和大小.其中number指定Nginx服务器向系统申请缓存空间个数,size指的是每个缓存空间的大小.主要实现的是申请number个每个大小为size的内存空间,这个值的设定一般会和服务器的操作系统有关,所以建议此项不设置,使用默认值即可
+* gzip_disable regex: 针对不同种类客户端发起的请求,可以选择性地开启和关闭Gzip功能.regex可以根据客户端的浏览器标志(user-agent)来设置,支持使用正则表达式,指定的浏览器标志不使用Gzip.该指令一般是用来排除一些明显不支持Gzip的浏览器
+* gzip_http_version 1.0\|1.1: 针对不同的HTTP协议版本,可以选择性地开启和关闭Gzip功能,使用默认即可
+* gzip_min_length length: 该指令针对传输数据的大小,可以选择性地开启和关闭Gzip功能.Gzip压缩功能对大数据的压缩效果明显,但是如果要压缩的数据比较小,可能出现越压缩数据量越大的情况,因此需要根据响应内容的大小来决定是否使用Gzip功能,响应页面的大小可以通过头信息中的`Content-Length`来获取,但是如果使用了Chunk编码动态压缩,该指令将被忽略,建议设置为1K或以上
+* gzip_proxied: 设置是否对服务端返回的结果进行Gzip压缩
+  * off: 关闭Nginx服务器对后台服务器返回结果的Gzip压缩
+  * expired: 启用压缩,如果header头中包含 Expires 头信息
+  * no-cache: 启用压缩,如果header头中包含 Cache-Control:no-cache 头信息
+  * no-store: 启用压缩,如果header头中包含Cache-Control:no-store 头信息
+  * private: 启用压缩,如果header头中包含 Cache-Control:private 头信息
+  * no_last_modified: 启用压缩,如果header头中不包含 Last-Modified 头信息
+  * no_etag: 启用压缩,如果header头中不包含 ETag 头信息
+  * auth: 启用压缩,如果header头中包含 Authorization 头信息
+  * any: 无条件启用压缩
+* gzip_static on \| off \| always: 检查与访问资源同名的.gz文件时,response中以gzip相关的header返回.gz文件的内容.添加上述命令后如果报错`unknown directive "gzip_static"`,主要是Nginx默认是没有添加ngx_http_gzip_static_module模块,需要自行添加`./configure --with-http_gzip_static_module`
+
+```nginx
+# 开启gzip功能
+gzip on;
+# 压缩源文件类型,根据具体的访问资源类型设定
+gzip_types *;
+# gzip压缩级别
+gzip_comp_level 6;
+# 进行压缩响应页面的最小长度,content-length
+gzip_min_length 1024;
+# 缓存空间大小
+gzip_buffers 4 16K;
+# 指定压缩响应所需要的最低HTTP请求版本
+gzip_http_version 1.1;
+# 往头信息中添加压缩标识
+gzip_vary  on;
+# 对IE6以下的版本都不进行压缩
+gzip_disable "MSIE [1-6]\.";
+# nginx作为反向代理压缩服务端返回数据的条件
+gzip_proxied  off;
+```
+
+* 以上配置可以在各地使用,只需要使用include引入即可
+
+
+
+## Cache
+
+
+
+* HTTP协议中和页面缓存相关的字段,都在请求头中:
+  * Expires: 缓存过期的日期和时间
+  * Cache-Control: 设置和缓存相关的配置信息
+  * Last-Modified: 请求资源最后修改时间
+  * ETag: 请求变量的实体标签的当前值,比如文件的MD5值
+
+![](img/001.png)
+
+1. 用户首次通过浏览器发送请求到服务端获取数据,客户端是没有对应的缓存,所以需要发送request请求来获取数据
+2. 服务端接收到请求后,获取服务端的数据及服务端缓存的允许后,返回200的成功状态码并且在响应头上附上对应资源以及缓存信息
+3. 当用户再次访问相同资源的时候,客户端会在浏览器的缓存目录中查找是否存在响应的缓存文件
+4. 如果没有找到对应的缓存文件,则走第2步
+5. 如果有缓存文件,接下来对缓存文件是否过期进行判断,过期的判断标准是(Expires)
+6. 如果没有过期,则直接从本地缓存中返回数据进行展示
+7. 如果Expires过期,接下来需要判断缓存文件是否发生过变化
+8. 判断的标准有两个,一个是ETag(Entity Tag),一个是Last-Modified
+9. 判断结果是未发生变化,则服务端返回304,直接从缓存文件中获取数据
+10. 如果判断是发生了变化,重新从服务端获取数据,并根据缓存协商(服务端所设置的是否需要进行缓存数据的设置)来进行数据缓存
+
+
+
+##### expires指令
+
+expires:该指令用来控制页面缓存的作用。可以通过该指令控制HTTP应答中的“Expires"和”Cache-Control"
+
+| 语法   | expires   [modified] time<br/>expires epoch\|max\|off; |
+| ------ | ------------------------------------------------------ |
+| 默认值 | expires off;                                           |
+| 位置   | http、server、location                                 |
+
+time:可以整数也可以是负数，指定过期时间，如果是负数，Cache-Control则为no-cache,如果为整数或0，则Cache-Control的值为max-age=time;
+
+epoch: 指定Expires的值为'1 January,1970,00:00:01 GMT'(1970-01-01 00:00:00)，Cache-Control的值no-cache
+
+max:指定Expires的值为'31 December2037 23:59:59GMT' (2037-12-31 23:59:59) ，Cache-Control的值为10年
+
+off:默认不缓存。
+
+##### add_header指令
+
+add_header指令是用来添加指定的响应头和响应值。
+
+| 语法   | add_header name value [always]; |
+| ------ | ------------------------------- |
+| 默认值 | —                               |
+| 位置   | http、server、location...       |
+
+Cache-Control作为响应头信息，可以设置如下值：
+
+缓存响应指令：
+
+```
+Cache-control: must-revalidate
+Cache-control: no-cache
+Cache-control: no-store
+Cache-control: no-transform
+Cache-control: public
+Cache-control: private
+Cache-control: proxy-revalidate
+Cache-Control: max-age=<seconds>
+Cache-control: s-maxage=<seconds>
+```
+
+| 指令             | 说明                                           |
+| ---------------- | ---------------------------------------------- |
+| must-revalidate  | 可缓存但必须再向源服务器进行确认               |
+| no-cache         | 缓存前必须确认其有效性                         |
+| no-store         | 不缓存请求或响应的任何内容                     |
+| no-transform     | 代理不可更改媒体类型                           |
+| public           | 可向任意方提供响应的缓存                       |
+| private          | 仅向特定用户返回响应                           |
+| proxy-revalidate | 要求中间缓存服务器对缓存的响应有效性再进行确认 |
+| max-age=<秒>     | 响应最大Age值                                  |
+| s-maxage=<秒>    | 公共缓存服务器响应的最大Age值                  |
+
+max-age=[秒]：
+
+
+
+
 
 ## server
+
+
 
 * 若配置文件中有多个server,则相应的配置可以写在location中
 * 若使用include包含了多个其他配置文件,每一个文件就是个server,则不需要location
@@ -327,6 +464,8 @@ server{
     server_name localhost;
     auth_basic "Protection";
     auth_basic_user_file nginx/password/passwords;
+    # 配置错误页面,对404.html做了定向配置
+    error_page 404 /404.html;
     # 处理ip:port/a的请求
     location /a{
         autoindex on;
@@ -354,31 +493,87 @@ server{
             return 204;
         }
     }
+    #配置错误页面转向
+    location = /404.html {
+        root /html/error;
+        index 404.html;
+    }
 }
 ```
 
-* listen:监听端口,一个server中可以有多个listen,但是端口不能重复.多个server中的listen可以相同
+* listen:监听IP,端口,一个server中可以有多个listen,但是端口不能重复.多个server中的listen可以相同
+
+  * default_server: 标识符,用来将此虚拟主机设置成默认主机.即如果没有匹配到对应的address:port,则会默认当前server.如果不指定默认使用的是第一个server
+
 
   ```nginx
   listen 11111;
   listen 22222;
+  listen 127.0.0.1:8888;
+  # 监听所有端口
+  listen 127.0.0.1;
+  listen 8000 default_server;
   ```
 
-* server_name:监听的域名,ip地址.若有域名,可写域名.多个域名,ip中间用空格隔开
+* server_name:监听的域名,ip地址.若有域名,可写域名.多个域名,ip中间用空格隔开.域名可精准匹配,也可以通配符匹配,正则匹配
+
+  * 通配符匹配: 支持通配符`*`,但通配符不能出现在域名的中间,只能出现在首段或尾段,如` *.idream.com`
+
+  * 正则匹配: 可以使用`~`作为正则表达式字符串的开始标记,后面不能加空格,如`server_name ~^www\.(\w+)\.com$;`
+
+* access_log: 错误日志文件地址,若不配置则使用全局配置
 
 * location:根据请求地址访问本地不同的资源或转发请求
 
 * autoindex:自动索引,即自动搜索目录中的文件和目录并且展现在页面上
 
+  ```nginx
+  location /media {
+      # 访问ip:port/media会访问/usr/local/nginx/html/media下的文件
+      root /usr/local/nginx/html;
+      # 访问ip:port/media会访问/usr/local/nginx/html/下的文件,要访问到media,则需要改成ailas /usr/local/nginx/html/media;
+      ailas /usr/local/nginx/html;
+  }
+  ```
+
 * root:当前服务对应本地目录地址.相对地址从 nginx 安装目录开始寻址,绝对地址从根开始寻址
 
-* alias:目录别名,当项目根目录不在nginx中时指定,绝对路径
+* alias:目录别名,当项目根目录不在nginx中时指定,绝对路径.root和alias的区别在于root的路径要拼接上location后的路径,alias直接就是完整路径,不需要加上location后的路径
+
+  * root的处理结果是: root路径+location路径
+  * alias的处理结果是:使用alias路径替换location路径
+  * alias是一个目录别名的定义,root则是最上层目录的含义
+  * 如果location路径是以/结尾,则alias也必须是以/结尾,root没有要求
 
 * index:启动项目时打开的首页,多个用空格隔开
 
 * proxy_pass:代理IP地址,可以是upstream的名称,也可以写多个IP.注意,IP结尾带不带/可能造成无法访问的问题
 
-* error_page 500 502 503 504 /50x.html:错误页面
+* error_page 500 502 503 504 /50x.html:错误页面,也可指定跳转的页面,可选项`=[response]`的作用是用来将相应代码更改为另外一个
+
+  ```nginx
+  server {
+      # 指定具体跳转的地址
+      error_page 404 http://www.dream.com;
+      # 指定重定向地址
+      error_page 404 /50x.html;
+      error_page 500 502 503 504 /50x.html;
+      location =/50x.html{
+          root html;
+      }
+      # 使用location的@符合完成错误信息展示
+      error_page 404 @jump_to_error;
+      location @jump_to_error {
+          default_type text/plain;
+          return 404 'Not Found Page...';
+      }
+      # 使用response,当返回404找不到对应的资源的时候,最终返回的状态码是200.注意error_page后面的内容,404后面需要加空格,200前面不能加空格
+      error_page 404 =200 /50x.html;
+      location =/50x.html{
+          root html;
+      }
+  }
+  ```
 
 * if:同Java中的if,只能在server和location中用,配合内置函数使用,详细语法见Nginx官方文档
 
@@ -405,20 +600,20 @@ server{
 location /{ # 请求URI
     root /app;	# 本请求对应的根目录
     index index.html;	# 本请求对应的首页
-	rewrite ^(.*)\.vue$ /index.html; # 任何以vue结尾的都跳到index
+    rewrite ^(.*)\.vue$ /index.html; # 任何以vue结尾的都跳到index
     proxy_pass http://192.168.1.80:12345; # 单独代理一个ip地址
 }
 ```
 
-* location URI {}:对当前路径以及子路径生效
+* location URI {}:对当前路径以及子路径生效,可匹配正则
 
-* location = URI {}:完全匹配才生效
+* location = URI {}:完全匹配才生效,不匹配正则
 
 * location ~/~* URI {}:模式匹配URI,此处的URI可使用正则表达式,~区分字符大小写,~*不区分
 
-* location ^~URI {}:不使用正则表达式
+* location ^~URI {}:不使用正则表达式,功能和精准匹配一样,但是如果有多个匹配,改模式将不会继续搜索其他URI
 
-* 多location匹配规则:先普通,再正则,匹配顺序= > ^~ > ~|~* > /|/dir/
+* 多location匹配规则:先普通,再正则,匹配顺序: `= > ^~ > ~|~* > /|/dir/`
   * 普通:除了2个正则,其他的都是普通匹配.匹配的顺序和location在文件中的顺序无关
   * 普通匹配使用最大前缀匹配,即匹配最多的才是最后使用规则
   * 有2种情况在普通匹配之后不匹配正则:使用^~或者完全匹配
@@ -704,7 +899,7 @@ cp nginx /usr/local/nginx/sbin
   # 将init.d文件拷贝到etc下,加入开机启动项
   cp /usr/software/keepalived/etc/rc.d/init.d/keepalived /etc/init.d/keepalived
   
-  # 将keepalived文件拷贝到etc下，加入网卡配置
+  # 将keepalived文件拷贝到etc下,加入网卡配置
   cp /usr/software/keepalived/etc/sysconfig/keepalived /etc/sysconfig/ 
   
   # 创建keepalived文件夹

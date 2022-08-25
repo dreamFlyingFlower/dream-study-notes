@@ -187,27 +187,28 @@ source /etc/profile
 
 
 
-- `$args`:这个变量等于请求行中的参数,同`$query_string`
+- `$args`:这个变量等于请求行中的参数,即请求中`?`后的部分,如arg1=value1&arg2=value2,同`$query_string`
 - `$content_length`:请求头中的Content-length字段
 - `$content_type`:请求头中的Content-Type字段
-- `$document_root`:当前请求在root指令中指定的值
-- `$host`:请求主机头字段,否则为服务器名称
+- `$uri`:不带请求参数的当前URI,`$uri`不包含主机名,如`/foo/bar.html`
+- `$document_uri`:与`$uri`相同
+- `$document_root`:变量存储的是当前请求对应location的root值,如果未设置,默认指向Nginx自带html目录所在位置
+- `$host`:请求访问服务器的server_name值,否则为服务器名称
 - `$http_user_agent`:客户端agent信息
-- `$http_cookie`:客户端cookie信息
-- `$limit_rate`:这个变量可以限制连接速率
-- `$request_method`:客户端请求的动作,通常为GET或POST
+- `$http_cookie`:客户端cookie信息,可以通过add_header Set-Cookie 'cookieName=cookieValue'来添加cookie数据
+- `$limit_rate`:这个变量可以限制连接速率,也就是Nginx配置中对limit_rate指令设置的值,默认是0,不限制
 - `$remote_addr`:客户端的IP地址
 - `$remote_port`:客户端的端口
-- `$remote_user`:已经经过Auth Basic Module验证的用户名
-- `$request_filename`:当前请求的文件路径,由root或alias指令与URI请求生成
-- `$scheme`:HTTP方法,如http,https
+- `$remote_user`:经过Auth Basic Module验证的用户名,需要有认证模块才能获取
+- `$request_method`:客户端请求方式,通常为GET或POST
+- `$request_body_file`: 变量中存储了发给后端服务器的本地文件资源的名称
+- `$request_filename`:当前请求的资源文件路径,由root或alias指令与URI请求生成
+- `$request_uri`:存储了当前请求的URI,并且携带请求参数,比如ip:port/server?id=10&name=zhangsan中的/server?id=10&name=zhangsan
+- `$scheme`:HTTP协议,如http,https
 - `$server_protocol`:请求使用的协议,通常是HTTP/1.0或HTTP/1.1
 - `$server_addr`:服务器地址,在完成一次系统调用后可以确定这个值
 - `$server_name`:服务器名称
 - `$server_port`:请求到达服务器的端口号
-- `$request_uri`:包含请求参数的原始URI,不包含主机名,如:`/foo/bar.php?arg=baz`
-- `$uri`:不带请求参数的当前URI,`$uri`不包含主机名,如`/foo/bar.html`
-- `$document_uri`:与`$uri`相同
 
 
 
@@ -391,63 +392,59 @@ gzip_proxied  off;
 
 
 
-##### expires指令
+### expires
 
-expires:该指令用来控制页面缓存的作用。可以通过该指令控制HTTP应答中的“Expires"和”Cache-Control"
 
-| 语法   | expires   [modified] time<br/>expires epoch\|max\|off; |
-| ------ | ------------------------------------------------------ |
-| 默认值 | expires off;                                           |
-| 位置   | http、server、location                                 |
 
-time:可以整数也可以是负数，指定过期时间，如果是负数，Cache-Control则为no-cache,如果为整数或0，则Cache-Control的值为max-age=time;
+* 用来控制页面缓存的作用,可以通过该指令控制HTTP应答中的Expires和Cache-Control
+* expires [modified] time|expires epoch\|max\|off: 
+  * time: 可以整数也可以是负数,指定过期时间,如果是负数,Cache-Control则为no-cache,如果为整数或0,则Cache-Control的值为max-age=time
+  * epoch: 指定Expires的值为'1 January,1970,00:00:01 GMT'(1970-01-01 00:00:00),Cache-Control的值no-cache
+  * max: 指定Expires的值为'31 December2037 23:59:59GMT' (2037-12-31 23:59:59),Cache-Control的值为10年
+  * off: 默认不缓存
 
-epoch: 指定Expires的值为'1 January,1970,00:00:01 GMT'(1970-01-01 00:00:00)，Cache-Control的值no-cache
 
-max:指定Expires的值为'31 December2037 23:59:59GMT' (2037-12-31 23:59:59) ，Cache-Control的值为10年
 
-off:默认不缓存。
+## add_header
 
-##### add_header指令
 
-add_header指令是用来添加指定的响应头和响应值。
 
-| 语法   | add_header name value [always]; |
-| ------ | ------------------------------- |
-| 默认值 | —                               |
-| 位置   | http、server、location...       |
+* add_header name value [always]: 添加指定的响应头和响应值,可以在http、server、location使用
 
-Cache-Control作为响应头信息，可以设置如下值：
 
-缓存响应指令：
 
+### Cache相关
+
+
+
+* Cache-Control作为缓存的响应头信息,可以设置如下值:
+  * must-revalidate: 可缓存但必须再向源服务器进行确认
+  * no-cache: 缓存前必须确认其有效性
+  * no-store: 不缓存请求或响应的任何内容
+  * no-transform: 代理不可更改媒体类型
+  * public: 可向任意方提供响应的缓存
+  * private: 仅向特定用户返回响应
+  * proxy-revalidate: 要求中间缓存服务器对缓存的响应有效性再进行确认
+  * max-age=<秒>: 响应最大Age值
+  * s-maxage=<秒>: 公共缓存服务器响应的最大Age值
+
+
+
+### 跨域相关
+
+
+
+```nginx
+location /html{
+    add_header Access-Control-Allow-Origin *;
+    add_header Access-Control-Allow-Methods GET,POST,PUT,DELETE;
+    default_type application/json;
+    return 200 '{"id":1,"name":"TOM","age":18}';
+}
 ```
-Cache-control: must-revalidate
-Cache-control: no-cache
-Cache-control: no-store
-Cache-control: no-transform
-Cache-control: public
-Cache-control: private
-Cache-control: proxy-revalidate
-Cache-Control: max-age=<seconds>
-Cache-control: s-maxage=<seconds>
-```
 
-| 指令             | 说明                                           |
-| ---------------- | ---------------------------------------------- |
-| must-revalidate  | 可缓存但必须再向源服务器进行确认               |
-| no-cache         | 缓存前必须确认其有效性                         |
-| no-store         | 不缓存请求或响应的任何内容                     |
-| no-transform     | 代理不可更改媒体类型                           |
-| public           | 可向任意方提供响应的缓存                       |
-| private          | 仅向特定用户返回响应                           |
-| proxy-revalidate | 要求中间缓存服务器对缓存的响应有效性再进行确认 |
-| max-age=<秒>     | 响应最大Age值                                  |
-| s-maxage=<秒>    | 公共缓存服务器响应的最大Age值                  |
-
-max-age=[秒]：
-
-
+* Access-Control-Allow-Origin: 允许跨域访问的源地址信息,可以配置多个(用逗号分隔),也可以使用`*`代表所有源
+* Access-Control-Allow-Methods: 允许跨域访问的请求方式,值可以为 GET POST PUT DELETE...,根据需要设置,多个用逗号分隔
 
 
 
@@ -866,6 +863,75 @@ cp nginx /usr/local/nginx/sbin
 
 * 进入到安装目录,执行`make upgrade`
 * 查看是否更新成功: `./nginx -v`
+
+
+
+# 防盗链
+
+
+
+* 当浏览器向web服务器发送请求的时候,一般都会带上Referer来告诉浏览器该网页是从哪个页面链接过来的,后台服务器可以根据获取到的这个Referer信息来判断是否为自己信任的网站地址,如果是则放行继续访问,如果不是则可以返回403(服务端拒绝访问)的状态信息
+* `valid_referers`:nginx会通就过查看referer自动和valid_referers后面的内容进行匹配,如果匹配到了就将$invalid_referer变量置0,如果没有匹配到,则将\$invalid_referer变量置为1,匹配的过程中不区分大小写,可以写在server、location中
+  * none: 如果Header中的Referer为空,允许访问
+  * blocked: 在Header中的Referer不为空,但是该值被防火墙或代理进行伪装过,如不带"http://" ,"https://"等协议头的资源允许访问
+  * server_names: 指定具体的域名或者IP
+  * string: 可以支持正则表达式和`*`的字符串,如果是正则表达式,需要以`~`开头表示
+
+```nginx
+location ~*\.(png|jpg|gif){
+    valid_referers none blocked www.baidu.com 192.168.1.150 *.example.com example.*  www.example.org  ~\.google\.;
+    if ($invalid_referer){
+        return 403;
+    }
+    root /usr/local/nginx/html;
+}
+```
+
+* 该方式限制粒度比较粗,比如随意加一个Referer,上面的方式是无法进行限制的.要解决该问题需要用到第三方模块`ngx_http_accesskey_module`
+
+
+
+## 针对目录进行防盗链
+
+
+
+```nginx
+location /images {
+    valid_referers none blocked www.baidu.com 192.168.1.150 *.example.com example.*  www.example.org  ~\.google\.;
+    if ($invalid_referer){
+        return 403;
+    }
+    root /usr/local/nginx/html;
+}
+```
+
+
+
+# Rewrite
+
+
+
+* Rewrite是Nginx服务器提供的一个重要基本功能,是Web服务器产品中几乎必备的功能,主要的作用是用来实现URL的重写
+* 地址重写和转发的区别:
+  * 地址重写浏览器地址会发生变化而地址转发则不变
+  * 一次地址重写会产生两次请求而一次地址转发只会产生一次请求
+  * 地址重写到的页面必须是一个完整的路径而地址转发则不需要
+  * 地址重写因为是两次请求所以request范围内属性不能传递给新页面而地址转发因为是一次请求所以可以传递值
+  * 地址转发速度快于地址重写
+
+
+
+## Rewrite规则
+
+
+
+### set
+
+
+
+* `set $variable value`: 设置一个新的变量,可在server、location、if中使用
+  * variable: 变量的名称,该变量名称要用"$"作为变量的第一个字符,且不能与Nginx服务器预设的全局变量同名
+  * value: 变量的值,可以是字符串,其他变量或者变量的组合等
 
 
 

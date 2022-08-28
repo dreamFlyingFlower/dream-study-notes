@@ -311,6 +311,8 @@
 
 # DockerCompose
 
+
+
 * 一种用于通过使用单个命令创建和启动Docker应用程序的工具,主要用来做开发,测试等
 * 需要配置一个docker-compose.yml文件,详见[官网](https://docs.docker.com/compose/extends/)
 
@@ -320,7 +322,7 @@
 
 
 
-* Docker Compose运行目录下的所有文件(docker-compose.yml,extends文件或环境变量文件等)组成一个工程,若无特殊指定工程名即为当前目录名
+* Docker Compose运行目录下的所有文件(docker-compose.yml,extends文件或环境变量文件等)组成一个工程,若不指定工程名即为当前目录名
 * 一个工程当中可包含多个服务,每个服务中定义了容器运行的镜像,参数,依赖
 * 一个服务当中可包括多个容器实例
 * 没有解决负载均衡的问题,因此需要借助其它工具实现服务发现及负载均衡
@@ -363,11 +365,15 @@
   * commond:使用command可以覆盖容器启动后默认执行的命令
   * container_name:容器名称
   * depends_on:指定依赖那个服务
-  * ports:映射的端口号
+  * ports:映射的端口号,主机端口映射:docker端口映射
   * extra_hosts:会在/etc/hosts文件中添加一些记录
-  * volumes:持久化目录
+  * volumes:持久化目录,主机文件映射:docker文件映射
   * volumes_from:从另外一个容器挂在数据卷
   * dns:设置dns
+  * privileged: 权限
+  * user: 用户账号
+  * restart: 是否总是重启
+  * environment: 启动环境变量
 * 定制docker-compose内容
 * 运行docker-compose up
 
@@ -376,45 +382,46 @@ version: '3.0'
 services:
 	# 服务名称
 	tomcat80: 
-        # container_name: tomcat8080 指定容器名称
-        image: tomcat:8
-        ports:
-            - 8080:8080
-        volumes:
-            - /usr/tomcat/webapps:/usr/local/tomcat/webapps
-        # 定义网络的桥
-        networks:  
-            - test_web
-    mysql:
-        image: mysql:5.7
-        # 解决外部无法访问
-        command: --default-authentication-plugin=mysql_native_password
-        ports:
-        	- 3306:3306
-        environment:
-        	# root密码
-            MYSQL_ROOT_PASSWORD: 'root'
-            # 连接密码不能为空
-            MYSQL_ALLOW_EMPTY_PASSWORD: 'no'
-            # 默认创建数据库test
-            MYSQL_DATABASE: 'test'
-            # 默认创建一个test的用户,并指定密码
-            MYSQL_USER: 'test'
-            MYSQL_PASSWORD: 'root'
+        	# container_name: tomcat8080 指定容器名称
+        	image: tomcat:8
+        	# 端口映射
+        	ports:
+            	- 8080:8080
+        	volumes:
+            	- /usr/tomcat/webapps:/usr/local/tomcat/webapps
+        	# 定义网络的桥
+        	networks:  
+            	- test_web
+        mysql:
+        	image: mysql:5.7
+                # 解决外部无法访问
+                command: --default-authentication-plugin=mysql_native_password
+                ports:
+                    - 3306:3306
+                environment:
+                        # root密码
+                        MYSQL_ROOT_PASSWORD: 'root'
+                        # 连接密码不能为空
+                        MYSQL_ALLOW_EMPTY_PASSWORD: 'no'
+                        # 默认创建数据库test
+                        MYSQL_DATABASE: 'test'
+                        # 默认创建一个test的用户,并指定密码
+                        MYSQL_USER: 'test'
+                        MYSQL_PASSWORD: 'root'
         networks:
         	- test_web
-    # 自己单独的springboot项目
-    test-web:
-        hostname: localhost
-        # 需要构建的Dockerfile文件
-        build: ./
-        ports:
-        	- "38000:8080"
-        # web服务依赖mysql服务,要等mysql服务先启动
-        depends_on:
-        	- mysql
-        networks:
-        	- test_web
+        # 自己单独的springboot项目
+	test-web:
+		hostname: localhost
+                # 需要构建的Dockerfile文件
+                build: ./
+                ports:
+                    - "38000:8080"
+                # web服务依赖mysql服务,要等mysql服务先启动
+                depends_on:
+                    - mysql
+                networks:
+                    - test_web
 # 定义一个网络,让多个组件之间可以相互连通
 networks:
 	test_web:

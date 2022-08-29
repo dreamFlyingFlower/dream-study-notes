@@ -1043,11 +1043,11 @@ server {
 	server_name www.a.com;
 	rewrite ^/ http://www.b.com permanent;
 }
-
+# 将访问a的请求直接转发到b,同时可以获得请求来源a的URL
 server {
 	listen 80;
-	server_name www.itheima.com;
-	rewrite ^(.*) http://www.hm.com$1 permanent;
+	server_name www.a.com;
+	rewrite ^(.*) http://www.b.com$1 permanent;
 }
 ```
 

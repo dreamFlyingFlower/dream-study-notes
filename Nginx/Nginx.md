@@ -1032,6 +1032,27 @@ location /{
 
 
 
+## 案例
+
+
+
+```nginx
+# 访问a的请求将直接被转发到b网站
+server {
+	listen 80;
+	server_name www.a.com;
+	rewrite ^/ http://www.b.com permanent;
+}
+
+server {
+	listen 80;
+	server_name www.itheima.com;
+	rewrite ^(.*) http://www.hm.com$1 permanent;
+}
+```
+
+
+
 # Rewrite_log
 
 

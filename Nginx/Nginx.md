@@ -1017,7 +1017,6 @@ location /{
   * 地址重写到的页面必须是一个完整的路径而地址转发则不需要
   * 地址重写因为是两次请求所以request范围内属性不能传递给新页面而地址转发因为是一次请求所以可以传递值
   * 地址转发速度快于地址重写
-
 * URL和URI的区别:
   * URI:统一资源标识符
   * URL:统一资源定位符
@@ -1025,25 +1024,25 @@ location /{
   * regex: 用来匹配URI的正则表达式
   * replacement: 匹配成功后,用于替换URI中被截取内容的字符串.如果该字符串是以"http://"或者"https://"开头的,则不会继续向下对URI进行其他处理,而是直接返回重写后的URI给客户端
   * flag: 用来设置rewrite对URI的处理行为,可选值有如下:
-    * last:
-    * break
-    * redirect
-    * permanent
+    * last: rewrite 后会跳出location 作用域,重新开始再走一次刚刚的行为
+    * break: rewrite后不会跳出location 作用域,它的生命也在这个location中终结
+    * redirect: 临时重定向,状态码为302
+    * permanent: 永久重定向,状态码为301
 
 
 
-## 案例
+## 基本使用
 
 
 
 ```nginx
-# 访问a的请求将直接被转发到b网站
+# 访问a和访问b的请求将直接被转发到c网址
 server {
 	listen 80;
-	server_name www.a.com;
-	rewrite ^/ http://www.b.com permanent;
+	server_name www.a.com www.b.com;
+	rewrite ^/ http://www.c.com permanent;
 }
-# 将访问a的请求直接转发到b,同时可以获得请求来源a的URL
+# 将访问a的请求直接转发到b,同时可以获得请求来源a的参数
 server {
 	listen 80;
 	server_name www.a.com;
@@ -1053,12 +1052,406 @@ server {
 
 
 
-# Rewrite_log
+## 域名镜像
+
+
+
+* 将www.a.com 和 www.b.com都能跳转到www.c.com,那么www.c.com就可以把它起名叫主域名,其他两个就是镜像域名.如果不想把整个网站做镜像,只想为其中某一个子目录下的资源做镜像,可以在location块中配置rewrite功能
+
+```nginx
+server {
+    listen 80;
+    server_name rewrite.myweb.com;
+    # 只匹配指定URL后缀的请求
+    location ^~ /source1{
+        rewrite ^/resource1(.*) http://rewrite.myweb.com/web$1 last;
+    }
+}
+```
+
+
+
+## 独立域名
+
+
+
+* 一个完整的项目包含多个模块,可以为每一个模块设置独立的域名
+
+```
+http://search.dream.com		访问商品搜索模块
+http://item.dream.com		访问商品详情模块
+http://cart.dream.com		访问商品购物车模块
+```
+
+```nginx
+server{
+    listen 80;
+    server_name search.dream.com;
+    rewrite ^(.*) http://www.dream.com/search$1 last;
+}
+server{
+    listen 81;
+    server_name item.dream.com;
+    rewrite ^(.*) http://www.dream.com/item$1 last;
+}
+server{
+    listen 82;
+    server_name cart.dream.com;
+    rewrite ^(.*) http://www.dream.com/cart$1 last;
+}
+```
+
+
+
+## 目录自动添加/
+
+
+
+```nginx
+server {
+	listen	80;
+	server_name localhost;
+	location / {
+		root html;
+		index index.html;
+	}
+}
+```
+
+* 要想访问上述资源,只需要通过http://192.168.1.150直接就能访问,地址后面不需要加/,但是如果将上述的配置修改为如下内容:
+
+```nginx
+server {
+	listen	80;
+	server_name localhost;
+	location /dream {
+		root html;
+		index index.html;
+	}
+}
+```
+
+* 这个时候,要想访问上述资源,按照上述的访问方式,可以通过http://192.168.1.150/dream/来访问,但是如果地址后面不加斜杠,Nginx服务器内部会自动做一个301的重定向,重定向的地址会有一个指令叫`server_name_in_redirect on|off;`来决定重定向的地址
+  * on: 重定向的地址为: http://server_name/目录名/;
+  * off: 重定向的地址为: http://原URL中的域名/目录名/;
+* 如果http://192.168.1.150/dream不加斜杠,按照上述规则,当server_name_in_redirect为on,则301重定向地址变为 http://localhost/dream/,当为off,则301重定向地址变为http://192.168.1.150/dream/,后面这个是正常的,前面地址就有问题
+* server_name_in_redirect在Nginx的0.8.48版本之前默认都是on,之后改成了off,所以现在高版本不需要考虑这个问题
+* 如果是低版本,可通过rewrite解决该问题,在末尾没有斜杠的URL自动添加一个斜杠
+
+```nginx
+server {
+    listen	80;
+    server_name localhost;
+    server_name_in_redirect on;
+    location /hm {
+        if (-d $request_filename){
+            rewrite ^/(.*)([^/])$ http://$host/$1$2/ permanent;
+        }
+    }
+}
+```
+
+
+
+## 合并目录
+
+
+
+* 搜索引擎优化(SEO)是一种利用搜索引擎的搜索规则来提供目的网站的有关搜索引擎内排名的方式.在创建自己的站点时,可以通过很多方式来有效的提供搜索引擎优化的程度.其中有一项就包含URL的目录层级一般不要超过三层,否则的话不利于搜索引擎的搜索也给客户端的输入带来了负担,但是将所有的文件放在一个目录下又会导致文件资源管理混乱并且访问文件的速度也会随着文件增多而慢下来,可以使用rewrite解决上述问题
+* 假如网站中有一个资源文件的访问路径时 /server/11/22/33/44/20.html,也就是说20.html存在于第5级目录下,如果想要访问该资源文件,客户端的URL地址就要写成 `http://www.web.name/server/11/22/33/44/20.html`,但是这非常不利于SEO,同时客户端也不好记.使用rewrite可以进行如下配置:
+
+```nginx
+server {
+    listen 80;
+    server_name www.web.name;
+    location /server{
+        rewrite ^/server-([0-9]+)-([0-9]+)-([0-9]+)-([0-9]+)\.html$ /server/$1/$2/$3/$4/$5.html last;
+    }
+}
+```
+
+* 这样客户端只需要输入http://www.web.name/server-11-22-33-44-20.html就可以访问到20.html页面
+
+
+
+## 防盗链
+
+
+
+* 通过rewrite可以将防盗链的功能进行完善,当出现防盗链时,可以使用rewrite将请求转发到自定义的一张图片和页面
+
+```nginx
+server{
+    listen 80;
+    server_name www.web.com;
+    locatin ~* ^.+\.(gif|jpg|png|swf|flv|rar|zip)${
+        valid_referers none blocked server_names *.web.com;
+        if ($invalid_referer){
+            rewrite ^/ http://www.web.com/images/forbidden.png;
+        }
+    }
+}
+```
+
+* 根据目录实现防盗链配置:
+
+```nginx
+server{
+    listen 80;
+    server_name www.web.com;
+    location /file/{
+        root /server/file/;
+        valid_referers none blocked server_names *.web.com;
+        if ($invalid_referer){
+            rewrite ^/ http://www.web.com/images/forbidden.png;
+        }
+    }
+}
+```
+
+
+
+## Rewrite_log
 
 
 
 * `rewrite_log on|off`: 配置是否开启URL重写日志的输出功能,可在http、server、location、if中使用
 * 开启后,URL重写的相关日志将以notice级别输出到error_log指令配置的日志文件汇总
+
+
+
+# 反向代理
+
+
+
+## 配置
+
+
+
+### proxy_pass
+
+
+
+* `proxy_pass URL;`: 设置被代理服务器地址,可以是主机名称、IP地址加端口号形式.URL为要设置的被代理服务器地址,包含传输协议(`http`,`https://`)、主机名称或IP地址加端口号、URI等要素
+* 在编写proxy_pass的时候,后面的值加不加"/"效果不一样
+
+```nginx
+server {
+    listen 80;
+    server_name localhost;
+    location /{
+        #proxy_pass http://192.168.1.150;
+        proxy_pass http://192.168.1.150/;
+    }
+}
+# 当客户端访问 http://localhost/index.html,效果是一样的
+server{
+    listen 80;
+    server_name localhost;
+    location /server{
+        #proxy_pass http://192.168.1.150;
+        proxy_pass http://192.168.1.150/;
+    }
+}
+# 当客户端访问 http://localhost/server/index.html
+# 第一个proxy_pass就变成了http://localhost/server/index.html
+# 第二个proxy_pass就变成了http://localhost/index.html效果就不一样了
+```
+
+
+
+### proxy_set_header
+
+
+
+* `proxy_set_header field value;`: 可以更改Nginx服务器接收到的客户端请求的请求头信息,然后将新的请求头发送给代理的服务器,可以写多个
+* 如果想要看到结果,必须在被代理的服务器上来获取添加的头信息
+
+* 被代理服务器: [192.168.1.146]
+
+```nginx
+server {
+    listen  8080;
+    server_name localhost;
+    default_type text/plain;
+    return 200 $http_username;
+}
+```
+
+* 代理服务器: [192.168.1.150]
+
+```nginx
+server {
+    listen  8080;
+    server_name localhost;
+    location /server {
+        proxy_pass http://192.168.1.146:8080/;
+        proxy_set_header username TOM;
+    }
+}
+```
+
+
+
+### proxy_redirect
+
+
+
+* 用来重置头信息中的Location和Refresh的值
+
+```nginx
+proxy_redirect redirect replacement;
+proxy_redirect default;
+proxy_redirect off;
+```
+
+* 为什么要用该指令
+* 假设服务端[192.168.1.146]
+
+```nginx
+server {
+    listen  8081;
+    server_name localhost;
+    if (!-f $request_filename){
+        return 302 http://192.168.1.146;
+    }
+}
+```
+
+* 代理服务端[192.168.1.150]
+
+```nginx
+server {
+    listen  8081;
+    server_name localhost;
+    location / {
+        proxy_pass http://192.168.1.146:8081/;
+        proxy_redirect http://192.168..146 http://192.168.1.150;
+    }
+}
+```
+
+* 该指令的几组选项:`proxy_redirect redirect replacement;`,redirect:目标,Location的值;replacement:要替换的值
+* `proxy_redirect default;`:default,将location块的uri变量作为replacement,将proxy_pass变量作为redirect进行替换
+* `proxy_redirect off;`: 关闭proxy_redirect的功能
+
+
+
+## 安全控制
+
+
+
+### 使用SSL加密
+
+
+
+* 就是将http请求转变成https请求,它们都是HTTP协议,只不过https是身披SSL外壳的http
+* http协议是明文传输数据,存在安全问题,而https是加密传输,相当于http+ssl,并且可以防止流量劫持
+* Nginx要想使用SSL,需要添加模块`--with-http_ssl_module`,而该模块在编译的过程中又需要OpenSSL的支持
+
+
+
+#### 添加SSL的支持
+
+
+
+* 完成 `--with-http_ssl_module`模块的增量添加
+  * 将原有/usr/local/nginx/sbin/nginx进行备份
+  * 拷贝nginx之前的配置信息
+  * 在nginx的安装源码进行配置指定对应模块  ./configure --with-http_ssl_module
+  * 通过make模板进行编译
+  * 将objs下面的nginx移动到/usr/local/nginx/sbin下
+  * 在源码目录下执行  make upgrade进行升级,这个可以实现不停机添加新模块的功能
+
+
+
+#### SSL相关指令
+
+
+
+* `ssl on|off`: 开启|关闭ssl,如`listen 443 ssl;`
+* `ssl_certificate filePath`: 为当前这个虚拟主机指定一个带有PEM格式证书的证书
+* `ssl_certificate_key filePath`: 指定PEM secret key文件的路径
+* `ssl_sesion_cache off|none|[builtin[:size]] [shared:name:size]`: 配置用于SSL会话的缓存
+  * off:禁用会话缓存,客户端不得重复使用会话
+  * none:禁止使用会话缓存,客户端可以重复使用,但是并没有在缓存中存储会话参数
+  * builtin:内置OpenSSL缓存,仅在一个工作进程中使用
+  * shared:所有工作进程之间共享缓存,缓存的相关信息用name和size来指定
+* `ssl_session_timeout time`: 开启SSL会话功能后,设置客户端能够反复使用储存在缓存中的会话参数时间
+* `ssl_ciphers ciphers`: 指出允许的密码,密码指定为OpenSSL支持的格式,默认值为`ssl_ciphers HIGH:!aNULL:!MD5;`,可以使用`openssl ciphers`查看openssl支持的格式
+* `ssl_prefer_server_ciphers on|off`: 指定是否服务器密码优先客户端密码,默认off
+
+
+
+#### 生成证书
+
+
+
+* 方式一: 使用阿里云/腾讯云等第三方服务进行购买
+* 方式二: 使用openssl生成证书,要确认当前系统是否有安装openssl: `openssl version`,安装下面的命令进行生成
+
+```shell
+mkdir /root/cert
+cd /root/cert
+openssl genrsa -des3 -out server.key 1024
+openssl req -new -key server.key -out server.csr
+cp server.key server.key.org
+openssl rsa -in server.key.org -out server.key
+openssl x509 -req -days 365 -in server.csr -signkey server.key -out server.crt
+```
+
+
+
+#### 开启SSL实例
+
+
+
+```nginx
+server {
+    listen       443 ssl;
+    server_name  localhost;
+
+    ssl_certificate      server.cert;
+    ssl_certificate_key  server.key;
+
+    ssl_session_cache    shared:SSL:1m;
+    ssl_session_timeout  5m;
+
+    ssl_ciphers  HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers  on;
+
+    location / {
+        root   html;
+        index  index.html index.htm;
+    }
+}
+```
+
+
+
+## 系统调优
+
+
+
+* 反向代理值Buffer和Cache
+  * 两种方式都是用来提供IO吞吐效率,都是用来提升Nginx代理的性能
+  * Buffer主要用来解决不同设备之间数据传递速度不一致导致的性能低的问题,缓冲中的数据一旦此次操作完成后,就可以删除;Cache主要是备份,将被代理服务器的数据缓存一份到代理服务器,这样客户端再次获取相同数据的时候,就只需要从代理服务器上获取,效率较高,缓存中的数据可以重复使用,只有满足特定条件才会删除
+* `proxy_buffering on|off;`: 开启或者关闭代理服务器的缓冲区
+* `proxy_buffers number size;`: 指定单个连接从代理服务器读取响应的缓存区的个数和大小.如`proxy_buffers 8 4k | 8K;(与系统平台有关)`
+  * number:缓冲区的个数
+  * size:每个缓冲区的大小,缓冲区的总大小就是number*size
+* `proxy_buffer_size size`: 设置从被代理服务器获取的第一部分响应数据的大小.保持与proxy_buffers中的size一致即可,也可以更小
+* `proxy_busy_buffers_size size`: 限制同时处于BUSY状态的缓冲总大小
+* `proxy_temp_path path`: 当缓冲区存满后,仍未被Nginx服务器完全接受,响应数据就会被临时存放在磁盘文件上,该指令设置文件路径.path最多设置三层
+* `proxy_temp_file_write_size size`: 设置磁盘上缓冲文件的大小
+* 通用网站的配置
+
+```nginx
+proxy_buffering on;
+proxy_buffer_size 4 32k;
+proxy_busy_buffers_size 64k;
+proxy_temp_file_write_size 64k;
+```
 
 
 
@@ -1122,7 +1515,8 @@ server {
   service keepalived start/stop/restart
   ```
 
-  
+
+* 日志在/var/log/messages中
 
 
 
@@ -1131,18 +1525,44 @@ server {
 
 
 ```shell
+# 全局配置
+global_defs {
+    #通知邮件,当keepalived发送切换时需要发email给具体的邮箱地址
+    notification_email {
+         xxxx@dream.com
+         xxxx01@dream.com
+    }
+    # 设置发件人的邮箱信息
+    notification_email_from xxxx02@dream.com
+    # 指定smpt服务地址
+    smtp_server 192.168.1.150
+    # 指定smpt服务连接超时时间,单位秒
+    smtp_connect_timeout 30
+    # 运行keepalived服务器的一个标识,可以用作发送邮件的主题信息
+    router_id keepalived1
+    # 如果通告与接收的上一个通告来自相同的master,则不执行检查(跳过检查),默认不跳过检查.检查收到的VRRP通告中的所有地址可能会比较耗时
+    vrrp_skip_check_adv_addr
+    # 严格遵守VRRP协议
+    vrrp_strict
+    # 在一个接口发送的两个免费ARP之间的延迟,可以精确到毫秒级,默认是0
+    vrrp_garp_interval 0
+    # 在一个网卡上每组na消息之间的延迟时间,默认为0
+    vrrp_gna_interval 0
+}
+
 # 执行的脚本
 vrrp_script chk_nginx {
-	# 运行脚本,检测nginx宕机以后,重启Nginx服务
+    # 运行脚本的地址,检测nginx宕机以后,重启Nginx服务
     script "/etc/keepalived/nginx_check.sh"
     # 检测时间间隔,单位秒
     interval 2
-    # 如果条件成立的话,则权重 -20
+    # 如果条件成立的话,则vrrp_instance的权重 -20
     weight -20 
 }
+
 # 定义虚拟路由,VI_1为虚拟路由的标示符,可自定义
 vrrp_instance VI_1 {
-	# 决定主从,MASTER主,BACKUP从.会根据网络动态变化
+    # 决定主从,MASTER主,BACKUP从.会根据网络动态变化
     state MASTER 
     # 绑定虚拟IP的网络接口,根据实际情况填写,同时外网要打开防火墙
     interface ens33
@@ -1156,14 +1576,15 @@ vrrp_instance VI_1 {
     nopreempt
     # 组播信息发送间隔,主从节点设置必须一样,默认1s
     advert_int 1
-    # 主从节点验证信息,必须设置相同
+    # 主从节点验证信息,必须设置相同,密码最多设置8位
     authentication {
+        # 指定认证方式,PASS简单密码认证(推荐)
         auth_type PASS
         auth_pass 1111
     }
     # 将 track_script 块加入 instance 配置块
     track_script {
-    	# 执行 Nginx 监控的服务
+        # 执行 Nginx 监控的服务
         chk_nginx
     }
     # 虚拟ip,也就是解决写死程序的ip怎么能切换的ip,可配置多个
@@ -1181,7 +1602,7 @@ vrrp_instance VI_1 {
 # chk_nginx.sh
 A=`ps -C nginx -no-header |wc -l`
 if [ $A -eq 0 ];then
-	# nginx启动地址,根据实际情况修改
+    # nginx启动地址,根据实际情况修改
     /usr/local/nginx/sbin/nginx
     sleep 2
     if [ `ps -C nginx --no-header |wc -l` -eq 0 ];then

@@ -1386,6 +1386,8 @@ sort -t " " -k2.1,2.3 # 按空格分隔文件行,用第2列的第一个字符到
 
 # 防火墙
 
+
+
 * systemctl start firewalld.service/service firewalld start::开启防火墙.centos7安装之后默认是开启的
 * systemctl stop firewalld.service/service firewalld stop:停止防火墙,但是重启之后仍会打开
 * systemctl disable firewalld.service/service firewalld disable:彻底关闭防火墙,重启之后也不会打开防火墙
@@ -1395,8 +1397,10 @@ sort -t " " -k2.1,2.3 # 按空格分隔文件行,用第2列的第一个字符到
 
 ## Firewall-cmd
 
-* firewall-cmd []:关于防火墙的操作,以下参数全部都是该命名的参数
 
+
+* firewall-cmd []:关于防火墙的操作,以下参数全部都是该命名的参数
+  * --query-port=8080/tcp: 查看指定端口是否开放
   * --list-ports:查看已经打开的端口
   * --state:查看防火墙状态
   * --get-zones:查看有多少种区域,默认是public
@@ -1409,9 +1413,12 @@ sort -t " " -k2.1,2.3 # 按空格分隔文件行,用第2列的第一个字符到
   * --zone=public --add-port=80/tcp --permanent:centos7打开某个端口允许外部访问
   * --reload:centos7重启防火墙
   * --list-rich-rules:查看封禁ip结果
+  * --permanent --add-port=9001-9003/tcp: 批量开放某些端口
   * --permanent --add/remove-rich-rule="rule family='ipv4'" source address='xx.xx.xx.xx' reject/accept:添加/删除,封禁/解禁某个ip,需要重启防火墙
   * --permanent --add/remove-rich-rule="rule family='ipv4' source  address='xx.xx.xx.0/125' reject/accept:添加/删除,封禁/解禁ip段,需要重启防火墙
   * --permanent --add/remove-rich-rule="rule family=ipv4 source address=xx.xx.xx.xx port port=80  protocol=tcp  accept/reject":添加/删除,允许/拒绝单个ip的某个端口,需要重启防火墙
+  * --permanent --remove-port=9003/tcp: 移除一个指定的端口
+  
 
 
 

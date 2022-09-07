@@ -4,12 +4,15 @@
 
 # 概述
 
+
+
 * 分布式系统链路追踪,通常和zipkin一起使用
 * 它有助于收集解决微服务架构中的延迟问题所需的时序数据,并管理这些数据的收集和查找
 * ZipkinUI提供了一个依赖关系图,显示了每个应用程序通过的跟踪请求数
 * 如果要解决延迟问题或错误,可以根据应用程序,跟踪长度,注释或时间戳对所有跟踪进行筛选或排序
 * 选择跟踪后,可以看到每个跨度所需的总跟踪时间百分比,从而可以识别有问题的应用程序
 * 可以追踪10种类型的组件:async,Hystrix,messaging,websocket,rxjava,scheduling,web,Spring  MVC Controller,Servlet,webclient,Spring RestTemplate,Feign,Zuul
+* 同类型产品还有pinpoint,skywalking
 
 
 

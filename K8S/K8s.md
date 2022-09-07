@@ -2066,7 +2066,7 @@ kubectl -n kubesphere-monitoring-system create secret generic kube-etcd-client-c
 
 
 
-* ServiceMesh代表作
+* ServiceMesh代表作,主要用于服务治理,如流量管控,熔断限流,动态路由,链路追踪
 
 
 

@@ -2,11 +2,7 @@
 
 
 
-# 注解
-
-
-
-## @Autowired
+# Autowired
 
 
 
@@ -14,7 +10,7 @@
 
 
 
-### AutowiredAnnotationBeanPostProcessor
+## AutowiredAnnotationBeanPostProcessor
 
 
 
@@ -158,7 +154,7 @@ public class AutowiredAnnotationBeanPostProcessor extends InstantiationAwareBean
 
 
 
-### InjectionMetadata
+## InjectionMetadata
 
 
 
@@ -464,7 +460,7 @@ public class InjectionMetadata {
 
 
 
-### AutowiredFieldElement
+## AutowiredFieldElement
 
 
 
@@ -529,7 +525,7 @@ private class AutowiredFieldElement extends InjectionMetadata.InjectedElement {
 
 
 
-### AutowiredMethodElement
+## AutowiredMethodElement
 
 
 
@@ -621,4 +617,6 @@ private class AutowiredMethodElement extends InjectionMetadata.InjectedElement {
     }
 }
 ```
+
+
 

@@ -51,87 +51,11 @@
 
 
 
-## Nginx七层负载均衡
+# 负载均衡状态
 
 
 
-* Nginx要实现七层负载均衡需要用到proxy_pass代理模块配置,Nginx的负载均衡是在Nginx的反向代理基础上把用户的请求根据指定的算法分发到一组【upstream虚拟服务池】
-
-
-
-### upstream
-
-
-
-* `upstream name {...}`: 定义一组服务器,它们可以是监听不同端口的服务器,并且也可以是同时监听TCP和Unix socket的服务器.服务器可以指定不同的权重,默认为1
-
-
-
-### server
-
-
-
-* `server name [paramerters]`: 指定后端服务器的名称和一些参数,可以使用域名、IP、端口或者unix socket
-
-
-
-### 使用案例
-
-
-
-* 服务器配置
-
-```nginx
-server {
-    listen   9001;
-    server_name localhost;
-    default_type text/html;
-    location /{
-        return 200 '<h1>192.168.200.146:9001</h1>';
-    }
-}
-server {
-    listen   9002;
-    server_name localhost;
-    default_type text/html;
-    location /{
-        return 200 '<h1>192.168.200.146:9002</h1>';
-    }
-}
-server {
-    listen   9003;
-    server_name localhost;
-    default_type text/html;
-    location /{
-        return 200 '<h1>192.168.200.146:9003</h1>';
-    }
-}
-```
-
-* 负载均衡器设置
-
-```nginx
-upstream backend{
-    server 192.168.1.146:9091;
-    server 192.168.1.146:9092;
-    server 192.168.1.146:9093;
-}
-server {
-    listen 8083;
-    server_name localhost;
-    location /{
-        proxy_pass http://backend;
-    }
-}
-```
-
-
-
-### 负载均衡状态
-
-
-
-#### down
+## down
 
 
 
@@ -139,7 +63,7 @@ server {
 
 
 
-#### backup
+## backup
 
 
 
@@ -162,7 +86,7 @@ server {
 
 
 
-#### max_conns
+## max_conns
 
 
 
@@ -170,7 +94,7 @@ server {
 
 
 
-#### max_fails和fail_timeout
+## max_fails和fail_timeout
 
 
 
@@ -194,7 +118,7 @@ server {
 
 
 
-### 负载均衡策略
+# 负载均衡策略
 
 
 
@@ -202,7 +126,7 @@ server {
 
 
 
-#### 轮询
+## 轮询
 
 
 
@@ -225,11 +149,11 @@ server {
 
 
 
-#### weight加权[加权轮询]
+## weight
 
 
 
-* weight=number:设置服务器的权重,默认为1,权重数据越大,被分配到请求的几率越大;该权重值,主要是针对实际工作环境中不同的后端服务器硬件配置进行调整的,此策略比较适合服务器的硬件配置差别比较大的情况
+* weight=number:加权[加权轮询],设置服务器的权重,默认为1,权重数据越大,被分配到请求的几率越大;该权重值,主要是针对实际工作环境中不同的后端服务器硬件配置进行调整的,此策略比较适合服务器的硬件配置差别比较大的情况
 
 ```nginx
 upstream backend{
@@ -248,7 +172,7 @@ server {
 
 
 
-#### ip_hash
+## ip_hash
 
 
 
@@ -273,7 +197,7 @@ server {
 
 
 
-#### least_conn
+## least_conn
 
 
 
@@ -297,7 +221,7 @@ server {
 
 
 
-#### url_hash
+## url_hash
 
 
 
@@ -321,7 +245,7 @@ server {
 
 
 
-#### fair
+## fair
 
 
 
@@ -368,7 +292,7 @@ in_port_t	   default_port
 
 
 
-### 案例
+## 案例
 
 
 
@@ -478,7 +402,83 @@ server {
 
 
 
-## Nginx四层负载均衡
+# Nginx七层负载均衡
+
+
+
+* Nginx要实现七层负载均衡需要用到proxy_pass代理模块配置,Nginx的负载均衡是在Nginx的反向代理基础上把用户的请求根据指定的算法分发到一组upstream虚拟服务池
+
+
+
+### upstream
+
+
+
+* `upstream name {...}`: 定义一组服务器,它们可以是监听不同端口的服务器,并且也可以是同时监听TCP和Unix socket的服务器.服务器可以指定不同的权重,默认为1
+
+
+
+### server
+
+
+
+* `server name [paramerters]`: 指定后端服务器的名称和一些参数,可以使用域名、IP、端口或者unix socket
+
+
+
+### 使用案例
+
+
+
+* 服务器配置
+
+```nginx
+server {
+    listen   9001;
+    server_name localhost;
+    default_type text/html;
+    location /{
+        return 200 '<h1>192.168.200.146:9001</h1>';
+    }
+}
+server {
+    listen   9002;
+    server_name localhost;
+    default_type text/html;
+    location /{
+        return 200 '<h1>192.168.200.146:9002</h1>';
+    }
+}
+server {
+    listen   9003;
+    server_name localhost;
+    default_type text/html;
+    location /{
+        return 200 '<h1>192.168.200.146:9003</h1>';
+    }
+}
+```
+
+* 负载均衡器设置
+
+```nginx
+upstream backend{
+    server 192.168.1.146:9091;
+    server 192.168.1.146:9092;
+    server 192.168.1.146:9093;
+}
+server {
+    listen 8083;
+    server_name localhost;
+    location /{
+        proxy_pass http://backend;
+    }
+}
+```
+
+
+
+# Nginx四层负载均衡
 
 
 
@@ -488,7 +488,7 @@ server {
 
 
 
-### 添加stream模块的支持
+## 添加stream模块的支持
 
 
 
@@ -496,7 +496,7 @@ server {
 
 
 
-### stream
+## stream
 
 
 
@@ -504,7 +504,7 @@ server {
 
 
 
-### upstream
+## upstream
 
 
 
@@ -512,7 +512,7 @@ server {
 
 
 
-### 案例
+## 案例
 
 
 

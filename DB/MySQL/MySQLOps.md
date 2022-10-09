@@ -1128,11 +1128,9 @@ systemctl restart crontab # 重启定时任务
 
 
 
-## 原理
 
 
-
-### Binlog复制
+## Binlog复制
 
 
 
@@ -1146,7 +1144,165 @@ systemctl restart crontab # 重启定时任务
 
 
 
-### GTID复制
+### 问题
+
+
+
+* 主库宕机后,数据可能丢失
+* 从库只有一个SQL Thread,主库写压力大,复制很可能延时
+
+
+
+### 半同步复制
+
+
+
+* MySQL从5.5版本开始引入了半同步复制机制来降低数据丢失的概率,但会降低数据库性能
+* MySQL让Master在某一个时间点等待Slave节点的 ACK消息,接收到ACK消息后才进行事务提交,这也是半同步复制的基础
+* MySQL 事务写入碰到主从复制时的完整过程,主库事务写入分为 4个步骤:
+  * InnoDB Redo File Write (Prepare Write)
+  * Binlog File Flush & Sync to Binlog File
+  * InnoDB Redo File Commit(Commit Write)
+  * Send Binlog to Slave
+* 当Master不需要关注Slave是否接受到Binlog Event时,即为传统的主从复制
+* 当Master需要在第三步等待Slave返回ACK时,即为 after-commit,半同步复制
+* 当Master需要在第二步等待 Slave 返回 ACK 时,即为 after-sync,增强半同步
+
+
+
+### 并行复制
+
+
+
+* MySQL从5.6版本开始追加了并行复制功能,并行复制称为enhanced multi-threaded slave(简称MTS)
+* 在从库中有两个线程IO Thread和SQL Thread,都是单线程模式工作,因此有了延迟问题,我们可以采用多线程机制来加强,减少从库复制延迟.(IO Thread多线程意义不大,主要指的是SQL Thread多线程)
+* 在MySQL的5.7、8.0版本上,都是基于上述SQL Thread多线程思想,不断优化,减少复制延迟
+
+
+
+#### MySQL5.7并行复制
+
+
+
+* MySQL 5.7是基于组提交的并行复制,这其中最为主要的原理就是slave服务器的回放与master服务器是一致的,即master服务器上是怎么并行执行的slave上就怎样进行并行回放,不再有库的并行复制限制(5.6是以库为单位的并行复制)
+
+* MySQL 5.7是通过对事务进行分组,当事务提交时,它们将在单个操作中写入到二进制日志中.如果多个事务能同时提交成功,那么它们意味着没有冲突,因此可以在Slave上并行执行
+
+* MySQL 5.7的并行复制基于一个前提,即所有已经处于prepare阶段的事务,都是可以并行提交的.这些当然也可以在从库中并行提交,因为处理这个阶段的事务都是没有冲突的.在一个组里提交的事务,一定不会修改同一行,这是一种新的并行复制思路,完全摆脱了原来一直致力于为了防止冲突而做的分发算法,等待策略等复杂的而又效率底下的工作
+
+* InnoDB事务提交采用的是两阶段提交模式:一阶段是prepare,另一个是commit
+
+* 为了兼容MySQL 5.6基于库的并行复制,5.7引入了新的变量slave-parallel-type,其可以配置为:
+
+  * DATABASE:默认值,基于库的并行复制方式
+  * LOGICAL_CLOCK:基于组提交的并行复制方式
+
+* 如何知道事务是否在同一组中,生成的Binlog内容告诉Slave哪些事务是可以并行复制的
+
+* 在MySQL 5.7版本中,其设计方式是将组提交的信息存放在GTID中,为了避免用户没有开启GTID功能(gtid_mode=OFF),MySQL 5.7又引入了称之为Anonymous_Gtid的二进制日志event类型ANONYMOUS_GTID_LOG_EVENT
+
+* 通过mysqlbinlog工具分析binlog日志,就可以发现组提交的内部信息
+
+  ```mysql
+  14:23:11 server id 1 end log_pos 1031 CRC_32 0x4ead9ad6 GTID last_commited=0 sequence_number = 1
+  14:23:11 server id 1 end log_pos 1483 CRC_32 0xdf94bc85 GTID last_commited=0 sequence_number = 2
+  14:23:11 server id 1 end log_pos 2708 CRC_32 0x0914697b GTID last_commited=0 sequence_number = 3
+  14:23:11 server id 1 end log_pos 3934 CRC_32 0xd9cb5df3 GTID last_commited=0 sequence_number = 4
+  14:23:11 server id 1 end log_pos 5159 CRC_32 0x98653e6d GTID last_commited=4 sequence_number = 5
+  14:23:11 server id 1 end log_pos 6386 CRC_32 0x3de1ae55 GTID last_commited=4 sequence_number = 6
+  ```
+
+* MySQL 5.7的日志较之原来的日志内容多了last_committed和sequence_number,last_committed表示事务提交的时候,上次事务提交的编号,如果事务具有相同的last_committed,表示这些事务都在一组内,可以进行并行的回放
+
+
+
+#### MySQL8.0并行复制
+
+
+
+* MySQL8.0 是基于write-set的并行复制
+* MySQL会有一个集合变量来存储事务修改的记录信息(主键哈希值),所有已经提交的事务所修改的主键值经过hash后都会与那个变量的集合进行对比,来判断该行是否与其冲突,并以此来确定依赖关系,没有冲突即可并行.这样的粒度,就到了row级别了,此时并行的粒度更加精细,并行的速度会更快
+
+
+
+## 并行复制配置
+
+
+
+* binlog_transaction_dependency_history_size:控制集合变量的大小
+
+* binlog_transaction_depandency_tracking:控制binlog文件中事务之间的依赖关系,即last_committed值
+
+  * COMMIT_ORDERE:基于组提交机制
+  * WRITESET: 基于写集合机制
+  * WRITESET_SESSION: 基于写集合,比writeset多了一个约束,同一个session中的事务last_committed按先后顺序递增
+
+* transaction_write_set_extraction:用于控制事务的检测算法,参数值为: OFF、 XXHASH64、MURMUR32
+
+* master_info_repository:开启MTS功能后,务必将参数master_info_repostitory设置为TABLE,这样性能可以有50%~80%的提升,这是因为并行复制开启后对于元master.info这个文件的更新将会大幅提升,资源的竞争也会变大
+
+* slave_parallel_workers: 若将该参数设置为0,则MySQL 5.7退化为原单线程复制;将该参数设置为1,则SQL线程功能转化为coordinator线程,但是只有1个worker线程进行回放,也是单线程复制.然而,这两种性能却又有一些的区别,因为多了一次coordinator线程的转发,因此该参数设置为1的性能反而比0还要差.所以该参数设置的至少要比1大最好
+
+* slave_preserve_commit_order:MySQL 5.7后的MTS可以实现更小粒度的并行复制,但需要将slave_parallel_type设置为LOGICAL_CLOCK,但仅仅设置为LOGICAL_CLOCK也会存在问题,因为此时在slave上应用事务的顺序是无序的,和relay log中记录的事务顺序不一样,这样数据一致性是无法保证的,为了保证事务是按照relay log中记录的顺序来回放,就需要开启参数slave_preserve_commit_order
+
+* 开启enhanced multi-threaded slave:
+
+  ```mysql
+  slave-parallel-type=LOGICAL_CLOCK
+  slave-parallel-workers=16
+  slave_pending_jobs_size_max = 2147483648
+  slave_preserve_commit_order=1
+  master_info_repository=TABLE
+  relay_log_info_repository=TABLE
+  relay_log_recovery=ON  
+  ```
+
+
+
+## 并行复制监控
+
+
+
+* 在使用了MTS后,复制的监控依旧可以通过SHOW SLAVE STATUS\G,但是MySQL 5.7在performance_schema库中提供了很多元数据表,可以更详细的监控并行复制过程
+
+  ```mysql
+  mysql> show tables like 'replication%';
+  +---------------------------------------------+
+  | Tables_in_performance_schema (replication%) |
+  +---------------------------------------------+
+  | replication_applier_configuration |
+  | replication_applier_status |
+  | replication_applier_status_by_coordinator |
+  | replication_applier_status_by_worker |
+  | replication_connection_configuration |
+  | replication_connection_status |
+  | replication_group_member_stats |
+  | replication_group_members |
+  +---------------------------------------------+
+  ```
+
+* 通过replication_applier_status_by_worker可以看到worker进程的工作情况:
+
+  ```mysql
+  mysql> select * from replication_applier_status_by_worker;
+  +--------------+-----------+-----------+---------------+------------------------
+  --------------------+-------------------+--------------------+------------------
+  ----+
+  | CHANNEL_NAME | WORKER_ID | THREAD_ID | SERVICE_STATE | LAST_SEEN_TRANSACTION| LAST_ERROR_NUMBER | LAST_ERROR_MESSAGE |LAST_ERROR_TIMESTAMP |
+  +--------------+-----------+-----------+---------------+--------------------------------------------+-------------------+--------------------+------------------
+  ----+
+  | | 1 | 32 | ON | 0d8513d8-00a4-11e6-a510-f4ce46861268:96604 | 0 | | 0000-00-0000:00:00 || | 2 | 33 | ON | 0d8513d8-00a4-11e6-
+  a510-f4ce46861268:97760 | 0 | | 0000-00-0000:00:00 |
+  +--------------+-----------+-----------+---------------+--------------------------------------------+-------------------+--------------------+------------------
+  ----+
+  2 rows in set (0.00 sec)
+  ```
+
+
+
+
+
+## GTID复制
 
 
 
@@ -1180,6 +1336,8 @@ systemctl restart crontab # 重启定时任务
 
 
 ## 正常配置
+
+
 
 * 每个slave只有一个master,每个master可以有多个slave.5.7后一个从库可以有多个主库
 
@@ -1820,6 +1978,35 @@ skip-name-resolve
 	* 唯一的办法-----监测并观察服务器的状态:`show status;show processlist;`
 * 减少无关请求(业务逻辑层面,其实是最有效的手段)
 * 如果请求数是一定的,不可减少的,则要尽量让请求数平稳,不要有剧烈波动,比如秒杀时段请求数过高.使用缓存或队列改变尽量减少波动.缓存需要注意击穿,雪崩等
+
+
+
+## 降低磁盘写入次数
+
+
+
+* 增大redolog,减少落盘次数:`innodb_log_file`设置为`0.25 * innodb_buffer_pool_size`
+* 通用查询日志,慢查询日志可以不开,bin-log开.遇到问题时在开慢日志查看
+* 写redolog策略innodb_flush_log_at_trx_commit设置为0或2.如果不设计非常高的安全性,或基础架构足够安全,或事务非常小时使用
+
+
+
+## COUNT
+
+
+
+* `count(*)`会统计NULL,而count(常量)或count(字段)不会统计NULL
+* `count(distinct col)`计算该列的非NULL之外的不重复行数
+* `count(distinct col1,col2)`如果其中一列全为NULL,那么即时另一列有不同的值,也返回0
+* 当某一列值全为NULL时,count(col)返回0,但sum(col)返回NULL,需要注意NPL
+
+
+
+## IN
+
+
+
+* 尽量避免IN操作,若实在需使用,应控制IN的参数个数在1000以内
 
 
 

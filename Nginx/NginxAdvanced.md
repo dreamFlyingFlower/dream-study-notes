@@ -740,9 +740,9 @@ server{
 * 需要使用模块ngx_http_autoindex_module,该模块处理以斜杠("/")结尾的请求,并生成目录列表
 * nginx编译的时候会自动加载该模块,但是该模块默认是关闭的,需要使用命令来完成对应的配置
 * `autoindex on|off`: 启用或禁用目录列表输出
-* `autoindex_exact_size on|off`: 对应HTLM格式,指定是否在目录列表展示文件的详细大小.默认为on,显示出文件的确切大小,单位是bytes;改为off后,显示出文件的大概大小,单位是kB或者MB或者GB
+* `autoindex_exact_size on|off`: HTLM格式下,指定是否展示文件的详细大小.默认on显示,单位bytes;off显示文件的大概大小,单位kB或MB或GB
 * `autoindex_format html|xml|json|jsonp;`: 设置目录列表的格式
-* `autoindex_localtime on|off`: 对应HTML格式,是否在目录列表上显示时间.默认为off,显示的文件时间为GMT时间;改为on后,显示的文件时间为文件的服务器时间
+* `autoindex_localtime on|off`: HTML格式下,是否显示时间.默认off,显示的文件时间为GMT时间;on显示的文件时间为文件的服务器时间
 
 ```nginx
 location /download{

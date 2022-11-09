@@ -470,11 +470,12 @@ FLUSH PRIVILEGES;
   mysql [-h127.0.0.1] -uroot -p
   ```
 
-  
 
 
 
 # 配置文件
+
+
 
 > mysqld --help --verbose|grep -A 1 'Default options':查看mysql读取配置文件的顺序,不同系统顺序不一样
 
@@ -513,51 +514,61 @@ binlog-do-db = mysql # binlog中只记录某些数据库,多个用逗号隔开
 binlog_format = mixed # binlog的类型,row,statement,mixed
 expire_logs_days = 15 # 保留binlog日志的天数,一般一个星期
 pid-file=/app/mysql/data/mysql.pid # mysql的标识文件
-innodb_buffer_pool_size = 3G # innodb数据,索引等缓存,一般配置为内存的1/3到1/2
-innodb_additional_mem_pool_size # 定义innodb的数据字典和内部数据结构的缓冲池大小
-innodb_file_io_threads = 4 # 文件的io线程数
-innodb_thread_concurrency = 8 # 线程并发情况
-innodb_flush_method = O_DIRECT # 设置如何跟文件系统交互
-innodb_log_buffer_size = 16M # 事务日志缓冲区大小,不需要很大
-innodb_log_file_size = 200M # 单个事务日志的大小,即bin.log单个日志大小,根据业务而定
-innodb_log_files_in_group = 2 # 控制事务日志文件的个数
+# 定义innodb的数据字典和内部数据结构的缓冲池大小.当数据库对象非常多时,适当调整该参数的大小以确保所有数据都能存放在内存中提高访问效率,当过小时,MySQL会记录Warning信息到数据库的错误日志中,这时就需要该调整这个参数大小
+innodb_additional_mem_pool_size
+# innodb数据,索引等缓存,一般配置为内存的1/3到1/2
+innodb_buffer_pool_size = 3G
+# 文件的io线程数
+innodb_file_io_threads = 4
+# 设置如何跟文件系统交互
+innodb_flush_method = O_DIRECT
 # 日志刷新到硬盘上的模式:0,每秒写入一次到缓存,同时写入到磁盘,可能会丢失1秒数据
 # 1,默认,每次事务都将事务日志写到缓存,同时写入到磁盘,不会丢失数据,但是太影响性能
 # 2,建议,每次提交把事务日志写入到缓存,每秒执行一次将缓存写入到磁盘,除非服务器宕机,可能会丢失1秒数据
 innodb_flush_log_at_trx_commit = 2
-innodb_file_per_table = 1 # 每个表是否设置一个独立的表空间,最好开启
-innodb_max_dirty_pages_pct = 90 # 设置在缓冲池中保存的最大的脏页数量
+# 每个表是否设置一个独立的表空间,最好开启
+innodb_file_per_table = 1
+ # 事务日志缓冲区大小,不需要很大
+innodb_log_buffer_size = 16M
+innodb_log_file_size = 200M # 单个事务日志的大小,即bin.log单个日志大小,根据业务而定
+innodb_log_files_in_group = 2 # 控制事务日志文件的个数
+# 设置在缓冲池中保存的最大的脏页数量
+innodb_max_dirty_pages_pct = 90
 innodb_lock_wait_timeout = 120
 innodb_doublewrite = 1 # 是否开启双写缓存,避免数据损坏
 innodb_strict_mode # 定义一个专门为innodb插件提供的服务器sql模式级别
-query_cache_size # 设置查询缓存大小
+# 线程并发情况,设为CPU核数的2倍
+innodb_thread_concurrency = 8 
 tmp_table_size = 72M # Memory引擎临时文件表的大小
 max_heap_table_size # 定义一个Memory引擎表的最大容量,该参数和tmp_table_size最好大小相同
 max_connections = 1000 # 最大客户端连接数
 max_connect_errors = 6000 # 单次连接最大可能出现的错误数
 max_allowed_packet = 32M # 结果集的最大容量
 max_length_for_fort_data # 用于排序数据的最大长度,可以影响mysql选择那个排序算法
-sysdate_is_now # 确保sysdate()返回日期和now()的结果是一样的
+# 最大连接数,默认为0无上限
+max_user_connection
+# 确保sysdate()返回日期和now()的结果是一样的
+sysdate_is_now
 optimizer_switch # 设置mysql优化器中那个高级索引合并功能被开启
 init-connect = 'SET NAMES utf8mb4' # 初始化数据库链接时提供的配置信息
-wait_timeout = 600 # 锁表超过该时间仍然没有释放锁,mysql将自动释放锁,单位s
+# 数据库连接闲置时间,闲置连接会占用内存资源
+wait_timeout = 600
 interactive_timeout = 600 # 超过多长时间没有写入数据就断开连接,单位s
 autocommit = 1 # 自动提交事务,0为手动提交
 thread_cache_size=768 # 线程缓存大小
 table_cache_size # 缓存表的大小
-# 使用的时候才分配,而且是一次性指定,每个表会分配一个,多表同时排序可能会造成内存溢出
-sort_buffer_size = 32M # 每个线程排序缓存大小
-join_buffer_size = 128M # 每个线程联表缓存大小,一次性指定,每张关联会分配一个,多表时同样可能造成内存溢出
-key_buffer_size=32M # 为MyISAM数据库的索引设置缓冲区大小,使用时才真正分配
-read_buffer_size = 16M # 每个线程查询MyISAM表时缓存大小,一次性分配指定大小
-read_rnd_buffer_size = 32M # 每个线程查询时索引缓存大小,只会分配需要的内存大小
-read_only # 不需要值,只要该参数存在于配置文件中,表示当前数据库只读,不能写
+# 每个线程排序缓存大小.使用的时候才分配,而且是一次性指定,每个表会分配一个,多表同时排序可能会造成内存溢出
+sort_buffer_size = 32M
+# 每个线程联表缓存大小,一次性指定,每张关联会分配一个,多表时同样可能造成内存溢出
+join_buffer_size = 128M
+# 为MyISAM数据库的索引设置缓冲区大小,使用时才真正分配
+key_buffer_size=32M
 lower_case_table_names = 1
-skip_name_resolve # 忽略名字解析,DNS查找,不加可能导致权限错误,但是最好禁用
 #skip_networking
 table_open_cache = 400
 read_buffer_size=8M
 read_rnd_buffer_size=4M
+# 连接堆栈大小.MySql连接数据达到max_connections时,新来的请求将会被存在堆栈中,以等待连接释放,如果等待连接数超过back_log,将不被授予连接资源
 back_log=1024
 #flush_time=0
 open_files_limit=65535
@@ -571,7 +582,14 @@ log_slow_admin_statements = 1
 log_slow_slave_statements = 1
 log_throttle_queries_not_using_indexes = 10
 min_examined_row_limit = 100
-secure_file_priv=’’
+# 设置查询缓存大小
+query_cache_size
+# 对表进行顺序扫描的请求将分配一个读入缓冲区,MySql会为它分配一段内存缓冲区.如果对表的顺序扫描请求非常频繁.可以通过增加该变量值以及内存缓冲区大小提高其性能
+read_buffer_size = 16M
+# 每个线程查询时索引缓存大小,只会分配需要的内存大小
+read_rnd_buffer_size = 32M
+# 不需要值,只要该参数存在于配置文件中,表示当前数据库只读,不能写
+read_only
 # 主从开启时从库的设置
 replication-do-db # 设定需要复制的数据库,多个用逗号隔开
 replication-ignore-db # 设定忽略复制的数据库,多个用逗号隔开
@@ -580,6 +598,9 @@ replication-ignore-table # 设定需要忽略复制的表,多个用逗号隔开
 replication-wild-do-table # 同replication-do-table功能一样,但可以加通配符
 replication-wild-ignore-table # 同replication-ignore-table功能一样,但可以加通配符
 slave-skip-errors=1032,1062 # 主从复制时,忽略符合错误码的错误,1032是错误码
+secure_file_priv=’’
+# 忽略名字解析,DNS查找,不加可能导致权限错误,但是最好禁用
+skip_name_resolve
 [mysqld_safe]
 # 错误日志,默认是关闭的
 log-error=/app/mysql/logs/mysql-error.log

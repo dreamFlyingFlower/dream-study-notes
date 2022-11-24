@@ -104,6 +104,19 @@ source /etc/profile
 
 
 
+## 开机自启
+
+
+
+* 脚本在Linux目录下scripts/nginx_start.sh
+* 将该脚本复制到/etc/init.d/目录下,修改为nginx
+* 赋权:`chmod 755 nginx`
+* 将nginx加入开机项目:`chkconfig --add /etc/init.d/nginx`
+* 开启启动:`chkconfig nginx on`
+* 查看开机启动项:`chkconfig --list`
+
+
+
 # 目录
 
 

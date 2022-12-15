@@ -304,6 +304,14 @@ events {
 
 * log_format main:在ngxin.conf.default中可以看到该参数,表示日志的输出格式,可以根据默认配置文件中的说明进行配置.main是一个标识,在access_log中要用到.更多参数参考nginx官网
 
+  ```nginx
+  # 打印输出post请求参数
+  log_format  main escape=json '$remote_addr - $remote_user [$time_local] "$request" '
+                        '$status $body_bytes_sent "$http_referer" '
+                        '"$http_user_agent" "$http_x_forwarded_for"'
+  		      '"$request_body"';
+  ```
+
 * access_log foldername main:将nginx的日志以main格式输入到指定目录的文件中
 
 * sendfile on|off:是否支持文件传输,该属性可以大大提高Nginx处理静态资源的性能

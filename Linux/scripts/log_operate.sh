@@ -62,7 +62,7 @@ netstat -an | grep ESTABLISHED | wc -l
 ps -ef|grep httpd|wc -l
 # netstat -an会打印系统当前网络链接状态,而grep -i 80是用来提取与80端口有关的连接的,wc -l进行连接数统计,最终返回的数字就是当前所有80端口的请求总数
 netstat -nat|grep -i "80"|wc -l
-# grep ESTABLISHED 提取出已建立连接的信息。然后wc -l统计,最终返回的数字就是当前所有80端口的已建立连接的总数
+# grep ESTABLISHED 提取出已建立连接的信息,然后wc -l统计,最终返回的数字就是当前所有80端口的已建立连接的总数
 netstat -na|grep ESTABLISHED|wc -l
 # 可查看所有建立连接的详细记录
 netstat -nat||grep ESTABLISHED|wc
@@ -70,7 +70,7 @@ netstat -nat||grep ESTABLISHED|wc
 # 输出每个ip的连接数,以及总的各个状态的连接数
 netstat -n | awk '/^tcp/ {n=split($(NF-1),array,":");if(n<=2)++S[array[(1)]];else++S[array[(4)]];++s[$NF];++N} END {for(a in S){printf("%-20s %s\n", a, S[a]);++I}printf("%-20s %s\n","TOTAL_IP",I);for(a in s) printf("%-20s %s\n",a, s[a]);printf("%-20s %s\n","TOTAL_LINK",N);}'
 
-# 分析日志文件下 2012-05-04 访问页面最高 的前20个 URL 并排序
+# 分析日志文件下 2012-05-04 访问页面最高的前20个 URL 并排序
 cat access.log |grep '04/May/2012'| awk '{print $11}'|sort|uniq -c|sort -nr|head -20
 
 # 查询受访问页面的URL地址中 含有 www.abc.com 网址的 IP 地址
@@ -91,7 +91,7 @@ cat log_file |awk '($7~/\.php/){print $NF " " $1 " " $4 " " $7}'|sort -nr|head -
 # 列出最最耗时的页面(超过60秒的)的以及对应页面发生次数
 cat access.log |awk '($NF > 60 && $7~/\.php/){print $7}'|sort -n|uniq -c|sort -nr|head -100
 
-# 统计网站流量（G)
+# 统计网站流量
 cat access.log |awk '{sum+=$10} END {print sum/1024/1024/1024}'
 
 # 统计404的连接
@@ -143,7 +143,7 @@ netstat -ant |awk '/:80/{split($5,ip,":");++A[ip[1]]}END{for(i in A) print A[i],
 # 用tcpdump嗅探80端口的访问看看谁最高
 tcpdump -i eth0 -tnn dst port 80 -c 1000 | awk -F"." '{print $1"."$2"."$3"."$4}' | sort | uniq -c | sort -nr |head -20
 
-#查找较多time_wait连接
+# 查找较多time_wait连接
 netstat -n|grep TIME_WAIT|awk '{print $5}'|sort|uniq -c|sort -rn|head -n20
 
 # 找查较多的SYN连接
@@ -152,7 +152,7 @@ netstat -an | grep SYN | awk '{print $5}' | awk -F: '{print $1}' | sort | uniq -
 # 根据端口列进程
 netstat -ntlp | grep 80 | awk '{print $7}' | cut -d/ -f1
 
-# 查看了连接数和当前的连接数
+# 查看连接数和当前的连接数
 netstat -ant | grep $ip:80 | wc -l 
 netstat -ant | grep $ip:80 | grep EST | wc -l
 

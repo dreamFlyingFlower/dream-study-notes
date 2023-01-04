@@ -23,8 +23,8 @@ one_min_load=$(uptime | awk '{print $(NF-2)}' | tr -d ',')
 five_min_load=$(uptime | awk '{print $(NF-1)}' | tr -d ',')
 fifteen_min_load=$(uptime | awk '{print $NF}' | tr -d ',')
 
-# 获取当前cpu 内存 磁盘io信息，并写入日志文件
-# 如果需要发送消息或者调用其他，请自行编写函数即可
+# 获取当前cpu 内存 磁盘io信息,并写入日志文件
+# 如果需要发送消息或者调用其他,请自行编写函数即可
 get_info(){
     log_dir="cpu_high_script_log"
     test -d "$log_dir" || mkdir "$log_dir"

@@ -647,6 +647,8 @@ S0     S1     E      O      M     CCS    YGC   YGCT    FGC    FGCT     GCT
 
 # GC输出
 
+
+
 ```java
 public static void main(String[] args) {
     byte[] b = null;
@@ -657,7 +659,7 @@ public static void main(String[] args) {
 ```
 
 ```java
-// 设置JVM启动参数:-verbose:gc -XX:+PrintGCDetails -XX:+UseSerialGC -Xmx20m -Xms20m -Xmn1m
+// 设置JVM启动参数:-verbose:gc -XX:+PrintGCDetails -XX:+UseSerialGC -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:+PrintGCDateStamps -XX:+PrintHeapAtGC -Xloggc:E:/logs/gc-default.log  -Xmx20m -Xms20m -Xmn1m
 [GC (Allocation Failure) [DefNew: 896K->63K(960K), 0.0009520 secs] 896K->628K(20416K), 0.0009838 secs] [Times: user=0.00 sys=0.00, real=0.00 secs] 
 [GC (Allocation Failure) [DefNew: 262K->63K(960K), 0.0012891 secs][Tenured: 19079K->1734K(19456K), 0.0012453 secs] 19259K->1734K(20416K), [Metaspace: 2661K->2661K(1056768K)], 0.0025666 secs] [Times: user=0.00 sys=0.00, real=0.00 secs] 
 Heap

@@ -34,10 +34,13 @@
 
 
 * Ctrl+`:关闭项目
+* CTRL+SHIFT+C: 如果该快捷键无效,可以修改Toggle Line Comment,将When修改为In Windows
 
 
 
 ### WorkSpace
+
+
 
 * 勾选
   * Text file encoding->Other->UTF-8

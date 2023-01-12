@@ -1952,6 +1952,88 @@ net {
 * 可以通过showprocesslist或tcpdump抓取的MySQL协议数据进行分析
 * 可以把分析结果输出到文件中,分析过程是先对查询语句的条件进行参数化,然后对参数化以后的查询进行分组统计,统计出各查询的执行时间,次数,占比等
 * 对数据库表进行分表
+* 直接分析慢查询文件
+
+  ```mysql
+  pt-query-digest /var/lib/mysql/slowtest-slow.log > slow_report.log
+  ```
+* 分析最近12小时内的查询
+
+  ```mysql
+  pt-query-digest --since=12h /var/lib/mysql/slowtest-slow.log > slow_report2.log
+  ```
+
+* 分析指定时间范围内的查询：
+
+  ```mysql
+  pt-query-digest /var/lib/mysql/slowtest-slow.log --since '2017-01-07 09:30:00' --until '2017-01-07 10:00:00'> > slow_report3.log
+  ```
+
+* 分析指含有select语句的慢查询
+
+  ```mysql
+  pt-query-digest --filter '$event->{fingerprint} =~ m/^select/i' /var/lib/mysql/slowtest-slow.log> slow_report4.log
+  ```
+
+* 针对某个用户的慢查询
+
+  ```mysql
+  pt-query-digest --filter '($event->{user} || "") =~ m/^root/i' /var/lib/mysql/slowtest-slow.log> slow_report5.log
+  ```
+
+* 查询所有所有的全表扫描或full join的慢查询
+
+  ```mysql
+  pt-query-digest --filter '(($event->{Full_scan} || "") eq "yes") ||(($event->{Full_join} || "") eq "yes")' /var/lib/mysql/slowtest-slow.log> slow_report6.log
+  ```
+
+  
+
+## 报告分析
+
+
+
+### 第一部分:总体统计结果
+
+
+
+- Overall: 总共有多少条查询
+- Time range: 查询执行的时间范围
+- unique: 唯一查询数量,即对查询条件进行参数化以后,总共有多少个不同的查询
+- total:总计
+- min:最小
+- max:最大
+- avg:平均
+- 95%:把所有值从小到大排列,位置位于95%的那个数,这个数一般最具有参考价值
+- median:中位数,把所有值从小到大排列,位置位于中间那个数
+
+
+
+### 第二部分:查询分组统计结果
+
+
+
+- Rank: 所有语句的排名,默认按查询时间降序排列,通过--order-by指定
+- Query ID: 语句的ID,去掉多余空格和文本字符,计算hash值
+- Response: 总的响应时间
+- time: 该查询在本次分析中总的时间占比
+- calls: 执行次数,即本次分析总共有多少条这种类型的查询语句
+- R/Call: 平均每次执行的响应时间
+- V/M: 响应时间Variance-to-mean的比率
+- Item: 查询对象
+
+
+
+### 第三部分:每一种查询的详细统计结果
+
+
+
+- ID: 查询的ID号,和上图的Query ID对应
+- Databases: 数据库名
+- Users: 各个用户执行的次数(占比)
+- Query_time distribution: 查询时间分布,长短体现区间占比
+- Tables: 查询中涉及到的表
+- Explain: SQL语句
 
 
 
@@ -1980,54 +2062,6 @@ collation-server=utf8mb4_unicode_ci
 skip-character-set-client-handshake
 skip-name-resolve
 ```
-
-
-
-# 性能优化
-
-
-
-## 负载过高
-
-
-
-* 情形:服务器出现长时间负载过高 /周期性负载过大,或偶尔卡住
-* 思路:
-	* 发生该情况的服务器是周期性的变化还是偶尔问题
-	* 是服务器整体性能的问题, 还是某单条语句的问题
-	* 具体到单条语句, 这条语句是在等待上花的时间,还是查询上花的时间
-	* 唯一的办法-----监测并观察服务器的状态:`show status;show processlist;`
-* 减少无关请求(业务逻辑层面,其实是最有效的手段)
-* 如果请求数是一定的,不可减少的,则要尽量让请求数平稳,不要有剧烈波动,比如秒杀时段请求数过高.使用缓存或队列改变尽量减少波动.缓存需要注意击穿,雪崩等
-
-
-
-## 降低磁盘写入次数
-
-
-
-* 增大redolog,减少落盘次数:`innodb_log_file`设置为`0.25 * innodb_buffer_pool_size`
-* 通用查询日志,慢查询日志可以不开,bin-log开.遇到问题时在开慢日志查看
-* 写redolog策略innodb_flush_log_at_trx_commit设置为0或2.如果不设计非常高的安全性,或基础架构足够安全,或事务非常小时使用
-
-
-
-## COUNT
-
-
-
-* `count(*)`会统计NULL,而count(常量)或count(字段)不会统计NULL
-* `count(distinct col)`计算该列的非NULL之外的不重复行数
-* `count(distinct col1,col2)`如果其中一列全为NULL,那么即时另一列有不同的值,也返回0
-* 当某一列值全为NULL时,count(col)返回0,但sum(col)返回NULL,需要注意NPL
-
-
-
-## IN
-
-
-
-* 尽量避免IN操作,若实在需使用,应控制IN的参数个数在1000以内
 
 
 

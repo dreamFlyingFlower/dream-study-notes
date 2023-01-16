@@ -475,17 +475,28 @@ ${imp:import(java.util.ArrayList,java.util.List,java.util.Map)}
   --add-exports=jdk.unsupported/sun.misc=ALL-UNNAMED
   ```
 
-  
 
 
 
 ## MyBatipse
 
+
+
 * 配合MyBatis,鼠标左键+CTRL可直接选择跳到相应的XML文件的相应方法中
 
 
 
+## CallGraph Viewer
+
+
+
+* 以流程图的形式展现选中类或方法的调用链
+
+
+
 ## DBeaver
+
+
 
 * 数据库管理工具,可以代替Navicat
 
@@ -493,11 +504,15 @@ ${imp:import(java.util.ArrayList,java.util.List,java.util.Map)}
 
 ## UMLet
 
+
+
 * 画UML流程图,并且可以导出pdf,jpg等格式
 
 
 
 ## JAutoDoc
+
+
 
 * 自动代码注释
 
@@ -505,11 +520,15 @@ ${imp:import(java.util.ArrayList,java.util.List,java.util.Map)}
 
 ## Eclipse Color Theme
 
+
+
 * Eclipse多种主题切换
 
 
 
 ## Bytecode Outline
+
+
 
 * 显示Java文件编译后的指令文件,即JVM真正运行时的指令文件
 
@@ -517,11 +536,15 @@ ${imp:import(java.util.ArrayList,java.util.List,java.util.Map)}
 
 ## aiXcoder
 
+
+
 * 同codota,需要在Brower for more solutions中搜索
 
 
 
 ## Codota
+
+
 
 * 代码提示以及最新的代码样例,需要在Brower for more solutions中搜索
 
@@ -529,11 +552,15 @@ ${imp:import(java.util.ArrayList,java.util.List,java.util.Map)}
 
 ## ResourceBundle Editor
 
+
+
 * 同时修改国际化配置文件
 
 
 
 ## Jar2UML
+
+
 
 * 将Jar文件转换为UML图
 
@@ -541,16 +568,22 @@ ${imp:import(java.util.ArrayList,java.util.List,java.util.Map)}
 
 ## SonarLint
 
+
+
 * 代码检查
 
 
 
 ## Enhanced Class Decompiler
 
+
+
 * 无需源码即可debug
 
 
 
 ## Checkstyle Plug-in
+
+
 
 * 检查代码样式

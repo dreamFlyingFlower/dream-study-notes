@@ -1483,6 +1483,8 @@ select sleep(12);
 
 ## InnoDB锁
 
+
+
 * show variables like '%tx_isolation%':查看mysql的默认事物隔离级别
 * show open tables:查看表上加过的锁,in_use为0表示没加锁
 * show status like '%table%':查看数据库表锁情况
@@ -1501,6 +1503,8 @@ select sleep(12);
 
 ## 表锁
 
+
+
 * lock tables
 * 元数据锁(meta data lock,MDL)
 * 偏向MyISAM存储引擎,开销小,加锁快,无死锁,锁定粒度大,发生锁冲突的概率最高,并发低
@@ -1509,6 +1513,8 @@ select sleep(12);
 
 
 ### 读锁
+
+
 
 * 若sesson1对a表设置了读锁,那sesson1就只能读a表,不可更新a表,也不可读写其他没有锁定的表.sesson2可以读写锁表,也包括a表.若是sesson2要写a表,此时就是阻塞,直到sesson1解锁
 
@@ -1524,8 +1530,9 @@ select sleep(12);
 
 
 
-
 ### 写锁
+
+
 
 * sesson1给t1表加写锁,则sesson1可以对t1表读写,但不能对其他没有写锁的表进行读写
 * sesson2只能读写没有锁的表,读写t1表时都会被阻塞.等sesson1对t1表的锁释放后才能继续对t1表进行读写
@@ -1533,6 +1540,8 @@ select sleep(12);
 
 
 ## 行锁
+
+
 
 * 偏向InnoDB引擎,开销大,加锁慢,会出现死锁.锁定粒度最小,发生锁冲突的概率最低,并发度也高
 * 锁只能作用在索引上,包括聚簇索引和二级索引
@@ -1548,6 +1557,8 @@ select sleep(12);
 
 ### RC*非唯一索引
 
+
+
 ![](MYSQL18.PNG)
 
 * phone为非唯一二级索引,加锁时会锁住主键的103和105
@@ -1556,6 +1567,8 @@ select sleep(12);
 
 
 ### RR*非唯一索引
+
+
 
 ![](MYSQL19.png)
 
@@ -1567,11 +1580,15 @@ select sleep(12);
 
 ## 行锁升表锁
 
+
+
 * 在行锁的情况下,若更新时索引失效,如where子句中的自动类型转换,将会导致行锁变成表锁,此时整个表都只能有一个更新事务,其他事务都会被阻塞
 
 
 
 ## 间隙锁
+
+
 
 ![](MYSQL20.png)
 
@@ -1586,11 +1603,15 @@ select sleep(12);
 
 ## 加锁过程
 
+
+
 ![](MYSQL21.PNG)
 
 
 
 ### 死锁
+
+
 
 ![](MYSQL22.PNG)
 
@@ -1605,6 +1626,8 @@ select sleep(12);
 
 ## 分析行锁定
 
+
+
 * show status like 'innodb_row_lock%':
   * innodb_row_lock_current_waits:当前正在等待锁定的数量
   * innodb_row_lock_time:从系统启动到现在锁定总时间长度,比较重要
@@ -1614,7 +1637,88 @@ select sleep(12);
 
 
 
+## 锁相关系统表
+
+
+
+### Innodb_trx
+
+
+
+* 当前运行的所有事务
+* `select * from information_schema.innodb_trx;`:重点关注trx_state为LOCK_WAIT的数据,查看 trx_mysql_thread_id 字段的值,可以使用kill trx_mysql_thread_id 来杀掉线程
+* 表中各字段的含义:
+
+| 字段名                     | 含义                        |
+| -------------------------- | --------------------------- |
+| trx_id                     | 事务id                      |
+| trx_state                  | 事务状态                    |
+| trx_started                | 事务开始时间                |
+| trx_requested_lock_id      | innodb_locks表的lock_id     |
+| trx_wait_started           | 事务开始等待的时间          |
+| trx_weight                 | #                           |
+| trx_mysql_thread_id        | 事务线程ID                  |
+| trx_query                  | 具体SQL语句                 |
+| trx_operation_state        | 事务当前操作状态            |
+| trx_tables_in_use          | 事务中有多少表被使用        |
+| trx_tables_locked          | 事务有多少个锁              |
+| trx_lock_structs           | #                           |
+| trx_lock_memory_bytes      | 事务锁住的内存大小,单位字节 |
+| trx_rows_locked            | 事务锁住的行数              |
+| trx_rows_modified          | 事务更改的行数              |
+| trx_concurrency_tickets    | 事务并发票数                |
+| trx_isolation_level        | 事务隔离级别                |
+| trx_unique_checks          | 是否唯一性检查              |
+| trx_foreign_key_checks     | 是否外键检查                |
+| trx_last_foreign_key_error | 最后的外键错误              |
+| trx_adaptive_hash_latched  | #                           |
+| trx_adaptive_hash_timeout  | #                           |
+| trx_is_read_only           | 事务是否只读                |
+| trx_autocommit_non_locking | 事务是否在无锁时自动提交    |
+
+
+
+### innodb_locks
+
+
+
+* 当前出现的锁
+* 表中各字段的含义:
+
+| 字段名      | 含义           |
+| ----------- | -------------- |
+| lock_id     | 锁ID           |
+| lock_trx_id | 拥有锁的事务ID |
+| lock_mode   | 锁模式         |
+| lock_type   | 锁类型         |
+| lock_table  | 被锁的表       |
+| lock_index  | 被锁的索引     |
+| lock_space  | 被锁的表空间号 |
+| lock_page   | 被锁的页号     |
+| lock_rec    | 被锁的记录号   |
+| lock_data   | 被锁的数据     |
+
+
+
+### innodb_lock_waits
+
+
+
+* 锁等待的对应关系
+* 表中各字段的含义:
+
+| 表字段            | 含义               |
+| ----------------- | ------------------ |
+| requesting_trx_id | 请求锁的事务ID     |
+| requested_lock_id | 请求锁的锁ID       |
+| blocking_trx_id   | 当前拥有锁的事务ID |
+| blocking_lock_id  | 当前拥有锁的锁ID   |
+
+
+
 ## 优化
+
+
 
 * 尽可能让所有数据检索都通过索引来完成,避免无索引行锁升级为表锁
 * 合理设计索引,尽量缩小锁的范围
@@ -1625,6 +1729,8 @@ select sleep(12);
 
 
 ## Snapshot
+
+
 
 生成一个数据请求时间点的一致性数据快照,并用这个快照来提供一定级别的一致性读取(MVCC:Multi Version Concurrency Control)
 

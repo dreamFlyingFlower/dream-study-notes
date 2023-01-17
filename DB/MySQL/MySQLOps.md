@@ -2118,3 +2118,21 @@ rm city.ibd
 # 修改表名
 mysql> alter table city_new rename city;
 ```
+
+
+
+## 锁查看
+
+
+
+```mysql
+-- 当前运行的所有事务,重点关注trx_state为lock_wait的,查看trx_mysql_thread_id字段的值,之后使用kill杀掉线程
+-- 例如查看 trx_mysql_thread_id 的值为 123456789,kill 123456789 可杀掉线程
+select * from information_schema.innodb_trx;
+-- 注意,这不是linux线程,是mysql线程
+kill 123456789;
+-- 如果以上方法杀掉线程,但还是不能解决,可以查找执行线程用时比较久的用户,然后直接干掉
+SELECT * from information_schema.`PROCESSLIST` WHERE Time > 1000 AND USER = 'root' ORDER BY TIME desc;
+kill 123456789;
+```
+

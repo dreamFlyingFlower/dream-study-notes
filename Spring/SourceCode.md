@@ -2,6 +2,30 @@
 
 
 
+# 源码编译
+
+
+
+* 从[github.com](https://github.com/spring-projects/spring-framework)下载源码,在IDE上使用gradle进行编译
+
+* 注意要先配置好gradle
+
+* 进入源码目录,打开 gradle.properties 文件,可以修改版本号,避免与官网的版本冲突
+
+  ```
+  version=dream-5.3.23
+  ```
+
+* `gradle build -x test`: 命令号进行编译构建,-x test 是跳过测试,大概下载30分钟到1小时构建完成
+
+* 错误1:`The container 'Project and External Dependencies' references non existing library 'F:\repository\source\spring-framework-5.3.23\spring-core\build\libs\spring-cglib-repack-3.3.0.jar'`,需要在spring-framework的目录中运行`gradle cglibRepackJar`,运行成功会在各个缺少jar的build/libs下生成该jar包
+
+* 错误2:`The container 'Project and External Dependencies' references non existing library 'F:\repository\source\spring-framework-5.3.23\spring-core\build\libs\spring-objenesis-repack-3.2.jar'`,同错误1,运行`gradle objenesisRepackJar`
+
+* 错误3:`Access restriction: The method 'Headers.set(String, String)' is not API (restriction on required library 'F:\Software\JDK1.8\jre\lib\rt.jar')`,将编译器里的`Preferences-Java-Compiler-Error/Warning-Deprecated and Restricted API-Forbidden reference`,设置成Ignore或Warning
+
+
+
 # Autowired
 
 

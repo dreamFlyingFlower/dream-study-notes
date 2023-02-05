@@ -126,11 +126,15 @@
   * -d:容器在创建时以后台启动的方式运行,没有交互界面.-d和-it同时使用无效
   * -i:docker为启动进程始终打开标准输入,即非后台启动
   * -t:为docker分配一个终端,或者CTRL+P/CTRL+Q退出终端,即可实现后台运行
+  * -P:大写的p,随机端口映射
   * -p port1:port2:为运行的容器指定端口映射
     * port1是主机端口,port2是docker容器端口
     * 若不指定port1,则将随机映射到主机端口
     * 可以同时写多个端口映射,如-p port1:port2 -p port3:port4
   * --name=cname:自定义容器的名称(cname),不能重复,若不指定,由docker自行定义
+  * -h:指定容器的hostname
+  * -e:设置环境变量,容器中可以使用该环境变量
+  * `--net="bridge"`:指定容器的网络连接类型,支持bridge/host/none/container
   * -v src:des[:rwo]:将容器中的文件映射到主机中,保证数据的持久化,可以给目录赋权
     * src:主机中的目录地址
     * des:容器中的目录地址
@@ -142,6 +146,12 @@
     * datavolumn:容器中需要备份的数据卷目录,多个用空格隔开
   * --link=cname:alias:由于docker容器重启之后ip都会改变,若是有使用ip的操作,重启之后就会失效.该参数就是给需要通过ip操作的docker容器起一个别名,所有通过ip的操作可以通过别名来完成,类似于主机名.cname是另外一个容器的名称,alias是给该容器起的别名
   * -icc=true:docker默认是允许container互通,通过-icc=false关闭互通.一旦关闭互通,只能通过-link name:alias命令连接指定container
+  * `--privileged=flase`:指定容器是否为特权容器,特权容器拥有所有的capabilities
+  * `--restart=always`:指定容器荣之后的重启侧脸
+    * no:容器退出时不重启
+    * always:容器退出时总是重启
+    * on-failure:容器故障退出时重启
+  * `--rm=false`:指定容器停止后自动删除容器,不能以docker run -d启动容器
 
 * docker ps []:查看所有正在运行的容器
 
@@ -164,9 +174,7 @@
 
 * docker inspect [] iid/iname/iname:tag/cid/cname:查看镜像,容器的详细信息
 
-  * -f:格式化形式详细信息
-
-* docker inspect --format='{{.NetworkSettings.IPAddress}}' iid/iname/iname:tag/cid/cname:直接输出容器或镜像的ip地址,双大括号固定写法,里面的内容需要根据inspect信息指定,是一个Json对象
+  * `-f "{{.NetworkSettings.IPAddress}}" iid/iname/iname:tag/cid/cname`:直接输出容器或镜像的ip地址,双大括号固定写法,里面的内容需要根据inspect信息指定,是一个Json对象
 
 * docker logs [] cid/cname:查看容器日志
 
@@ -178,16 +186,23 @@
 
 * docker stop/kill cid/cname:停止某个容器,stop是优雅停止,kill是暴力停止
 
+  * `docker stop $(docker ps -qa)`:停止所有运行容器
+
 * docker rmi [] iid/iname/iname:tag:删除镜像.当镜像有多个版本时,可使用最后一种方式删除
 
   * -f:强制删除镜像,即使有容器依托在该镜像上运行
   * --no-prune:不删除镜像中没有打标签(tag)的父镜像
   * docker rmi \`docker images -q\`:删除没有在容器中运行的镜像
 
+* docker image prune:删除临时的,没有被使用的镜像文件
+
+  * `-a,--all`:删除所有没有用的镜像,而不仅仅是临时文件
+  * `-f,--force`:强制删除镜像文件
+
 * docker rm [] cid/cname:删除没有运行的容器
 
   * -f:强行删除容易,不管是否在运行中
-  * docker rm $(docker ps -aq):删除所有容器
+  * `docker rm $(docker ps -aq)`:删除所有容器
 
 * docker info:显示docker的运行信息
 
@@ -200,8 +215,10 @@
   * -l:运行时的日志级别,默认为info
   * --label key=value:定义标签
   * -p:进程id,默认地址为/var/run/docker.pid
-  
-* docker save mysql:版本 > /目录/mysql.tar.gz:将镜像从docker中导出到指定目录下,若是latest,版本可不写,>可以换成-o表示输出docker save mysql -o mysql.tar.gz
+
+* docker save mysql:版本 > /目录/mysql.tar.gz:将镜像从docker中导出到指定目录下,若是latest,版本可不写
+
+  * -o:非数字0,效果等同于`>`,指定输出的文件目录和名称
 
 * docker load < mysql.tar.gz:将镜像导入到docker中,或者docker load -i < mysql.tar.gz
 
@@ -210,19 +227,29 @@
   * `--build-arg argname=argvalue`: 打包dockerfile的时候指定参数,该参数可以在dockerfile中以`${argname}`使用
   * `-t 镜像名:版本`: 指定镜像名的名字
   * .:表示dockerfile所在目录,.表示当前目录,也可以是其他目录
-  
-* docker cp file1 containerid:file2:将linux中的文件拷贝到docker容器中的指定目录中
 
-* docker cp containerid:file2 file1 :将docker容器中的文件拷贝到Linux指定目录中
+* `docker cp file1 containerid:file2`:将linux中的文件拷贝到docker容器中的指定目录中
 
-* docker tag iid/iname[:tag] newiname[:tag]:类似git中的tag,从某个稳定版本中拉取分支开发新功能
+* `docker cp containerid:file2 file1`:将docker容器中的文件拷贝到Linux指定目录中
 
-* docker commit [] iid newiname[:tag]:将修改后的镜像提交本地仓库中,成为一个新的镜像
+* `docker tag iid/iname[:tag] newiname[:tag]`:类似git中的tag,从某个稳定版本中拉取分支开发新功能
+
+* `docker commit [] iid newiname[:tag]`:将修改后的镜像提交本地仓库中,成为一个新的镜像
 
   * -m:提交的注释信息
   * -a:指定镜像作者
 
-* docker push iname[:tag]:将本地镜像推送到远程仓库
+* `docker push iname[:tag]`:将本地镜像推送到远程仓库
+
+* `docker update [OPTIONS] containerid`:动态更新容器配置,可以同时更新多个,空格隔开.如`docker update --restart always cid`
+
+* `docker network ls`:查看docker中的网络类型
+
+* `docker volume ls`:查看数据卷挂载情况
+
+* `docker volume inspect VNAME`:查看数据卷挂载详情,VNAME从`docker volume ls`中查看
+
+* `docker volume prune`:清理数据卷
 
 
 
@@ -653,3 +680,34 @@ services:
   docker login -u 用户名 -p 密码 192.168.66.102:85
   docker pull 192.168.66.102:85/dream/eureka:v1
   ```
+
+
+
+# 应用
+
+
+
+## MySQL
+
+
+
+```shell
+docker run 
+# 后台运行且带有shell控制台
+-itd 
+# 自定义容器名称
+--name self-mysql 
+# 总是重启
+--restart always
+# 端口映射
+-p 3306:3306
+# 进入mysql时的root用户密码
+-e MYSQL_ROOT_PASSWORD=123456
+# 数据卷映射:本地目录:docker容器目录
+-v /app/mysql/data:/var/lib/mysql
+# mysql镜像,不带版本就是最新版
+mysql:8.0.24
+# mysql默认字符集
+--character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci
+```
+

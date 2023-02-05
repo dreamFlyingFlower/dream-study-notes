@@ -707,6 +707,8 @@ log-error=/app/mysql/logs/mysql-error.log
 
 # Windows安装
 
+
+
 * 下载压缩包到自定义目录,解压之后得到目录如:E:\mysql-8.0.24
 * 进入mysql目录新建data和my.ini文件,data为mysql的数据目录,my.ini为配置文件,内容如下
 
@@ -715,9 +717,9 @@ log-error=/app/mysql/logs/mysql-error.log
 # 设置3306端口
 port=3306
 # 设置mysql的安装目录
-basedir=E:\\mysql-5.7.22-winx64
+basedir=E:\\mysql-8.0.24
 # 设置mysql数据库的数据的存放目录
-datadir=E:\\mysql-5.7.22-winx64\\data
+datadir=E:\\mysql-8.0.24\\data
 # 允许最大连接数
 max_connections=200
 # 允许连接失败的次数。这是为了防止有人从该主机试图攻击数据库系统
@@ -744,7 +746,7 @@ mysqld --initialize --user=mysql --console
 ```
 
 * 初始化时会将root密码输出到控制台中,登录时需要使用
-* 将服务添加到windows启动任务中:mysqld -install
+* 将服务添加到windows启动任务中:mysqld -install.如果出现`Install/Remove of the Service Denied!`错误,需要以管理员身份运行cmd
 * 启动:net start mysql
 * 登录数据库,使用刚才的密码
 * 修改密码:ALTER USER root@localhost IDENTIFIED BY '123456'; 

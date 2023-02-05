@@ -2,6 +2,86 @@
 
 
 
+# 源码编译
+
+
+
+* 从[github.com](https://github.com/spring-projects/spring-boot)下载源码,在IDE上使用gradle进行编译
+
+* 编译时会出现如下错误,删除相关引用即可
+
+* 进入源码目录,打开 gradle.properties 文件,可以修改版本号,避免与官网的版本冲突
+
+  ```
+  version=dream-2.7.5
+  ```
+
+* build.gradle配置项目依赖仓库与插件仓库,依赖仓库添加本地maven仓库与阿里镜像仓库
+
+  ```gradle
+  allprojects {
+  
+      repositories {
+          // 本地仓库,需配置GRADLE_USER_HOME,否则在user/.m2/repository
+          mavenLocal()
+          // aliyun镜像
+          maven { url 'https://maven.aliyun.com/nexus/content/groups/public/'}
+          maven { url 'https://maven.aliyun.com/repository/central'}
+  	maven { url 'https://maven.aliyun.com/repository/public' }
+          
+          mavenCentral()
+          if (!version.endsWith('RELEASE')) {
+              maven { url "https://repo.spring.io/milestone" }
+          }
+          if (version.endsWith('BUILD-SNAPSHOT')) {
+              maven { url "https://repo.spring.io/snapshot" }
+          }
+      }
+  }
+  ```
+
+* settings.gradle插件仓库添加本地maven仓库与阿里镜像仓库,且将插件 io.spring.gradle-enterprise-conventions 注释
+
+  ```
+  pluginManagement {
+      repositories {
+          // 本地仓库,需配置GRADLE_USER_HOME,否则在user/.m2/repository
+          mavenLocal()
+          // aliyun镜像
+          maven { url 'https://maven.aliyun.com/nexus/content/groups/public/'}
+          maven { url 'https://maven.aliyun.com/repository/central'}
+  	maven { url 'https://maven.aliyun.com/repository/public' }
+  
+          mavenCentral()
+          
+          gradlePluginPortal()
+          maven {
+              url 'https://repo.spring.io/plugins-release'
+          }
+          if (version.endsWith('BUILD-SNAPSHOT')) {
+              maven { url "https://repo.spring.io/snapshot" }
+          }
+      }
+  }
+  
+  plugins {
+      id "com.gradle.enterprise" version "3.2"
+  //     id "io.spring.gradle-enterprise-conventions" version "0.0.2"
+  }
+  ```
+
+* `gradle build -x test`: 命令号进行编译构建,-x test 是跳过测试
+
+* 大概下载30分钟到1小时构建完成
+
+* 如果使用Eclipse编译,需要配置Eclipse的Gradle的Local installation directory,Gradle user home,Java home
+
+* 错误1:`BomPluginIntegrationTests xxxxx`,可以在该文件中注释掉相关行
+
+* 错误2:` Execution failed for task ‘:buildSrc:checkFormatMain`:注释掉`buildSrc/build.gradle`下的`plugins`下的`id "io.spring.javaformat" version "${javaFormatVersion}"`
+
+
+
 # 启动
 
 

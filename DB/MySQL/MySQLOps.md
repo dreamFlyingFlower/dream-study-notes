@@ -319,6 +319,25 @@ mysqladmin -u root password "密码" # 从10那步的日志中找
 
 
 
+## 开机自启
+
+
+
+* `chkconfig mysql on`:开机自启
+* `chkconfig --list`:查看开机自启的程序
+
+
+
+## 相关目录
+
+
+
+* `/var/lib/mysql`:mysql数据库文件存放路径
+* `/etc/my.cnf`:主要配置文件
+* `/etc/init.d/mysql`:mysql启停相关脚本
+
+
+
 # 多实例
 
 

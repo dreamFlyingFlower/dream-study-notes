@@ -357,7 +357,11 @@
 
 # 基础语法
 
+
+
 ## 特殊语法
+
+
 
 * mysql中使用了关键字,需要用``(反引号)包裹起来
 
@@ -402,9 +406,28 @@
 
 * CREATE TABLE table AS SELECT * FROM table1:将table1中的数据全部插入到table中.在数据量很大的情况下,该方法效率很高.如果数据库禁止使用该方式插入数据,可以先使用`CREATE TABLE table LIKE table1`创建表,再使用`INSERT INTO table AS SELECT * FROM table1`插入数据
 
+* `XOR`:异或,和二进制中表达的啥意思类似,用该运算符连接的条件,只满足其中一个条件的数据才查询,如:
+
+  ```mysql
+  -- 得到的数据是age大于10且sex不等于1的数据和age小于等于10且sex等于1的数据
+  SELECT * FROM ts_user WHERE age > 10 XOR sex = 1;
+  ```
+
+* `USEING`:相当于多表连接中的ON,但是必须是被连接表中都有的字段,如:
+
+  ```mysql
+  .... ts_user INNER JOIN ts_user_role ON ts_user.user_id = ts_role.user_id;
+  -- 等同于如下,必须2表中都有user_id
+  .... ts_user INNER JOIN ts_user_role USING(user_id);
+  ```
+
+  
+
 
 
 ## 系统语法
+
+
 
 * SHOW DATABASES:查看所有的数据库
 * USE dbname:使用名称为dbname数据库
@@ -434,6 +457,20 @@
 * TRUNCATE TABLE table:直接删除表之后再重新建表结构,数据不可恢复
 * CREATE TABLE table LIKE table1:复制表table的表结构到table1
 * CREATE TABLE table AS SELECT * FROM table1:复制tablename1的表结构和数据到table
+
+
+
+## 数据类型
+
+
+
+* 浮点数:FLOAT和DOUBLE,取值范围较大,但是会丢失精度
+* 定点数:DECIMAL,取值范围比浮点数小,但是精准,没有误差,通常使用DECIMAL
+* TIMESTAMP和DATETIME
+  * TIMESTAMP存储空间小,标识的日期范围小,存储的是毫秒值,在日期比较时速度更快
+  * TIMESTAMP和时区有关,会根据用户的时区不同,显示不同的结果.而DATETIME则只能反应出插入当时的时区
+
+
 
 
 
@@ -632,6 +669,8 @@ END IF
 
 ### CASE WHEN
 
+
+
 ```mysql
 # 第一种形式,该方式适用于等值比较
 CASE column # column可以是字段,也可以某个表达式
@@ -650,6 +689,8 @@ END
 
 ### WHILE
 
+
+
 ```mysql
 [label:]WHILE cnd1 DO # label可有无,主要是用来跳出循环时使用.cnd1为循环的条件
 	sql;	# 需要执行的sql
@@ -664,6 +705,8 @@ END WHILE[label]
 
 
 ### REPEAT
+
+
 
 ```mysql
 [label:]REPEAT  # label可有无,主要是用来跳出循环时使用
@@ -849,6 +892,21 @@ END REPEAT[label]
   ```
 
 * MySQL 可以在运行时通过 `SET GLOBAL` 来临时更改设置,MySQL 8 新增了 `SET PERSIST` 命令,MySQL 会将该命令的配置保存到数据目录下的 `mysqld-auto.cnf` 文件中,下次启动时会读取该文件,用其中的配置来覆盖缺省的配置文件
+
+
+
+# 计算列
+
+
+
+* MySQL8新特性,语法
+
+  ```mysql
+  -- c为计算列,值为a+b字段的值,插入和更新a,b时,c的值会变化
+  CREATE TABLE test1(a INT,b INT,c INT GENERATED ALWAYS AS (a+b) VIRTUAL);
+  ```
+
+  
 
 
 

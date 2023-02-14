@@ -1943,3 +1943,40 @@ service keepalived start # 启动
 
 * 一款Linux文件系统性能测试工具,可以测试不同的操作系统中文件系统的读写性能
 * 下载:`http://www.iozone.org/src/current/`
+
+
+
+# 挖矿病毒处理
+
+
+
+* 参考:[ 挖矿木马分析之肉鸡竟是我自己_](https://blog.csdn.net/Appleteachers/article/details/117259776)
+
+* `ps auxw|head -1;ps auxw|sort -rn -k3|head -10` :查看CPU占用最多的前10个进程
+
+* `ls -ail /proc/PID`:查看占用最高的程序pid绝对路径,一般是在`root/.configrc/a/kswapd0*`
+
+* `rm -rf .configrc/`:删除文件,如果提示无权限,可使用`chattr -i .configrc`赋权,如果chattr找不到,可以从其他正常的机器复制一个放到`/bin`下
+
+* `kill -9 PID`:杀掉挖矿进程
+
+* 查看定时任务,一般会有以下几个定时任务,全部干掉
+
+  ```shell
+  1 1 */2 * * /root/.configrc4/a/upd>/dev/null 2>&1
+  @reboot /root/.configr4c/a/upd>/dev/null 2>&1
+  5 8 * * 0 /root/.configrc4/b/sync>/dev/null 2>&1
+  @reboot /root/.configrc4/b/sync>/dev/null 2>&1  
+  0 0 */3 * * /tmp/.X25-unix/.rsync/c/aptitude>/dev/null 2>&1
+  ```
+
+* 把密钥登陆中的密钥删除了(`/root/.ssh`)
+
+* 查看`/tmp`是否有`.X25-unix`目录,有就删除,没有就把`.unix`结尾的文件直接全删了
+
+* 查看`/tmp`是否有kdevtmpfsi开头的文件,也是挖矿病毒,全部删除
+
+
+
+
+

@@ -6,6 +6,8 @@
 
 # 概述
 
+
+
 * [官方地址](https://nacos.io)
 * [github地址](https://github.com/alibaba/nacos)
 * 是一个构建云原生应用的动态服务发现,配置管理和服务管理平台
@@ -30,6 +32,8 @@
 
 
 ## 下载及安装
+
+
 
 你可以通过源码和发行包两种方式来获取Nacos
 
@@ -66,6 +70,8 @@
 
 
 ## 数据支持
+
+
 
 * 单机模式时Nacos默认使用嵌入式数据库存储数据,若想使用其他存储方式,需要进行配置
 * MySQL中新建nacos_config数据库,Nacos初始化MySQL的文件在nacos/conf/nacos-mysql.sql

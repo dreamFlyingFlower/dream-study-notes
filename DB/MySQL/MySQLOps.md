@@ -1965,6 +1965,39 @@ net {
 
 
 
+# mysqltuner.pl
+
+
+
+* 一个常用的数据库性能诊断工具,主要检查参数设置的合理性,包括日志文件,存储引擎,安全建议及性能分析.针对潜在的问题,给出改进的建议
+
+> 项目地址：https://github.com/major/MySQLTuner-perl
+
+* 下载安装
+
+```shell
+wget https://raw.githubusercontent.com/major/MySQLTuner-perl/master/mysqltuner.pl
+```
+
+* 使用
+
+```shell
+[root@localhost ~]# ./mysqltuner.pl --socket /var/lib/mysql/mysql.sock
+ >> MySQLTuner 1.7.4 - Major Hayden <major@mhtx.net>
+ >> Bug reports, feature requests, and downloads at http://mysqltuner.com/
+ >> Run with '--help' for additional options and output filtering
+[--] Skipped version check for MySQLTuner script
+Please enter your MySQL administrative login: root
+Please enter your MySQL administrative password: [OK] Currently running supported MySQL version 5.7.23
+[OK] Operating on 64-bit architecture
+```
+
+* 报告分析
+  * 重要关注[!!]
+  * 关注最后给的建议Recommendations 
+
+
+
 # pt-query-digest
 
 
@@ -1990,7 +2023,7 @@ net {
   pt-query-digest /var/lib/mysql/slowtest-slow.log --since '2017-01-07 09:30:00' --until '2017-01-07 10:00:00'> > slow_report3.log
   ```
 
-* 分析指含有select语句的慢查询
+* 分析只含有select语句的慢查询
 
   ```mysql
   pt-query-digest --filter '$event->{fingerprint} =~ m/^select/i' /var/lib/mysql/slowtest-slow.log> slow_report4.log

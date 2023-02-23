@@ -23,7 +23,18 @@
 
 
 
+## Editor Actions
+
+
+
+* Duplicate Line or Selection:删除快捷键,这个快捷键是只复制选中的内容
+* Duplicate Enter Lines:添加快捷键,只要在光标在当前行,就可以直接复制整行
+
+
+
 ## Main menu
+
+
 
 * Refactor->Rename:添加快捷键F2
 * Code->Code Completion:移除Ctrl+空格,添加ALT+/
@@ -34,11 +45,15 @@
 
 ## Other
 
+
+
 * Show Intention Actions/Show Context Actions:去掉Alt+Enter,改为CTRL+1
 
 
 
 # Editor->General
+
+
 
 * Change font size(Zoom) with Ctrl+Mouse Wheel:鼠标滚轮控制字体大小
 * Remove trailing blank lines at the end of saved files:删除文件末尾空白
@@ -58,17 +73,32 @@
 
 ## Appearance
 
+
+
 * Show hard wrap guide(configured in Code Style options):不勾选,去掉中间的白线
+* Show line numbers:勾选,显示行号
 
 
 
 ## Code Completion
 
+
+
 * Code Completion:取消勾选Match case,自动提示忽略大小写
 
 
 
+## Editor Tabs
+
+
+
+* show tabs in one row:不勾选
+
+
+
 ## Postfix Completion
+
+
 
 * serr->syse
 * souf->sysof
@@ -232,10 +262,24 @@
 
 ### Imports
 
+
+
 * Use fully qualifies class names in JavaDoc:在注释中使用类的模式,选择Never,use short name...
 
 * Class count to use import with `*`:导入类超过多少时使用`*`,值设大一点就不会显示`*`
 * Names count to use static import with `*`:同上,只不过时静态导入
+
+
+
+### Code Generation
+
+
+
+#### Comment Code:
+
+
+
+* Line comment at first column:不勾选,让//注释紧贴代码
 
 
 
@@ -300,6 +344,8 @@
 
 ## Includes
 
+
+
 * 新建文件自定义时间
 
 ```java
@@ -312,14 +358,18 @@
 #set($fdate=$dateFormat.format($date)) 
 
 /**
- *
+ * 
+ * @author 飞花梦影
  * @date : ${fdate}
+ * @git {@link https://github.com/dreamFlyingFlower }
  */
 ```
 
 
 
 # Editor->File Encodings
+
+
 
 * Global Encoding,Project Encoding,Default encoding for properties files:设置编码,都设为UTF-8
 
@@ -474,6 +524,8 @@
 
 ## Eclipse Code Formatter
 
+
+
 * 让IDEA使用Eclipse的格式化
 * 打开File->Settings->Other Settings->Eclipse Code Formatter
 * Use the Eclipse Code Formatter:勾选
@@ -485,11 +537,39 @@
 
 ## Background Image Plus +
 
+
+
 * 更换IDEA背景
 
 
 
+## Save Actions
+
+
+
+* 代码格式化插件.可以优化包导入,自动给没有修改的变量添加final修饰符,调用方法的时候自动添加this关键字等
+
+
+
+## Translation
+
+
+
+* 翻译插件
+
+
+
+## Rainbow Brackets
+
+
+
+* 彩虹括号
+
+
+
 ## Stack trace to UML
+
+
 
 * 根据JVM异常堆栈画UML时序图和通信图
 * Analyze -> Open Stack trace to UML plugin + Generate UML diagrams from stacktrace from debug
@@ -498,11 +578,15 @@
 
 ## Xcode-Dark Theme
 
+
+
 * 该主题可适用于蓝色背景
 
 
 
 ## GsonFormat
+
+
 
 * 将Json字符串转为实体类
 
@@ -510,11 +594,15 @@
 
 ## Search In Repository
 
+
+
 * 搜索maven/gradle的第三方坐标地址
 
 
 
 ## SequenceDiagram
+
+
 
 * 调用链路自动生成时序图,右键->Sequence Diagaram 即可调出
 
@@ -522,12 +610,16 @@
 
 ## Easy_Javadoc
 
+
+
 * 快速给Java中的类,属性,方法生成注释,会根据英文命名自动生成中文注释,快捷键`CTRL+\`.也可以批量生成注释,快捷键`CTRL+SHIFT+\`
 * 在Other Settings中自定义注释模板
 
 
 
 ## Easy Code
+
+
 
 * 快速生成entity,dao,service,controller
 
@@ -539,11 +631,15 @@
 
 ## Lombok
 
+
+
 * Lombok插件
 
 
 
 ## RestfulTool
+
+
 
 * 维护项目中所有请求以及对应的类,主要是Controller中的值,快捷键`CTRL+ALT+N`
 * IDEA右侧会出现一栏RestServices,这里有整个项目的http请求,可以简单的进行测试
@@ -552,12 +648,16 @@
 
 ## CamelCase
 
+
+
 * 驼峰,下划线相互转换,默认快捷键ALT+SHIFT+U
 * File->Editor->Camel Case可设置相关配置
 
 
 
 ## String Manipulation
+
+
 
 * 字符串转换工具,可以进行驼峰,蛇形相互转换,快捷键`ALT+M`,功能比CamelCase更丰富
 * File->Settings->Other Settings可设置相关配置
@@ -566,11 +666,15 @@
 
 ## Codota
 
+
+
 * 代码提示以及最新的代码样例,需要再Brower for more solutions中搜索,消耗性能
 
 
 
 ## aiXcoder
+
+
 
 * 代码提示,支持相似代码搜索功能
 
@@ -578,11 +682,15 @@
 
 ## Java Stream Debugger
 
+
+
 * 对Java8的Stream进行Debug
 
 
 
 ## Free MyBatis plugin
+
+
 
 * 从dao跳到Mybatis的xml文件
 * 没有Eclipse的好用,只能从dao层条,service中不能跳

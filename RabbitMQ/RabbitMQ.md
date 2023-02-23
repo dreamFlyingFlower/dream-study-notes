@@ -152,6 +152,8 @@
 
 # 持久化
 
+
+
 * 当消费者挂掉,但是生产者仍在发送消息的时候,若是队列只是一个临时队列,那么消息就会丢失
 
 * 临时队列只在消费者存在的时候才会存在,消费者挂掉,临时队列就删除
@@ -163,11 +165,15 @@
   channel.exchangeDeclare(EXCHANGE_NAME, "direct",true);
   // queue持久化,第2个参数,默认false不持久化
   channel.queueDeclare("queue_name", true, false, false, null);
+  // 生产者消息持久化,第3个参数通常为null,生产者消息持久化意义不大
+  channel.basicPublish("", "queue_name", MessageProperties.PERSISTENT_TEXT_PLAIN, message.getBytes());
   ```
 
 
 
 # 死信队列
+
+
 
 * 死信队列是RabbitMQ中的一种消息机制,若队列里的消息出现以下情况被称为死信消息:
 * 消息被否定确认,使用channel.basicNack或channel.basicReject,并且此时requeue被设置为false

@@ -176,20 +176,24 @@
 
 
 * 死信队列是RabbitMQ中的一种消息机制,若队列里的消息出现以下情况被称为死信消息:
-* 消息被否定确认,使用channel.basicNack或channel.basicReject,并且此时requeue被设置为false
-* 消息在队列的存活时间超过设置的TTL时间
-* 消息队列的消息数量已经超过最大队列长度
+  * 消息被否定确认,使用channel.basicNack或channel.basicReject,并且此时requeue被设置为false
+  * 消息在队列的存活时间超过设置的TTL时间
+  * 消息队列的消息数量已经超过最大队列长度
+
 * 死信消息会被RabbitMQ进行特殊处理,如果配置了死信队列信息,那么该消息将会被丢进死信队列中,如果没有配置,则该消息将会被丢弃
-* 死信的队列的使用,大概可以分为以下步骤
+* 死信队列的使用,大概可以分为以下步骤
   * 配置业务队列,绑定到业务交换机上
-  * 为业务队列配置死信交换机(DLX和路由key
+  * 为业务队列配置死信交换机(DLX和路由key)
   * 为死信交换机配置死信队列(DLQ)
-* 样例见**paradise-study-microservice-amqp/com/wy/rabbitmq/DeadQueueConfig.java**
-* ![](image10.png)
+* 样例见**dream-study-microservice-mq/com/wy/rabbitmq/DeadQueueConfig.java**
+
+![](image10.png)
 
 
 
 # 延时队列
+
+
 
 * 消息的TTL就是消息的存活时间,RabbitMQ可以对队列和消息分别设置TTL
 
@@ -235,15 +239,48 @@
   * 用户发起退款,如果三天内没有得到处理则通知相关运营人员
   * 预定会议后,需要在预定的时间点前十分钟通知各个与会人员参加会议
 
-* 样例见**paradise-study-microsevice-amqp/com/wy/rabbitmq/DeadQueueConfig**
+* 样例见**dream-study-microsevice-amqp/com/wy/rabbitmq/DeadQueueConfig**
 
   ![](image11.png)
 
 
 
+## 延迟队列插件
+
+
+
+* 在传统的RabbitMQ延迟队列中,如果不设置绑定死信队列的业务队列的过期时间,而由生产者设置过期时间,则可以生成一个通用的模型
+
+* 在通用模型上,可以使用任意的过期时间来处理不同的业务逻辑,但是有一个致命的缺陷,即队列中前一个消息不过期,后面的消息不能过期
+
+  * 如消息A在生产者中设置的过期时间为30S,消息B为10S
+  * 先发送消息A到业务队列中,紧接着发送B到消息队列中
+  * 预期应该是A在30S的时候过期到死信队列中,B在10S的时候过期到死信队列中,然而他们都是30S到死信队列中
+
+* 为了解决上述问题,可以安装RabbitMQ插件,在[官网]( https://www.rabbitmq.com/community-plugins.html)上下载rabbitmq_delayed_message_exchange 插件
+
+* 下载后解压放置到 RabbitMQ 的插件目录
+
+* 进入 RabbitMQ 的安装目录下的 plgins 目录,执行下面命令让该插件生效
+
+  ```shell
+  cd /usr/lib/rabbitmq/lib/rabbitmq_server-3.8.8/plugins
+  rabbitmq-plugins enable rabbitmq_delayed_message_exchange
+  ```
+
+* 重启 RabbitMQ使插件生效
+
+* 在RabbitMQ的Web界面中,找到`Exchanges->Add a new exchange->Type`,发现多了`x-delayed-message`类型,这就是延迟队列插件生成的类型
+
+* 该插件的原理是:交换机获取生产者设置的过期时间,在到了过期时间后再将消息发送到指定队列中,而不是拿到消息后直接发送给队列
+
+
+
 # ACK
 
-* 消息确认机制,见**paradise-study-microsevice-amqp/com/wy/rabbitmq/simple**
+
+
+* 消息确认机制,见**dream-study-microsevice-amqp/com/wy/rabbitmq/simple**
 
 * 生产者也有消息确认机制,但是有很大的性能问题,特别是在高并发下,不建议使用
 
@@ -283,11 +320,21 @@
   }
   ```
 
-  
+
+
+
+# 备份交换机
+
+
+
+* 需要同时准备备份交换机和备份队列,主要是为了防止交换机挂掉
+* 太过浪费资源,如果不是需要数据特别完整,可以不需要
 
 
 
 # 消息丢失
+
+
 
 * 消息发送出去,由于网络或其他问题没有抵达服务器
   * 做好容错方法(try-catch),发送失败后要有重试机制,可记录到数据库,并且定期扫描重发
@@ -535,8 +582,11 @@ systemctl restart network
   rabbitmqctl -n rabbit2 stop_app
   rabbitmqctl -n rabbit2 reset
   # hostname为从节点的域名或ip:port
-  rabbitmqctl -n rabbit2 join_cluster rabbit1@'hostname' 
+  rabbitmqctl -n rabbit2 join_cluster rabbit1@'hostname1' 
   rabbitmqctl -n rabbit2 start_app
+  
+  # 从集群中移除节点
+  rabbitmqctl forget_cluster_node rabbit@hostname2(在rabbit1上执行)
   ```
 
 
@@ -568,7 +618,16 @@ systemctl restart network
 
 
 * HAProxy提供高可用性,负载均衡以及基于TCP和HTTP应用的代理
-* HAProxy实现了一种事件驱动、单一进程模型,此模型支持非常大的并发连接数
+* HAProxy实现了一种事件驱动、单一进程模型,此模型支持非常大的并发连接数,有点类似nginx的负载均衡
+
+```shell
+# 在需要切换的服务器上下载安装haproxy
+yum -y install haproxy
+# 修改每台机器的配置文件中的IP为当前机器 IP
+vim /etc/haproxy/haproxy.cfg
+# 启动haproxy
+haproxy -f /etc/haproxy/haproxy.cfg
+```
 
 
 
@@ -691,7 +750,36 @@ http://172.16.98.133:8100/rabbitmq-stats
 
 
 
+# Federation Exchange
+
+
+
+* 解决多地部署延迟网络访问延迟问题
+* 需要在RabbitMQ官网上下载该插件
+
+
+
+# Shovel
+
+
+
+* Federation 具备的数据转发功能类似,Shovel 能够可靠,持续地从一个 Broker 中的队列(作为源端,即source)拉取数据并转发至另一个 Broker 中的交换器(作为目的端,即 destination)
+* 作为源端的队列和作为目的端的交换器可以同时位于同一个 Broker,也可以位于不同的 Broker 上
+* Shovel 可以翻译为"铲子",这个铲子可以将消息从一方铲子另一方
+* Shovel 行为就像优秀的客户端应用程序能够负责连接源和目的地,负责消息的读写及负责连接失败问题的处理
+* 同样需要去RabbitMQ的官网去下载该插件
+
+```shell
+# 开启插件(需要的机器都开启)
+rabbitmq-plugins enable rabbitmq_shovel
+rabbitmq-plugins enable rabbitmq_shovel_management
+```
+
+
+
 # Springcloud stream
+
+
 
 	主要是对rabbit和kafuka的简化使用,不必配置更多的配置来使用中间件
 

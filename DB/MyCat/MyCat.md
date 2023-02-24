@@ -8,6 +8,8 @@
 
 # 概述
 
+
+
 * 纵向切分:把数据库切成多个数据库,根据路由规则匹配进行数据库操作.mycat只能实现2张表的连接查询
 * 横向切分:把单张表中的字段切成多个表,根据id关联.mycat中不能表连接查询
 * 逻辑库:mycat中database属性,逻辑上存在,物理上未必存在,主要针对纵向切分提供概念
@@ -21,6 +23,8 @@
 
 # 命令
 
+
+
 * 启动:mycat/bin下,mycat start
 * 停止:mycat stop
 * 重启:mycat restart
@@ -30,6 +34,8 @@
 
 
 # MyCat配置
+
+
 
 * 下载mycat的安装包,解压
 
@@ -43,6 +49,8 @@
 
 
 ## rule.xml
+
+
 
 * 分库策略,修改了rule之后,需要删除bin目录下的ruleData文件夹,该文件夹中存放了分片的规则信息,但是每次修改了rule.xml之后并不会重置该文件夹,需要手动删除.重启mycat后自动创建该文件夹
 
@@ -61,6 +69,8 @@
 
 
 ## schema.xml
+
+
 
 * 分库,分表,集群,读写分离,负载均衡策略
 
@@ -111,6 +121,8 @@
 
 ## server.xml
 
+
+
 * mycat对外服务策略
 
 * property:属性定义
@@ -138,11 +150,15 @@
 
 # 数据库读写分离
 
+
+
 * 直接在schema.xml中的writeHost标签里写readHost,而writeHost的balance值设为1即可
 
 
 
 # 数据库集群
+
+
 
 * 需要在schema.xml的dataHost中配置多个writeHost标签,而每个writeHost中配置一个readHost标签
 
@@ -170,6 +186,8 @@ tail -f ../logs/mycat.log
 
 
 # HAProxy高可用集群
+
+
 
 * 见Mysql_Mqcat文档
 

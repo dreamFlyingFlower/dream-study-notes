@@ -29,7 +29,7 @@
 * 停止:mycat stop
 * 重启:mycat restart
 * 状态:mycat status
-* 远程访问:mysql -u username -p password -hmycat_ip -P8066
+* `mysql -u myCatusername -p myCatpassword -hmycat_ip -P8066`:远程访问MyCat,8066是MyCat服务端口
 
 
 
@@ -75,7 +75,7 @@
 * 分库,分表,集群,读写分离,负载均衡策略
 
 * schema:
-  * name:属性,配置逻辑库名,如logicName,并非真实存在的数据库
+  * name:属性,配置逻辑库名,如logicName,并非真实存在的数据库,主要给其他配置文件使用
   * checkSQLschema:属性,如select * from logicName.tableName时,
     * true,发送到mysql语句会去掉logicName
     * false,原样发送sql语句到mysql

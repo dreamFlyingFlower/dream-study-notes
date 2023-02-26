@@ -169,6 +169,19 @@
   channel.basicPublish("", "queue_name", MessageProperties.PERSISTENT_TEXT_PLAIN, message.getBytes());
   ```
 
+* RabbitMQ存储层包含两个部分:队列索引和消息存储
+
+
+
+## 队列索引
+
+
+
+* 索引维护队列的罗盘消息的信息,如存储地点,是否已被消费者接收,是否已被消费者ACK等
+* 每个队列都有对应的索引
+* 索引使用顺序的段文件来存储,后缀为idx,文件名从0开始累加,每个段文件中包含固定的segment_entry_count条记录,默认为16384
+* 每个index从磁盘中读取消息的时候,至少要在内存中维护一个段文件,所以设置queue_index_embed_msgs_below时要谨慎,一点点增大也可能会引起内存爆炸式增长
+
 
 
 # 死信队列
@@ -239,7 +252,7 @@
   * 用户发起退款,如果三天内没有得到处理则通知相关运营人员
   * 预定会议后,需要在预定的时间点前十分钟通知各个与会人员参加会议
 
-* 样例见**dream-study-microsevice-amqp/com/wy/rabbitmq/DeadQueueConfig**
+* 样例见**dream-study-microservice-amqp/com/wy/rabbitmq/DeadQueueConfig**
 
   ![](image11.png)
 
@@ -280,7 +293,7 @@
 
 
 
-* 消息确认机制,见**dream-study-microsevice-amqp/com/wy/rabbitmq/simple**
+* 消息确认机制,见**dream-study-microservice-amqp/com/wy/rabbitmq/simple**
 
 * 生产者也有消息确认机制,但是有很大的性能问题,特别是在高并发下,不建议使用
 
@@ -419,6 +432,75 @@ vi  /usr/lib/sysctl.d/00-system.conf
 net.ipv4.ip_forward=1
 # 重启network服务
 systemctl restart network
+```
+
+
+
+## Shell命令
+
+
+
+```shell
+# 前台启动/停止/状态RabbitMQ
+rabbitmq-server start/stop/status
+
+# 后台启动
+rabbitmq-server -detached
+
+# 启动/停止/状态RabbitMQ
+rabbitmqctl start/stop/status
+
+# 启动RabbitMQ应用
+rabbitmqctl start_app
+rabbitmqctl stop_app
+
+# 查看所有队列
+rabbitmqctl list_queues
+
+# 查看所有可用的插件
+rabbitmq-plugins list
+
+# 启用插件
+rabbitmq-plugins enable <plugin-name>
+
+# 停用插件
+rabbitmq-plugins disable <plugin-name>
+
+# 添加用户
+rabbitmqctl add_user username password
+
+# 列出所有用户
+rabbitmqctl list_users
+
+# 删除用户
+rabbitmqctl delete_user username
+
+# 清除用户权限
+rabbitmqctl clear_permissions -p vhostpath username
+
+# 列出用户权限
+rabbitmqctl list_user_permissions username
+
+# 修改密码
+rabbitmqctl change_password username newpassword
+
+# 设置用户权限
+rabbitmqctl set_permissions -p vhostpath username ".*" ".*" ".*"
+
+# 创建虚拟主机
+rabbitmqctl add_vhost vhostpath
+
+# 查看所有虚拟主机
+rabbitmqctl list_vhosts
+
+# 列出虚拟主机上的所有权限
+rabbitmqctl list_permissions -p vhostpath
+
+# 删除虚拟主机
+rabbitmqctl delete_vhost vhost vhostpath
+
+# 移除所有数据,要在 rabbitmqctl stop_app 之后使用
+rabbitmqctl reset
 ```
 
 

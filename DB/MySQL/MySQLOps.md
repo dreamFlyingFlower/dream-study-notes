@@ -417,6 +417,10 @@ ALTER USER "root"@"localhost" IDENTIFIED BY "新密码";
 
 
 
+### Linux
+
+
+
 ```shell
 # 停止mysql
 systemctl stop mysqld
@@ -448,6 +452,26 @@ FLUSH PRIVILEGES;
 ALTER USER 'root'@'localhost' IDENTIFIED BY 'newpwd';
 # 再刷新权限
 FLUSH PRIVILEGES;
+```
+
+
+
+### Windows
+
+
+
+```mysql
+-- MySQL8重置密码
+-- 在服务中停止MySQL服务,CMD进入MySQL/bin下,执行以下命令,前台启动MySQL
+mysqld --console --skip-grant-tables --shared-memory;
+-- 再打开一个cmd,无密码登录
+mysql -uroot;
+-- 将root用户密码置为空
+UPDATE mysql.user SET authentication_string='' WHERE user='root' and host='localhost';
+-- 刷新权限
+FLUSH PRIVILEGES;
+-- 重置密码
+ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '你的密码';
 ```
 
 

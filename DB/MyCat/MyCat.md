@@ -84,7 +84,7 @@
     * name:逻辑表名,如table1,并非真实存在
     * dataNode:mycat中dataNode标签的name属性值,多个用逗号隔开或使用$0-100
     * rule:分片规则,对应rule.xml的tableRule的name属性,用来计算sql应该发送到那一个物理库中
-    * type:global,全局表,只在一个库中存在即可
+    * type:global,全局表,只需要在部分数据库中存在即可
     * autoIncrement:主键自增策略
     * primaryKey:主键字段名
 

@@ -9,7 +9,10 @@
 		<!-- name为mycat中的表,非真实数据库表,在mycat中创建表的时候会同时向对应的数据库中创建表 -->
 		<table name="table1" primaryKey="id" dataNode="dn1,dn2" rule="sharding-by-intfile" autoIncrement="true" fetchStoreNodeByJdbc="true">
 			<!-- 子表,主要用于关联查询:joinKey:子表和主表进行关联的子表的字段;parentKey:子表和主表进行关联的主表的字段 -->
-			<childTable name="table1_child" primaryKey="id" joinKey="table1_id" parentKey="id"> </childTable>
+			<!-- 主要用于ER表,防止跨分片联表,可以递归配置 -->
+			<childTable name="table1_child" primaryKey="id" joinKey="table1_id" parentKey="id">
+				<childTable name="table1_child_child" primaryKey="id" joinKey="table1_child_id" parentKey="id"></childTable>
+			</childTable>
 		</table>
 		<!-- <table name="oc_call" primaryKey="ID" dataNode="dn1$0-743" rule="latest-month-calldate" /> -->
 

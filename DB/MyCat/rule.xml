@@ -7,15 +7,12 @@
 			<algorithm>func1</algorithm>
 		</rule>
 	</tableRule>
+	<function name="func1" class="io.mycat.route.function.PartitionByLong">
+		<property name="partitionCount">8</property>
+		<property name="partitionLength">128</property>
+	</function>
 
-	<tableRule name="rule2">
-		<rule>
-			<columns>user_id</columns>
-			<algorithm>func1</algorithm>
-		</rule>
-	</tableRule>
-
-	<!-- 按时间分片 -->
+	<!-- 按日期天分片 -->
 	<tableRule name="sharding-by-date">
 		<rule>
 			<!-- 分片字段 -->
@@ -95,12 +92,19 @@
 			<algorithm>crc32slot</algorithm>
 		</rule>
 	</tableRule>
+
+	<!-- 按月分片,只能分12个月,不能超过配置年 -->
 	<tableRule name="sharding-by-month">
 		<rule>
 			<columns>create_time</columns>
 			<algorithm>partbymonth</algorithm>
 		</rule>
 	</tableRule>
+	<function name="partbymonth" class="io.mycat.route.function.PartitionByMonth">
+		<property name="dateFormat">yyyy-MM-dd</property>
+		<property name="sBeginDate">2015-01-01</property>
+	</function>
+
 	<tableRule name="latest-month-calldate">
 		<rule>
 			<columns>calldate</columns>
@@ -122,8 +126,7 @@
 		</rule>
 	</tableRule>
 
-	<function name="murmur"
-			  class="io.mycat.route.function.PartitionByMurmurHash">
+	<function name="murmur" class="io.mycat.route.function.PartitionByMurmurHash">
 		<property name="seed">0</property><!-- 默认是0 -->
 		<property name="count">2</property><!-- 要分片的数据库节点数量，必须指定，否则没法分片 -->
 		<property name="virtualBucketTimes">160</property><!-- 一个实际的数据库节点被映射为这么多虚拟节点，默认是160倍，也就是虚拟节点数是物理节点数的160倍 -->
@@ -135,17 +138,11 @@
 	<function name="crc32slot" class="io.mycat.route.function.PartitionByCRC32PreSlot">
 		<property name="count">2</property><!-- 要分片的数据库节点数量，必须指定，否则没法分片 -->
 	</function>
-	<function name="func1" class="io.mycat.route.function.PartitionByLong">
-		<property name="partitionCount">8</property>
-		<property name="partitionLength">128</property>
-	</function>
+	
 	<function name="latestMonth" class="io.mycat.route.function.LatestMonthPartion">
 		<property name="splitOneDay">24</property>
 	</function>
-	<function name="partbymonth" class="io.mycat.route.function.PartitionByMonth">
-		<property name="dateFormat">yyyy-MM-dd</property>
-		<property name="sBeginDate">2015-01-01</property>
-	</function>
+	
 	<function name="rang-mod" class="io.mycat.route.function.PartitionByRangeMod">
 		<property name="mapFile">partition-range-mod.txt</property>
 	</function>

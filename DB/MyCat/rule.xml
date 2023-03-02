@@ -7,9 +7,15 @@
 			<algorithm>func1</algorithm>
 		</rule>
 	</tableRule>
+	<!-- 固定分片hash算法,将10进制数转换为2进制进行hash -->
 	<function name="func1" class="io.mycat.route.function.PartitionByLong">
-		<property name="partitionCount">8</property>
-		<property name="partitionLength">128</property>
+		<!-- 分片个数列表,要和dataNode个数对应 -->
+		<property name="partitionCount">2</property>
+		<!-- 分片长度列表,长度*个数最大只能为1024 -->
+		<property name="partitionLength">512</property>
+		<!-- 不均匀分片 -->
+		<property name="partitionCount">2,1</property>
+		<property name="partitionLength">256,512</property>
 	</function>
 
 	<!-- 按日期天分片 -->
@@ -74,7 +80,7 @@
 	</tableRule>
 	<function name="mod-long" class="io.mycat.route.function.PartitionByMod">
 		<!-- how many data nodes -->
-		<!-- 节点数 -->
+		<!-- 分片数,要和逻辑表所属的数据库节点数量对应 -->
 		<property name="count">2</property>
 		<property name="defaultNode">0</property>
 	</function>

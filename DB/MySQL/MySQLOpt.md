@@ -627,8 +627,10 @@ SELECT b FROM table WHERE a='xxx';
 
 ## 存储空间
 
+
+
 * 索引key的大小,页内节点个数,树的层级决定索引文件大小
-* 一页的大小为16KB,一个BIGINT主键类型是8个字节,下一层指针是8个字节,即一页可以存1K的索引,3层就是1K+1K\*1K+1K\*1K\*1K,大概是10E数据.如果是32字节的主键长度,可以存6400W
+* 一页的大小为16KB,一个BIGINT是8字节,下一层指针是8个字节,即一页可以存1K的索引,3层就是1K+1K\*1K+1K\*1K\*1K,大概是10E数据.如果是32字节的主键长度,可以存6400W
 
 
 
@@ -1002,36 +1004,6 @@ select * from user t1 join class t2 on t1.userid = t2.userid;
 
 
 
-# 查询时间优化
-
-
-
-* 需要先设置开启优化配置:set profiling=1;
-
-* show profiles:执行查询语句之后,使用该语句可查询消耗的总时间,结果中会出现一个query_id
-
-* show profile for query query_id:查看单个查询各个部分消耗的时间
-
-* show profile cpu for query_id:查看CPU情况
-
-* 在高版本中profile已经废弃,需要使用performance_schema表进行查询,开启相关设置
-
-  * UPDATE setup_instruments SET enabled='YES',timed='YES' where name like 'stage%';
-  * UPDATE setup_consumers SET enabled='YES' where name like 'events%';
-
-* 使用查询语句查询所有表每个阶段消耗时间
-
-  ```sql
-  SELECT a.THREAD_ID,a.SQL_TEXT,c.EVENT_NAME,(c.TIMER_END-c.TIMER_START)/1000000000 'DURATION(ms)'
-  FROM events_statements_history_long a
-  JOIN threads b ON a.THREAD_ID = b.THREAD_ID
-  JOIN events_stages_history_long c ON c.THREAD_ID = b.THREAD_ID AND c.EVENT_ID BETWEEN a.EVENT_ID AND a.END_EVENT_ID
-  WHERE b.PROCESSLIST_ID = CONNECTION_ID() AND a.EVENT_NAME = 'statement/sql/select'
-  ORDER BY a.THREAD_ID,c.EVENT_ID;
-  ```
-
-
-
 # 性能优化
 
 
@@ -1085,25 +1057,6 @@ select * from user t1 join class t2 on t1.userid = t2.userid;
   -- 效率高,id上有索引
   select * from t1 where id in (select id from t1 where id > 100000) limit 100000,10;
   ```
-
-* show profiles:是mysql提供可用来分析当前会话中语句执行的资源消耗情况.默认情况下,参数处于关闭状态,并保存最近15次运行的结果
-
-  * show profiles:查看最近记录运行的sql语句,其中包括查询id,查询消耗时间以及查询语句
-  * show profile [] for query 查询id:查看该id的sql语句在执行中的全过程
-    * cpu:显示cpu相关信息
-    * block io:显示io相关开销
-    * all:显示所有信息
-    * context switches:上下文切换相关开销
-    * ipc:显示发送和接收相关开销
-    * memory:显示内存相关开销
-    * page faults:显示页面错误相关开销
-    * source:显示和source_function,source_file,source_line相关开销
-    * swaps:显示交换次数相关开销
-  * converting heap to myisam:查询结果太大,内存不够用
-  * creating tmp table:创建临时表,拷贝数据到临时表,用完再删除
-  * copying to tmp table on disk:把内存中临时表复制到磁盘,危险
-  * locked:锁表了
-  * 出现上述4种结果,说明查询有很大问题,需要优化
 
 * 为每个表建立独立表空间,使用系统表空间会出现大量浪费空间的问题
 
@@ -1220,7 +1173,7 @@ select * from user t1 join class t2 on t1.userid = t2.userid;
 
 
 
-* 使用`show profiles`可以观察到具体语句的执行步骤.若未开启该参数,需要先开启
+* `show profiles`:观察最近10条语句的具体执行步骤,总耗时等.默认未开启该参数,需要先开启
 
   ```mysql
   show variables lile '%prof%';
@@ -1232,9 +1185,27 @@ select * from user t1 join class t2 on t1.userid = t2.userid;
 
   ```mysql
   # 会分析最近使用的10条SQL
-  show profiles;
+  SHOW PROFILES;
   # 通过上一条语句查询到ID,再分析单条语句的执行情况
-  show profile for query id;
+  SHOW PROFILE FOR QUERY id;
+  # 显示所有性能信息
+  SHOW PROFILE ALL FOR QUERY id;
+  # 显示块IO操作次数
+  SHOW PROFILE BLOCK IO FOR QUERY id;
+  # 显示上下文切换次数,被动和主动
+  SHOW PROFILE CONTEXT SWITCHES FOR QUERY id;
+  # 显示用户CPU时间,系统CPU时间
+  SHOW PROFILE CPU FOR QUERY id;
+  # 显示内存相关信息
+  SHOW PROFILE MEMORY FOR QUERY id;
+  # 显示发送和接收消息数量
+  SHOW PROFILE IPC FOR QUERY id;
+  # 显示页错误数量
+  SHOW PROFILE PAGE FAULTS FOR QUERY id;
+  # 显示源码中的函数名称与位置,和source_function,source_file,source_line相关开销
+  SHOW PROFILE SOURCE FOR QUERY id;
+  # 显示SWAP的次数
+  SHOW PROFILE SWAPS FOR QUERY id;
   ```
 
 * 如果语句等待时间过长,则调优服务器参数,如缓冲区,线程数等
@@ -1267,6 +1238,36 @@ select * from user t1 join class t2 on t1.userid = t2.userid;
   | logging slow query   | 0.000003 |
   | cleaning up          | 0.000004 |
   +----------------------+----------+
+  ```
+
+* Status出现以下4种结果,说明查询有很大问题,需要优化:
+  * converting heap to myisam:查询结果太大,内存不够用
+  * creating tmp table:创建临时表,拷贝数据到临时表,用完再删除
+  * copying to tmp table on disk:把内存中临时表复制到磁盘,危险
+  * locked:锁表了
+
+
+
+# Performance
+
+
+
+* 在高版本(8以上)中profile已经废弃,需要使用performance_schema表进行查询,开启相关设置
+
+  ```mysql
+  UPDATE setup_instruments SET enabled='YES',timed='YES' where name like 'stage%';
+  UPDATE setup_consumers SET enabled='YES' where name like 'events%';
+  ```
+
+* 使用查询语句查询所有表每个阶段消耗时间
+
+  ```sql
+  SELECT a.THREAD_ID,a.SQL_TEXT,c.EVENT_NAME,(c.TIMER_END-c.TIMER_START)/1000000000 'DURATION(ms)'
+  FROM events_statements_history_long a
+  JOIN threads b ON a.THREAD_ID = b.THREAD_ID
+  JOIN events_stages_history_long c ON c.THREAD_ID = b.THREAD_ID AND c.EVENT_ID BETWEEN a.EVENT_ID AND a.END_EVENT_ID
+  WHERE b.PROCESSLIST_ID = CONNECTION_ID() AND a.EVENT_NAME = 'statement/sql/select'
+  ORDER BY a.THREAD_ID,c.EVENT_ID;
   ```
 
 

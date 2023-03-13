@@ -4,6 +4,8 @@
 
 # 页-记录存储
 
+
+
 ![](MySQL01.jpg)
 
 
@@ -479,6 +481,8 @@
 
 ## 通用
 
+
+
 * SELECT database(),now(),user(),version():查看mysql当前数据库,时间,登录用户,版本号
 * IFNULL(exp1,exp2):若exp1表达式为null,则使用exp2的值,若不为null,则使用exp1的值
 * MD5(str):对字符串加密,只用在新增mysql用户的时候
@@ -488,6 +492,8 @@
 
 
 ## 字符串
+
+
 
 * MySQL中VARCHAR,CHAR是按字符长度存储,不是按字节长度
 

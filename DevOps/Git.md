@@ -87,8 +87,9 @@ Head:指向当前分支,并非指向master.切换到那个分支就是指向那�
 * --global http.postBuffer 524288000:配置git缓存大小500M或更大,需要拉取的文件比较大时使用
 * --global http.lowSpeedLimit 0:配置git最低速度,git拉取速度较低时使用
 * --global http.lowSpeedTime 99999:配置git最低速度可持续时间,单位秒,git拉取速度较低时使用
-* git update-index --assue-unchanged config.conf:设置config.conf文件忽略更新,不提交,但是也不从远程仓库删除
-* git update-index --no-assume-unchanged config.conf:取消config.conf的忽略更新
+* `git update-index --assue-unchanged config.conf`:设置config.conf文件忽略更新,不提交,但是也不从远程仓库删除
+* `git update-index --no-assume-unchanged config.conf`:取消config.conf的忽略更新
+* `--global --add safe.directory '*'`:当出现`fatal: detected dubious ownership in repository`错误时,可以使用该命令清除文件夹所属用户校验,特别适用于系统重装之后的用户名更改问题
 
 
 

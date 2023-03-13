@@ -31,11 +31,7 @@ find / -name mysql # 查找系统中所有关于mysql的文件夹,之后通过�
 
 
 
-## 安装MySQL
-
-
-
-### rpm安装
+## rpm安装
 
 * 进入https://dev.mysql.com/downloads/repo/yum/,下载mysql的rpm包
 * 根据linux版本选择mysql版本,点击download
@@ -124,7 +120,7 @@ mysqladmin -u root password "密码" # 从10那步的日志中找
 
 
 
-### 压缩包安装
+## 压缩包安装
 
 
 
@@ -183,11 +179,11 @@ mysqladmin -u root password "密码" # 从10那步的日志中找
 
 
 
-### 编译安装
+## 编译安装
 
 
 
-#### 依赖
+### 依赖
 
 
 
@@ -202,7 +198,7 @@ mysqladmin -u root password "密码" # 从10那步的日志中找
 
 
 
-#### 编译参数
+### 编译参数
 
 
 
@@ -266,7 +262,7 @@ mysqladmin -u root password "密码" # 从10那步的日志中找
 
 
 
-#### 配置
+### 配置
 
 
 
@@ -277,23 +273,24 @@ mysqladmin -u root password "密码" # 从10那步的日志中找
   ```shell
   chmod 755 /app/software/mysql/scripts/mysql_install_db
   scripts/mysql_install_db --user=mysql --basedir=/app/software/mysql/ --datadir=/app/software/mysql/mysql/
-  ```
-
-* 设置mysqld的开机启动
-
-  ```shell
-  cp /app/software/mysql/support-files/mysql.server /etc/init.d/mysql
-  chmod 755 /etc/init.d/mysql
-  chkconfig mysql on
-  ```
-
-* 为MySQL配置环境变量
-
-  ```shell
+  
+  # 配置环境变量
   export PATH=/usr/local/mysql/bin:$PATH
   alias mysql_start="mysqld_safe &"
   alias mysql_stop="mysqladmin –u root -p shutdown
   ```
+
+
+
+### 开机启动
+
+
+
+```shell
+cp /app/software/mysql/support-files/mysql.server /etc/init.d/mysql
+chmod 755 /etc/init.d/mysql
+chkconfig mysql on
+```
 
 
 
@@ -319,15 +316,6 @@ mysqladmin -u root password "密码" # 从10那步的日志中找
 
 
 
-## 开机自启
-
-
-
-* `chkconfig mysql on`:开机自启
-* `chkconfig --list`:查看开机自启的程序
-
-
-
 ## 相关目录
 
 
@@ -338,11 +326,11 @@ mysqladmin -u root password "密码" # 从10那步的日志中找
 
 
 
-# 多实例
+# Linux多实例
 
 
 
-> 一台机器上开多不同的服务端口,运行多个Mysql服务进程,这些Mysql多实例公用一套安装程序,使用相同的/不同的my.cnf配置,启动程序,数据文件
+* 一台机器上开多不同的服务端口,运行多个Mysql服务进程,这些Mysql多实例公用一套安装程序,使用相同的/不同的my.cnf配置,启动程序,数据文件
 
 * 配置多个数据目录,多个配置文件及多个启动程序实现多实例
 
@@ -380,6 +368,55 @@ mysqld_safe --defaults-file=/app/mysql/data/3307/my.cnf 2>&1 > /dev/null &
 mysqladmin -uroot -p123456 -S /app/mysql/data/3306/mysql.sock shutdown
 mysqladmin -uroot -p123456 -S /app/mysql/data/3307/mysql.sock shutdown
 ```
+
+
+
+# Windows安装
+
+
+
+* 下载压缩包到自定义目录,解压之后得到目录如:E:\mysql-8.0.24
+* 进入mysql目录新建data和my.ini文件,data为mysql的数据目录,my.ini为配置文件,内容如下
+
+```ini
+[mysqld]
+# 设置3306端口
+port=3306
+# 设置mysql的安装目录
+basedir=E:\\mysql-8.0.24
+# 设置mysql数据库的数据的存放目录
+datadir=E:\\mysql-8.0.24\\data
+# 允许最大连接数
+max_connections=200
+# 允许连接失败的次数。这是为了防止有人从该主机试图攻击数据库系统
+max_connect_errors=10
+# 服务端使用的字符集默认为UTF8
+character-set-server=utf8mb4
+# 创建新表时将使用的默认存储引擎
+default-storage-engine=INNODB
+[mysql]
+# 设置mysql客户端默认字符集
+default-character-set=utf8mb4
+[client]
+# 设置mysql客户端连接服务端时默认使用的端口
+port=3306
+default-character-set=utf8mb4
+```
+
+* 配置环境变量:MYSQL_HOME=E:\mysql-8.0.24,加入Path中:%MYSQL_HOME%\bin
+
+* CMD进入E:\mysql-8.0.24\bin,执行以下命令进行数据库初始化
+
+```mysql
+mysqld --initialize --user=mysql --console
+```
+
+* 初始化时会将root密码输出到控制台中,登录时需要使用
+* `mysqld -install`:将服务添加到windows启动任务中
+  * 如果出现`Install/Remove of the Service Denied!`错误,需要以管理员身份运行cmd
+* `net start mysql`:启动
+* 登录数据库,使用刚才的控制台密码
+* `ALTER USER root@localhost IDENTIFIED BY '123456'; `:修改密码
 
 
 
@@ -480,7 +517,7 @@ ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '你的�
 
 
 
-* **注意打开远程访问时,mysql8之前的版本和8以后的版本不一样,因为登录时密码的加密方式不一样.MYSQL_NATIVE_PASSWORD是5的加密方式,8的加密方式改成了caching_sha2_password**,若是用远程访问工具登录数据库时,需要做部分修改
+* **远程访问时,mysql8之前的版本和8以后的版本不一样,因为登录时密码的加密方式不一样.MYSQL_NATIVE_PASSWORD是5的加密方式,8的加密方式改成了caching_sha2_password**,若是用远程访问工具登录数据库时,需要做部分修改
 
 * 创建用户时指定登录的加密方式,该方式只会影响单个用户,不会影响其他用户
 
@@ -745,54 +782,6 @@ log-error=/app/mysql/logs/mysql-error.log
    ```mysql
    SELECT DISTINCT CONCAT('User: ''',user,'''@''',host,''';') AS query FROM mysql.user;
    ```
-
-
-
-# Windows安装
-
-
-
-* 下载压缩包到自定义目录,解压之后得到目录如:E:\mysql-8.0.24
-* 进入mysql目录新建data和my.ini文件,data为mysql的数据目录,my.ini为配置文件,内容如下
-
-```ini
-[mysqld]
-# 设置3306端口
-port=3306
-# 设置mysql的安装目录
-basedir=E:\\mysql-8.0.24
-# 设置mysql数据库的数据的存放目录
-datadir=E:\\mysql-8.0.24\\data
-# 允许最大连接数
-max_connections=200
-# 允许连接失败的次数。这是为了防止有人从该主机试图攻击数据库系统
-max_connect_errors=10
-# 服务端使用的字符集默认为UTF8
-character-set-server=utf8mb4
-# 创建新表时将使用的默认存储引擎
-default-storage-engine=INNODB
-[mysql]
-# 设置mysql客户端默认字符集
-default-character-set=utf8mb4
-[client]
-# 设置mysql客户端连接服务端时默认使用的端口
-port=3306
-default-character-set=utf8mb4
-```
-
-* 配置环境变量:MYSQL_HOME=E:\mysql-8.0.24,加入Path中:%MYSQL_HOME%\bin
-
-* 进入E:\mysql-8.0.24\bin,执行以下命令进行数据库初始化
-
-```mysql
-mysqld --initialize --user=mysql --console
-```
-
-* 初始化时会将root密码输出到控制台中,登录时需要使用
-* 将服务添加到windows启动任务中:mysqld -install.如果出现`Install/Remove of the Service Denied!`错误,需要以管理员身份运行cmd
-* 启动:net start mysql
-* 登录数据库,使用刚才的密码
-* 修改密码:ALTER USER root@localhost IDENTIFIED BY '123456'; 
 
 
 

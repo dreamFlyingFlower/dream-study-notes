@@ -464,13 +464,12 @@
 
 
 
+* 数字类型的长度是显示长度,不是占用空间大小,占用空间大小固定,和Java数据类型一样.显示长度要和zerofill一起用才有效果
 * 浮点数:FLOAT和DOUBLE,取值范围较大,但是会丢失精度
 * 定点数:DECIMAL,取值范围比浮点数小,但是精准,没有误差,通常使用DECIMAL
 * TIMESTAMP和DATETIME
   * TIMESTAMP存储空间小,标识的日期范围小,存储的是毫秒值,在日期比较时速度更快
   * TIMESTAMP和时区有关,会根据用户的时区不同,显示不同的结果.而DATETIME则只能反应出插入当时的时区
-
-
 
 
 
@@ -724,23 +723,30 @@ END REPEAT[label]
 
 # 自定义变量
 
-* 自定义变量只在当前会话有效,只能在定义了之后使用
-* SET/SELECT @var_name=value:声明一个变量并给变量赋值
-* SELECT column INTO @var_name from ...:利用sql语句给变量赋值,sql只能返回一个值,但是可以同时给多个变量赋值
-* SELECT @var_name:查看自定义变量的值
+
+
+* 自定义变量只在当前会话有效,只能在定义了之后使用,不限制变量类型,变量前必须带关键字`@`
+* `SET @var_name=value`:声明一个变量并给变量赋值
+* `SELECT @var_name:=value`:声明一个变量并给变量赋值
+* `SELECT column INTO @var_name from ...`:利用sql语句给变量赋值,sql只能返回一个值,但是可以同时给多个变量赋值
+* `SELECT @var_name`:查看自定义变量的值
 
 
 
 # 局部变量
 
+
+
 * BEGIN...END:语句块,可以在其中写多条语句,一般用于逻辑比较复杂的存储过程等
-* DECLARE @var_name[,...] type [default]:声明局部变量,初始化值可以是常数或表达式,不赋值则为null.
+* DECLARE @var_name[,...] type [default]:声明局部变量,初始化值可以是常数或表达式,不赋值则为null
 * 局部变量必须先声明,之后才可以用自定义变量赋值的方式进行赋值
 * 局部变量只能在begin...end中使用,且必须是第一句话
 
 
 
 # 触发器
+
+
 
 * TRIGGER:触发器,主要是监听表中记录的增删改
 * CREATE TRIGGER triggername triggertime triggerevent ON tablename FOR EACH ROW trigger_sql

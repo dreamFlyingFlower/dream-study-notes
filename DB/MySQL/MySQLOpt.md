@@ -724,7 +724,7 @@ SELECT b FROM table WHERE a='xxx';
   * 索引中只要有一个列含有null,那么这一列也不会使用索引
   * 将区分度高的列放在前面,可以过滤掉更多数据
 
-  ```mysql
+  ``` mysql
   # e为普通字段,索引顺序为a,b,c,d
   explain select * from ts_user where a='' and b='' and c='' and d='';
   explain select * from ts_user where b='' and a='' and c='' and d=''; # 同上
@@ -752,6 +752,10 @@ SELECT b FROM table WHERE a='xxx';
   explain select * from ts_user where a='' and b>1 order by c;
   # abc索引全部都用到了,虽然是范围查找
   explain select * from ts_user where a='' and b like '1%' and c='';
+  # 如果排序中有非索引字段,不管是什么顺序,必然会产生file sort
+  explain select * from ts_user where a='' order by e,a;
+  # 一样会产生file sort
+  explan select * from ts_user where a='' order a,e;
   ```
 
 * 应该尽量避免更新复合索引,因为复合索引的顺序就是表记录的物理顺序,变更将会消耗大量资源
@@ -839,6 +843,8 @@ SELECT b FROM table WHERE a='xxx';
 
 
 ## SQL执行顺序
+
+
 
 ```mysql
 select distinct(t1.c) c,sum(t1.c) num from t1 inner join t2 on t1.a=t2.a where t1.a = t2.a group by t1.c having num > 0 order by t1.a limit 10 # 一个sql例子
@@ -953,7 +959,7 @@ select distinct(t1.c) c,sum(t1.c) num from t1 inner join t2 on t1.a=t2.a where t
 
   ```mysql
   # 索引顺序为a,b
-  # 使用索引排序
+  # 使用索引排序:排序使用索引的最左前缀或where+order by使用最左前缀
   explain select * from ts_user where a='' order by a;
   explain select * from ts_user where a='' order by a,b;
   explain select * from ts_user where a='' order by b;
@@ -1091,81 +1097,140 @@ select * from user t1 join class t2 on t1.userid = t2.userid;
 
 
 
-* processlist命令的输出结果显示了有哪些线程在运行,不仅可以查看当前所有的连接数,还可以查看当前的连接状态帮助识别出有问题的查询语句等
+* 该命令输出有哪些线程在运行,不仅可以查看当前所有的连接数,还可以查看当前的连接状态帮助识别出有问题的查询语句等
 
-* `SHOW PROCESSLIST`和`SHOW FULL PROCESSLIST`:不带FULL参数的默认只查询前100条数据,带FULL的查询全部,展示属性如下:
+* `SHOW PROCESSLIST`和`SHOW FULL PROCESSLIST`:不带FULL的INFO默认只查询前100个字符,带FULL的查询全部:
+  
   * Id:用户登录mysql时,系统分配的connection_id,可以使用函数connection_id()查看
   * User:显示当前用户.如果不是root,这个命令就只显示用户权限范围的sql语句
   * Host:显示这个语句是从哪个ip的哪个端口上发的,可以用来跟踪出现问题语句的用户
   * db:显示这个进程目前连接的是哪个数据库
-  * Command:显示当前连接的执行的命令,一般取值为休眠(sleep),查询(query),连接(connect)等
+  * Command:显示当前连接的执行的命令
+    * Create: 正在创建操作
+    * Drop: 正在删除操作
+    * Execute: 正在执行一个PreparedStatement
+    * Close Stmt: 正在关闭一个PreparedStatement
+    * Query: 正在执行一个语句
+    * Sleep: 正在等待客户端发送语句
+    * Quit: 正在退出
+    * Shutdown: 正在关闭服务器
+    * Connect: 链接
   * Time:显示这个状态持续的时间,单位是秒
   * State:显示使用当前连接的sql语句执行的状态.以查询为例,可能需要经过copying to tmp table,sorting result,sending data等状态才可以完成
-  * Info:显示这个sql语句
-  
-* 该命令对主从有更友好的显示,会多出其他列,state也更多:
-  * sending binlog event to slave:线程已经从二进制日志读取了一个事件并正将它发送到从服务器
-  * finished reading one binlog:switching to next binlog:线程已经读完二进制日志文件并正打开下一个要发送到从服务器的日志文件
-  * has sent all binlog to slave;waiting for binlog to be updated:线程已经从二进制日志读取所有主要的更新并已经发送到了从服务器.线程现在正空闲,等待由主服务器上新的更新导致的出现在二进制日志中的新事件
-  * waiting to finalize termination:线程停止时发生的一个很简单的状态
+  * Info:显示这个sql语句,默认只显示前100个字符,使用Full可显示全
   
 * State各种状态:
 
+  * Starting: 正在执行请求处理
   * Checking table:正在检查数据表(这是自动的)
   * Closing tables:正在将表中修改的数据刷新到磁盘中,同时正在关闭已经用完的表.如果操作很慢,就应该确认磁盘空间是否满了或磁盘是否正处于重负中
-  * Converting HEAP to MyISAM:查询结果太大时,把结果放在磁盘.如果服务器频繁出现converting HEAP to MyISAM,说明:
-    * sql有问题,取出的结果或中间结果过大,内存临时表放不下
-    * 服务器配置的临时表内存参数过小.可修改tmp_table_size和max_heap_table_size
+  
+  
+    * Create tmp table:创建临时表(如group时储存中间结果)以存放部分查询结果
+  
+  
+  
+    * Copying to tmp table on disk:由于临时结果集大于tmp_table_size,将临时表从内存存储转为磁盘存储以此节省内存
+  
+  
+  
+    * Locked:被其他查询锁住
+  
+  
+  
+    * logging slow query:记录慢查询
+  
+  
+  
+    * Connect Out:复制从服务器正在连接主服务器
+  
+  
+  
+    * deleting from main table:服务器正在执行多表删除中的第一部分,刚删除第一个表
+  
+  
+  
+    * deleting from reference tables:服务器正在执行多表删除中的第二部分,正在删除其他表的记录
+  
+  
+  
+    * Flushing tables:正在执行FLUSH TABLES,等待其他线程关闭数据表
+  
+  
+  
+    * Killed:发送一个kill请求给某线程,这个线程会检查kill标志位,同时会放弃下一个kill请求.MySQL会在每次的主循环中检查kill标志位,不过有些情况下该线程可能会过一小段才能死掉.如果该线程被其他线程锁住了,那么kill请求会在锁释放时马上生效
+  
+  
+  
+    * Sending data:正在处理SELECT查询的记录,同时正在把结果发送给客户端
+  
+  
+  
+    * Sorting for group:正在为GROUP BY做排序
+  
+  
+  
+    * Sorting for order:正在为ORDER BY做排序
+  
+  
+  
+    * Opening tables:这个过程很快,除非受到其他因素的干扰.例如,在执ALTER TABLE或LOCK TABLE语句行完以前,数据表无法被其他线程打开,正尝试打开一个表
+  
+  
+  
+    * Removing duplicates:正在执行一个SELECT DISTINCT方式的查询,但是MySQL无法在前一个阶段优化掉那些重复的记录.因此,MySQL需要再次去掉重复的记录,然后再把结果发送给客户端
+  
+  
+  
+    * Reopen table:获得了对一个表的锁,但是必须在表结构修改之后才能获得这个锁.已经释放锁,关闭数据表,正尝试重新打开数据表
+  
+  
+  
+    * Repair by sorting:修复指令正在排序以创建索引
+  
+  
+  
+    * Repair with keycache:修复指令正在利用索引缓存一个一个地创建新索引.它会比Repair by sorting慢些
+  
+  
+    * Searching rows for update:正在讲符合条件的记录找出来以备更新.它必须在UPDATE要修改相关的记录之前就完成了
+  
+  
+  
+    * Sleeping:正在等待客户端发送新请求
+  
+  
+  
+    * System lock:正在等待取得一个外部的系统锁.如果当前没有运行多个mysqld服务器同时请求同一个表,那么可以通过增加--skip-external-locking参数来禁止外部系统锁
+  
+  
+  
+    * Upgrading lock:INSERT DELAYED正在尝试取得一个锁表以插入新记录
+  
+  
+  
+    * Updating:正在搜索匹配的记录,并且修改它们
+  
+  
+  
+    * User Lock:正在等待GET_LOCK()
+  
+  
+  
+    * Waiting for tables:该线程得到通知,数据表结构已经被修改了,需要重新打开数据表以取得新的结构.为了能够重新打开数据表,必须等到所有其他线程关闭这个表.以下几种情况下会产生这个通知:FLUSH TABLES tbl_name, ALTER TABLE, RENAME TABLE, REPAIR TABLE, ANALYZE TABLE,或OPTIMIZE TABLE
+  
+  
+  
+    * Waiting for handler insert:INSERT DELAYED已处理完所有待处理的插入操作,正在等待新的请求
+  
 
 
-  * Create tmp table:创建临时表(如group时储存中间结果)以存放部分查询结果
+  * 主从模式下有更友好的显示,会多出其他列,State也更多:
+    * sending binlog event to slave:线程已经从二进制日志读取了一个事件并正将它发送到从服务器
+    * finished reading one binlog:switching to next binlog:线程已经读完二进制日志文件并正打开下一个要发送到从服务器的日志文件
+    * has sent all binlog to slave;waiting for binlog to be updated:线程已经从二进制日志读取所有主要的更新并已经发送到了从服务器.线程现在正空闲,等待由主服务器上新的更新导致的出现在二进制日志中的新事件
+    * waiting to finalize termination:线程停止时发生的一个很简单的状态
 
-  * Copying to tmp table on disk:由于临时结果集大于tmp_table_size,将临时表从内存存储转为磁盘存储以此节省内存
-
-  * Locked:被其他查询锁住
-
-  * logging slow query:记录慢查询
-
-  * Connect Out:复制从服务器正在连接主服务器
-
-  * deleting from main table:服务器正在执行多表删除中的第一部分,刚删除第一个表
-
-  * deleting from reference tables:服务器正在执行多表删除中的第二部分,正在删除其他表的记录
-
-  * Flushing tables:正在执行FLUSH TABLES,等待其他线程关闭数据表
-
-  * Killed:发送一个kill请求给某线程,这个线程会检查kill标志位,同时会放弃下一个kill请求.MySQL会在每次的主循环中检查kill标志位,不过有些情况下该线程可能会过一小段才能死掉.如果该线程被其他线程锁住了,那么kill请求会在锁释放时马上生效
-
-  * Sending data:正在处理SELECT查询的记录,同时正在把结果发送给客户端
-
-  * Sorting for group:正在为GROUP BY做排序
-
-  * Sorting for order:正在为ORDER BY做排序
-
-  * Opening tables:这个过程很快,除非受到其他因素的干扰.例如,在执ALTER TABLE或LOCK TABLE语句行完以前,数据表无法被其他线程打开,正尝试打开一个表
-
-  * Removing duplicates:正在执行一个SELECT DISTINCT方式的查询,但是MySQL无法在前一个阶段优化掉那些重复的记录.因此,MySQL需要再次去掉重复的记录,然后再把结果发送给客户端
-
-  * Reopen table:获得了对一个表的锁,但是必须在表结构修改之后才能获得这个锁.已经释放锁,关闭数据表,正尝试重新打开数据表
-
-  * Repair by sorting:修复指令正在排序以创建索引
-
-  * Repair with keycache:修复指令正在利用索引缓存一个一个地创建新索引.它会比Repair by sorting慢些
-  * Searching rows for update:正在讲符合条件的记录找出来以备更新.它必须在UPDATE要修改相关的记录之前就完成了
-
-  * Sleeping:正在等待客户端发送新请求
-
-  * System lock:正在等待取得一个外部的系统锁.如果当前没有运行多个mysqld服务器同时请求同一个表,那么可以通过增加--skip-external-locking参数来禁止外部系统锁
-
-  * Upgrading lock:INSERT DELAYED正在尝试取得一个锁表以插入新记录
-
-  * Updating:正在搜索匹配的记录,并且修改它们
-
-  * User Lock:正在等待GET_LOCK()
-
-  * Waiting for tables:该线程得到通知,数据表结构已经被修改了,需要重新打开数据表以取得新的结构.为了能够重新打开数据表,必须等到所有其他线程关闭这个表.以下几种情况下会产生这个通知:FLUSH TABLES tbl_name, ALTER TABLE, RENAME TABLE, REPAIR TABLE, ANALYZE TABLE,或OPTIMIZE TABLE
-
-  * waiting for handler insert:INSERT DELAYED已处理完所有待处理的插入操作,正在等待新的请求
 
 
 
@@ -1241,10 +1306,12 @@ select * from user t1 join class t2 on t1.userid = t2.userid;
   ```
 
 * Status出现以下4种结果,说明查询有很大问题,需要优化:
-  * converting heap to myisam:查询结果太大,内存不够用
-  * creating tmp table:创建临时表,拷贝数据到临时表,用完再删除
-  * copying to tmp table on disk:把内存中临时表复制到磁盘,危险
-  * locked:锁表了
+  * Converting HEAP to MyISAM:查询结果太大时,把结果放在磁盘.如果服务器频繁出现该结果,说明:
+    * sql有问题,取出的结果或中间结果过大,内存临时表放不下
+    * 服务器配置的临时表内存参数过小.可修改tmp_table_size和max_heap_table_size
+  * Creating Tmp Table:创建临时表,拷贝数据到临时表,用完再删除
+  * Copying to Tmp Table on disk:把内存中临时表复制到磁盘,危险
+  * Locked:锁表了
 
 
 

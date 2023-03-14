@@ -1319,12 +1319,22 @@ select * from user t1 join class t2 on t1.userid = t2.userid;
 
 
 
-* 在高版本(8以上)中profile已经废弃,需要使用performance_schema表进行查询,开启相关设置
+* [Performance Schema](https://dev.mysql.com/doc/refman/5.7/en/performance-schema.html)相关配置
+
+* instruments:生产者,用于采集mysql中各种各样的操作产生的事件信息,对应配置表中的配置项,可以称为监控采集配置项
+
+* consumers:消费者,对应的消费者表用于存储来自instruments采集的数据,对应配置表中的配置项,可以称为消费者配置项
+
+* 在高版本(5.7以上)中profile计划被废弃,需要使用performance_schema表进行查询,开启相关设置
 
   ```mysql
+  UPDATE setup_instruments SET enabled='YES',timed='YES' where name like 'wait%';
   UPDATE setup_instruments SET enabled='YES',timed='YES' where name like 'stage%';
-  UPDATE setup_consumers SET enabled='YES' where name like 'events%';
+  UPDATE setup_consumers SET enabled='YES' where name like '%wait%';
+  UPDATE setup_consumers SET enabled='YES' where name like '%events%';
   ```
+
+* performance_schema默认是开启状态,若要关闭,必须修改配置文件,而不能在MySQL控制台中修改,会报错
 
 * 使用查询语句查询所有表每个阶段消耗时间
 

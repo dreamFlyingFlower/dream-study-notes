@@ -1725,3 +1725,22 @@ ssh admin
 * `/etc/rc.d/init.d/crond start`:启动定时任务,在`/var/spool/cron`目录中确认定时任务
 * `ps -ef|grep crond`:查看定时任务是否在执行
 
+
+
+# 开机启动
+
+
+
+## 第一种
+
+
+
+* 直接在`/etc/rc.d/rc.local`中添加需要开机时执行的命令,注意命令执行时的目录路径
+
+
+
+## 第二种
+
+
+
+* 在定时任务中添加`@reboot 需要执行的操作`,`@reboot`是一个特殊的任务,重启后会自动执行

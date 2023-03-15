@@ -1183,15 +1183,17 @@ systemctl restart crontab # 重启定时任务
 
 
 
-
-
 ## Binlog复制
+
+
+
+![](img/040.png)
 
 
 
 * slave服务器上执行start slave,开启主从复制开关
 * 此时,slave服务器的io线程会通过在master上授权的复制用户权限请求连接master服务器,并请求从指定bin_log日志文件的指定位置(日志文件名和位置就是在配置主从复制服务器时执行的changet master命令指定的)之后发送bin_log日志内容
-* master服务器接收到来自slave服务器的io线程请求后,master服务器上负责复制的io线程根据slave服务器的io线程请求的信息读取指定bin_log日志文件指定位置之后的bin_log日志信息,然后返回给slave端的io线程.返回的信息中除了bin_log日志内容外,还有本次返回日志内容后在master服务器端的新的bin_log文件名称以及在bin_log中的下一个指定更新位置
+* master服务器接收到来自slave服务器的io线程请求后,master服务器上负责复制的io线程根据slave服务器的io线程请求的信息读取指定bin_log日志文件指定位置之后的bin_log日志信息,然后返回给slave端的io线程.返回的信息中除了bin_log日志内容外,还有本次返回日志内容后在master服务器端的新的bin_log文件名以及在bin_log中的下一个指定更新位置
 * 当slave服务器的io线程获取到来自master服务器上io线程发送的日志内容以及日志文件位置点后,将bin_log日志内容一次写入到slave自身的relaylog(中继日志)文件(mysql-relay-bin.xxxxxx)的最末端,并将新的bin_log文件名和位置记录到master-info文件中,以便下次读取master端新bin_log日志时能够告诉master服务器要从新bin_log的那个文件,那个位置开始请求
 * slave服务器的sql线程会实时的检测本地relaylog中新增加的日志内容,并在吱声slave服务器上按语句的顺序执行应用这些sql语句,应用完毕后清理应用过的日志
 * 由于主从同步是异步执行的,突发情况下仍然会造成数据的丢失
@@ -1203,8 +1205,8 @@ systemctl restart crontab # 重启定时任务
 
 
 
-* 主库宕机后,数据可能丢失
-* 从库只有一个SQL Thread,主库写压力大,复制很可能延时
+* 主库宕机后,数据可能丢失(半同步复制解决)
+* 从库只有一个SQL Thread,主库写压力大,复制很可能延时(并行复制解决)
 
 
 
@@ -1212,6 +1214,13 @@ systemctl restart crontab # 重启定时任务
 
 
 
+![](img/041.png)
+
+![](img/042.png)
+
+
+
+* 上述图1为传统异步复制时序图,图2为半同步复制
 * MySQL从5.5版本开始引入了半同步复制机制来降低数据丢失的概率,但会降低数据库性能
 * MySQL让Master在某一个时间点等待Slave节点的 ACK消息,接收到ACK消息后才进行事务提交,这也是半同步复制的基础
 * MySQL 事务写入碰到主从复制时的完整过程,主库事务写入分为 4个步骤:
@@ -1230,20 +1239,20 @@ systemctl restart crontab # 重启定时任务
 
 
 * MySQL从5.6版本开始追加了并行复制功能,并行复制称为enhanced multi-threaded slave(简称MTS)
-* 在从库中有两个线程IO Thread和SQL Thread,都是单线程模式工作,因此有了延迟问题,我们可以采用多线程机制来加强,减少从库复制延迟.(IO Thread多线程意义不大,主要指的是SQL Thread多线程)
+* 在从库中有两个线程IO Thread和SQL Thread,都是单线程模式,因此有延迟问题,可以采用多线程加强,减少延迟.(IO Thread多线程意义不大,主要指的是SQL Thread多线程)
 * 在MySQL的5.7、8.0版本上,都是基于上述SQL Thread多线程思想,不断优化,减少复制延迟
 
 
 
-#### MySQL5.7并行复制
+#### 5.7并行复制
 
 
 
 * MySQL 5.7是基于组提交的并行复制,这其中最为主要的原理就是slave服务器的回放与master服务器是一致的,即master服务器上是怎么并行执行的slave上就怎样进行并行回放,不再有库的并行复制限制(5.6是以库为单位的并行复制)
 
-* MySQL 5.7是通过对事务进行分组,当事务提交时,它们将在单个操作中写入到二进制日志中.如果多个事务能同时提交成功,那么它们意味着没有冲突,因此可以在Slave上并行执行
+* MySQL 5.7是通过对事务进行分组实现并行复制.当事务提交时,它们将在单个操作中写入到二进制日志中,并添加组提交信息.如果多个事务能同时提交成功,那么它们意味着没有冲突,因此可以在Slave上并行执行
 
-* MySQL 5.7的并行复制基于一个前提,即所有已经处于prepare阶段的事务,都是可以并行提交的.这些当然也可以在从库中并行提交,因为处理这个阶段的事务都是没有冲突的.在一个组里提交的事务,一定不会修改同一行,这是一种新的并行复制思路,完全摆脱了原来一直致力于为了防止冲突而做的分发算法,等待策略等复杂的而又效率底下的工作
+* MySQL 5.7的并行复制基于一个前提,即所有已经处于prepare阶段的事务,都是可以并行提交的.这些也可以在从库中并行提交,因为处理这个阶段的事务都是没有冲突的.在一个组里提交的事务,一定不会修改同一行,这完全摆脱了原来一直致力于为了防止冲突而做的分发算法,等待策略等复杂而又效率低下的工作
 
 * InnoDB事务提交采用的是两阶段提交模式:一阶段是prepare,另一个是commit
 
@@ -1251,8 +1260,6 @@ systemctl restart crontab # 重启定时任务
 
   * DATABASE:默认值,基于库的并行复制方式
   * LOGICAL_CLOCK:基于组提交的并行复制方式
-
-* 如何知道事务是否在同一组中,生成的Binlog内容告诉Slave哪些事务是可以并行复制的
 
 * 在MySQL 5.7版本中,其设计方式是将组提交的信息存放在GTID中,为了避免用户没有开启GTID功能(gtid_mode=OFF),MySQL 5.7又引入了称之为Anonymous_Gtid的二进制日志event类型ANONYMOUS_GTID_LOG_EVENT
 
@@ -1271,12 +1278,12 @@ systemctl restart crontab # 重启定时任务
 
 
 
-#### MySQL8.0并行复制
+#### 8.0并行复制
 
 
 
 * MySQL8.0 是基于write-set的并行复制
-* MySQL会有一个集合变量来存储事务修改的记录信息(主键哈希值),所有已经提交的事务所修改的主键值经过hash后都会与那个变量的集合进行对比,来判断该行是否与其冲突,并以此来确定依赖关系,没有冲突即可并行.这样的粒度,就到了row级别了,此时并行的粒度更加精细,并行的速度会更快
+* MySQL会有一个集合变量来存储事务修改的记录信息(主键哈希值),所有已经提交的事务所修改的主键值经过hash后都会与那个变量的集合进行对比,来判断该行是否与其冲突,并以此来确定依赖关系,没有冲突即可并行.这样的粒度,就到了row级别,并行的粒度更加精细,速度会更快
 
 
 
@@ -1296,7 +1303,7 @@ systemctl restart crontab # 重启定时任务
 
 * master_info_repository:开启MTS功能后,务必将参数master_info_repostitory设置为TABLE,这样性能可以有50%~80%的提升,这是因为并行复制开启后对于元master.info这个文件的更新将会大幅提升,资源的竞争也会变大
 
-* slave_parallel_workers: 若将该参数设置为0,则MySQL 5.7退化为原单线程复制;将该参数设置为1,则SQL线程功能转化为coordinator线程,但是只有1个worker线程进行回放,也是单线程复制.然而,这两种性能却又有一些的区别,因为多了一次coordinator线程的转发,因此该参数设置为1的性能反而比0还要差.所以该参数设置的至少要比1大最好
+* slave_parallel_workers: 若将该参数设置为0,则MySQL 5.7退化为单线程复制;设置为1,则SQL线程功能转化为coordinator线程,但是只有1个worker线程进行回放,也是单线程复制.然而,这两种性能却又有一些的区别,因为多了一次coordinator线程的转发,因此该参数设置为1的性能反而比0还要差.所以该参数设置的至少要比1大最好
 
 * slave_preserve_commit_order:MySQL 5.7后的MTS可以实现更小粒度的并行复制,但需要将slave_parallel_type设置为LOGICAL_CLOCK,但仅仅设置为LOGICAL_CLOCK也会存在问题,因为此时在slave上应用事务的顺序是无序的,和relay log中记录的事务顺序不一样,这样数据一致性是无法保证的,为了保证事务是按照relay log中记录的顺序来回放,就需要开启参数slave_preserve_commit_order
 
@@ -1318,7 +1325,7 @@ systemctl restart crontab # 重启定时任务
 
 
 
-* 在使用了MTS后,复制的监控依旧可以通过SHOW SLAVE STATUS\G,但是MySQL 5.7在performance_schema库中提供了很多元数据表,可以更详细的监控并行复制过程
+* 在使用了MTS后,复制的监控依旧可以通过`SHOW SLAVE STATUS\G`,但是MySQL 5.7在performance_schema库中提供了很多元数据表,可以更详细的监控并行复制过程
 
   ```mysql
   mysql> show tables like 'replication%';
@@ -1386,7 +1393,6 @@ systemctl restart crontab # 重启定时任务
   CHANGE MASTER TO MASTER_HOST='masterip' MASTER_PORT='master_port' MASTER_USER='' MASTER_PASSWORD='' MASTER_AUTO_POSITION=1;
   ```
 
-  
 
 
 
@@ -1512,9 +1518,12 @@ systemctl restart crontab # 重启定时任务
   SHOW SLAVE STATUS;
   ```
 
-  
+
+
 
 ## Show Slave Status
+
+
 
 * connecting to master:线程正试图连接主服务器
 * checking master version:检查版本,建立同主服务器之间的连接后立即临时出现的状态
@@ -1527,6 +1536,8 @@ systemctl restart crontab # 重启定时任务
 
 
 ## 简单配置
+
+
 
 * 配置文件的修改同2正常配置,不同的是进行主从复制的方式
 
@@ -1544,7 +1555,11 @@ systemctl restart crontab # 重启定时任务
 
 ## 主从故障
 
+
+
 ### 第一种
+
+
 
 停止主从,跳过故障点,重新开启主从
 
@@ -1560,11 +1575,15 @@ start slave;
 
 ### 第二种
 
+
+
 配置slave-skip-errors,该参数表示跳过指定错误码的错误,错误码可参考mysql文档
 
 
 
 ### 第三种
+
+
 
 主库损坏,备份不可用.若只有一个从库,直接用从库的数据恢复.若有多个从库,查看每一个从库的master.info文件,判断那一个对主库的复制位置更新,POS更大就用那一个
 
@@ -1593,11 +1612,15 @@ start slave;
 
 ## HA
 
+
+
 Keepalived+LVS+MYSQL+GALERA(同步复制)
 
 
 
 ## 延迟
+
+
 
 * 分库,将一个主库拆分为4个主库,每个主库的写并发就500/s,此时主从延迟可忽略
 
@@ -1618,16 +1641,27 @@ Keepalived+LVS+MYSQL+GALERA(同步复制)
   start slave;
   ```
 
-  
 
 
 
 ## 延迟校验
 
+
+
 * show master status\G,查看File和Position的值
 * show slave status\G,查看Master_Log_File和Read_Master_Log_Pos的值
 * 比较查看上述2个值的文件名和大小
 * 或者查看Exec_Master_Log_Pos和Relay_Log_Space的值
+
+
+
+## 用途
+
+
+
+* 实时灾备,用于故障切换(高可用)
+* 读写分离,提供查询服务(读扩展)
+* 数据备份,避免影响业务(高可用)
 
 
 
@@ -1666,7 +1700,11 @@ Keepalived+LVS+MYSQL+GALERA(同步复制)
 
 ## 双主
 
+
+
 ### 解决主键自增长
+
+
 
 * master1,在mysqld下配置如下2个参数
   * auto_increment_increment=2:设置自增长的间隔为2,若是3主,设置为3
@@ -1682,12 +1720,163 @@ Keepalived+LVS+MYSQL+GALERA(同步复制)
 
 ## InnoDBCluster
 
+
+
 * 支持自动Failover,具有强一致性,读写分离,读库高可用,读请求负载均衡,横向扩展的有点
 
 * 由MySQL,MySQL Router,MySQL Shell组成
 * 通常状况下是一主多从,主数据库可读写,从数据库可读
 * MySQL Router对集群中的数据库进行管理,监听集群中数据库是否可用,自动切换数据库
 * MySQL Shell是为管理人员提供的管理集群数据库的工具
+
+
+
+## MMM
+
+
+
+![](img/043.png)
+
+
+
+* Master-Master Replication Manager for MySQL,是一套用来管理和监控双主复制,支持双主故障切换的第三方软件
+* MMM 使用Perl开发,虽然是双主架构,但是业务上同一时间只允许一个节点进行写入操作,上图是基于MMM实现的双主高可用架构
+
+
+
+### 故障处理机制
+
+
+
+* MMM 包含writer和reader两类角色,分别对应写节点和读节点
+  * 当 writer节点出现故障,程序会自动移除该节点上的VIP
+  * 写操作切换到 Master2,并将Master2设置为writer
+  * 将所有Slave节点会指向Master2
+
+* 除了管理双主节点,MMM 也会管理 Slave 节点,在出现宕机,复制延迟或复制错误,MMM 会移除该节点的 VIP,直到节点恢复正常
+
+
+
+### 监控机制
+
+
+
+* MMM 包含monitor和agent两类程序,功能如下:
+  * monitor: 监控集群内数据库的状态,在出现异常时发布切换命令,一般和数据库分开部署
+  * agent: 运行在每个 MySQL 服务器上的代理进程,monitor 命令的执行者,完成监控的探针工作和具体服务设置,例如设置 VIP(虚拟IP),指向新同步节点
+
+
+
+## MHA
+
+
+
+![](img/044.png)
+
+
+
+* Master High Availability,是一套比较成熟的 MySQL 高可用方案,主要功能是故障切换和主从提升
+* 在MySQL故障切换过程中,MHA能做到在30秒之内自动完成数据库的故障切换操作,并且在进行故障切换的过程中,MHA能在最大程度上保证数据的一致性,以达到真正意义上的高可用
+* MHA还支持在线快速将Master切换到其他主机,通常只需0.5-2秒
+* MHA主要支持一主多从的架构,要搭建MHA,要求一个复制集群中必须最少有三台数据库服务器
+* MHA由两部分组成: MHA Manager(管理节点)和MHA Node(数据节点)
+  * MHA Manager可以单独部署在一台独立的机器上管理多个master-slave集群,也可以部署在一台slave节点上,负责检测master是否宕机、控制故障转移、检查MySQL复制状况等
+  * MHA Node运行在每台MySQL服务器上,不管是Master还是Slave,都称为Node,是被监控管理的对象节点,负责保存和复制master的二进制日志、识别差异的中继日志事件并将其差异的事件应用于其他的slave、清除中继日志
+
+* MHA Manager会定时探测集群中的master,当master出现故障时,它可以自动将最新数据的slave提升为master,然后将所有其他的slave重新指向新的master,整个故障转移过程对应用程序完全透明
+
+
+
+### 故障处理机制
+
+
+
+* 把宕机master的binlog保存下来
+* 根据binlog位置点找到最新的slave
+* 用最新slave的relay log修复其它slave
+* 将保存下来的binlog在最新的slave上恢复
+* 将最新的slave提升为master
+* 将其它slave重新指向新提升的master,并开启主从复制
+
+
+
+### 优点
+
+
+
+* 自动故障转移快
+* 主库崩溃不存在数据一致性问题
+* 性能优秀,支持半同步复制和异步复制
+* 一个Manager监控节点可以监控多个集群
+
+
+
+# 主备切换
+
+
+
+* 主备切换是指将备库变为主库,主库变为备库,有可靠性优先和可用性优先两种策略
+
+  
+
+## 主备延迟
+
+
+
+* 主备延迟是由主从数据同步延迟导致的,与数据同步有关的时间点主要包括以下三个:
+  * 主库 A 执行完成一个事务,写入 binlog,我们把这个时刻记为 T1
+  * 之后将binlog传给备库 B,我们把备库 B 接收完 binlog 的时刻记为 T2
+  * 备库 B 执行完成这个binlog复制,我们把这个时刻记为 T3
+* 主备延迟就是同一个事务,在备库执行完成的时间和主库执行完成的时间之间的差值,也就是 T3-T1
+* 在备库上执行`show slave status\G`,返回结果中,seconds_behind_master表示当前备库延迟了多少秒
+* 同步延迟主要原因如下:
+  * 备库机器性能问题
+  * 分工问题:备库提供了读操作,或者执行一些后台分析处理的操作,消耗大量的CPU资源
+  * 大事务操作:大事务耗费的时间比较长,导致主备复制时间长
+
+
+
+## 可靠性优先
+
+
+
+* 主备切换过程一般由专门的HA高可用组件完成,但是切换过程中会存在短时间不可用,因为在切换过程中某一时刻主库A和从库B都处于只读状态.如下图所示
+
+
+
+![](img/045.png)
+
+
+
+* 主库由A切换到B,切换的具体流程如下:
+  * 判断从库B的Seconds_Behind_Master值,当小于某个值才继续下一步
+  * 把主库A改为只读状态(readonly=true)
+  * 等待从库B的Seconds_Behind_Master值降为 0
+  * 把从库B改为可读写状态(readonly=false)
+  * 把业务请求切换至从库B
+
+
+
+## 可用性优先
+
+
+
+* 不等主从同步完成, 直接把业务请求切换至从库B,并且让 从库B可读写,这样几乎不存在不可用时间,但可能会数据不一致
+
+
+
+![](img/046.png)
+
+
+
+* 如上图所示,在A切换到B过程中,执行两个INSERT操作,过程如下:
+  * 主库A执行完 INSERT c=4 ,得到 (4,4) ,然后开始执行 主从切换
+  * 主从之间有5S的同步延迟,从库B会先执行 INSERT c=5 ,得到 (4,5)
+  * 从库B执行主库A传过来的binlog日志 INSERT c=4 ,得到 (5,4)
+  * 主库A执行从库B传过来的binlog日志 INSERT c=5 ,得到 (5,5)
+  * 此时主库A和从库B会有两行不一致的数据
+* 主备切换采用可用性优先策略,可能会导致数据不一致,所以大多数情况下,优先选择可靠性优先策略
+* 在满足数据可靠性的前提下,MySQL的可用性依赖于同步延时的大小,同步延时越小,可用性就越高
 
 
 
@@ -2060,7 +2249,7 @@ Please enter your MySQL administrative password: [OK] Currently running supporte
 
 
 
-### 第一部分:总体统计结果
+### 总体统计结果
 
 
 
@@ -2076,7 +2265,7 @@ Please enter your MySQL administrative password: [OK] Currently running supporte
 
 
 
-### 第二部分:查询分组统计结果
+### 查询分组统计结果
 
 
 
@@ -2091,7 +2280,7 @@ Please enter your MySQL administrative password: [OK] Currently running supporte
 
 
 
-### 第三部分:每一种查询的详细统计结果
+### 每种查询的详细统计结果
 
 
 

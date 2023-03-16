@@ -136,6 +136,8 @@
 
 ### 概述
 
+
+
 * 对应用进行负载均衡
 * 若主挂掉,则由备顶上.当主恢复的时候,主会抢占资源,而不是一直在背上运行
 * 若直接kill主的keepalived,则keepalived来不及删除主机上的虚拟网卡,而备机此时已经接受不到主的心跳,在备机上也会新建一个同样ip的网卡,这样就会出现2个相同的ip地址,造成ip冲突,这是一个小bug
@@ -143,6 +145,8 @@
 
 
 ### yum安装
+
+
 
 ```shell
 yum -y install keepalived # 安装
@@ -158,7 +162,40 @@ service keepalived start # 启动
 
 
 
+* 先安装依赖: `yum install -y curl gcc openssl-devel libnl3-devel net-snmp-devel`
+
+* 解压并安装
+
+  ```shell
+  tar -zxf keepalived.tar.gz
+  cd keepalived
+  ./configure --prefix=/usr/local/keepalived
+  make && make install
+  ```
+
+
+
+### 配置为服务
+
+
+
+```shell
+mkdir /etc/keepalived
+cp /usr/local/keepalived/etc/keepalived/keepalived.conf /etc/keepalived/
+# 复制keepalived 服务脚本到默认的地址
+cp /usr/local/keepalived/etc/rc.d/init.d/keepalived /etc/init.d/
+cp /usr/local/keepalived/etc/sysconfig/keepalived /etc/sysconfig/
+ln -s /usr/local/keepalived/sbin/keepalived /usr/sbin/
+ln -s /usr/local/keepalived/sbin/keepalived /sbin/
+# 设置keepalived 服务开机启动
+chkconfig keepalived on
+```
+
+
+
 ### 配置文件
+
+
 
 * 基本分为3大块,每个都是一个大的对象,大括号和key之间的空白不能去掉
 

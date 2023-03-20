@@ -1476,7 +1476,7 @@ systemctl restart crontab # 重启定时任务
 
 * 主从强制从主库查询数据:`/*MASTER*/select * from user;`
 
-* 主库操作
+* 主库配置文件操作
 
   ```mysql
   # 配置文件中指定serverid,唯一
@@ -1487,28 +1487,53 @@ systemctl restart crontab # 重启定时任务
   server-id=1
   # 配置文件指定同步的数据库,如果不指定则同步全部数据库
   binlog-do-db=my_test
-  
-  # MySQL中执行SQL语句查询状态
+  # 不需要同步的数据库
+  binlog-ignore-db=information_schema
+  binlog-ignore-db=mysql
+  binlog-ignore-db=performation_schema
+  binlog-ignore-db=sys
+  # 开启gtid
+  #gtid_mode=on
+  #enforce_gtid_consistency=1
+  ```
+
+* 主库SQL操作
+
+  ```mysql
+  # MySQL中执行SQL语句查询状态,查看主库master_log_file='mysql-bin.000001',master_log_pos=154
   SHOW MASTER STATUS\G
   # MySQL中授权用户slave01使用123456密码登录mysql
   grant replication slave on *.* to 'slave01'@'127.0.0.1' identified by '123456';
   # MySQL中刷新配置
   flush privileges;
   ```
-
-* 从库操作
+  
+* 从库配置文件操作
 
   ```mysql
   # 指定serverid,只要不重复即可,从库也只有这一个配置,其他都在SQL语句中操作
   server-id=2
-  
+  # 不需要同步的数据库
+  binlog-ignore-db=information_schema
+  binlog-ignore-db=mysql
+  binlog-ignore-db=performation_schema
+  binlog-ignore-db=sys
+  # 开启gtid
+  #gtid_mode=on
+  #enforce_gtid_consistency=1
+  ```
+
+* 从库SQL操作
+
+  ```mysql
   # MySQL中执行SQL
   CHANGE MASTER TO
+  # 指定主库的ip,端口,用户名和密码
   master_host='127.0.0.1',
+  master_port=3306,
   master_user='slave01',
   master_password='123456',
-  master_port=3306,
-  # 指定从某个文件开始开始同步
+  # 指定从某个文件开始开始同步.该值和下面的位置值都是从show master status中获取
   master_log_file='mysql-bin.000001',
   # 指定从上述文件的某个位置开始同步
   master_log_pos=1120;
@@ -1808,6 +1833,84 @@ Keepalived+LVS+MYSQL+GALERA(同步复制)
 * 主库崩溃不存在数据一致性问题
 * 性能优秀,支持半同步复制和异步复制
 * 一个Manager监控节点可以监控多个集群
+
+
+
+### 配置文件
+
+
+
+* MHA Manager服务器需要为每个监控的 Master/Slave 集群提供一个专用的配置文件,而所有的 Master/Slave 集群也可共享全局配置
+* 初始化配置目录
+
+```shell
+# /mha (MHA监控根目录),/app1 (MHA监控实例根目录),/manager.log (MHA监控实例日志文件)
+mkdir -p /var/log/mha/app1
+touch /var/log/mha/app1/manager.log
+```
+
+* 配置监控全局配置文件:`vim /etc/masterha_default.cnf`
+
+```mysql
+[server default]
+# 用户名密码
+user=root
+password=root
+# ssh登录账号
+ssh_user=root
+# 主从复制账号密码
+repl_user=root
+repl_password=root
+# ping次数
+ping_interval=1
+# 二次检查的主机
+secondary_check_script=masterha_secondary_check -s 192.168.1.150 -s 192.168.1.151 -s 192.168.1.152
+```
+
+* 配置监控实例配置文件:`vim /etc/mha/app1.cnf`
+
+```mysql
+[server default]
+# MHA监控实例根目录
+manager_workdir=/var/log/mha/app1
+# MHA监控实例日志文件
+manager_log=/var/log/mha/app1/manager.log
+# [serverx] 服务器编号
+# hostname 主机名
+# candidate_master 可以做主库
+# master_binlog_dir binlog日志文件目录
+[server1]
+hostname=192.168.1.150
+candidate_master=1
+master_binlog_dir="/var/lib/mysql"
+[server2]
+hostname=192.168.1.151
+candidate_master=1
+master_binlog_dir="/var/lib/mysql"
+[server3]
+hostname=192.168.1.152
+candidate_master=1
+master_binlog_dir="/var/lib/mysql"
+```
+
+
+
+### 配置检测
+
+
+
+* 执行ssh通信检测:在MHA Manager服务器上执行: `masterha_check_ssh --conf=/etc/mha/app1.cnf`
+* 检测MySQL主从复制:在MHA Manager服务器上执行:`masterha_check_repl --conf=/etc/mha/app1.cnf`.出现`MySQL Replication Health is OK.`证明MySQL复制集群没有问题
+
+
+
+### Manager启动
+
+
+
+* 在MHA Manager服务器上执行: `nohup masterha_manager --conf=/etc/mha/app1.cnf --remove_dead_master_conf -- ignore_last_failover < /dev/null > /var/log/mha/app1/manager.log 2>&1 &`
+* 查看监控状态:`masterha_check_status --conf=/etc/mha/app1.cnf`
+* 查看监控日志：`tail -f /var/log/mha/app1/manager.log`
 
 
 
@@ -2392,3 +2495,10 @@ SELECT * from information_schema.`PROCESSLIST` WHERE Time > 1000 AND USER = 'roo
 kill 123456789;
 ```
 
+
+
+## 数据迁移
+
+
+
+* 可以先关掉表的索引,等数据导入完成之后再打开索引

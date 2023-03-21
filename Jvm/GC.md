@@ -70,6 +70,7 @@
 
 * 根据对象的特点把内存分为N块,而后根据每个内存的特点使用不同的算法
 * 对于新生代和老年代来说,新生代回收的频率更高,但是每次回收耗时都很短,而老年代回收频率较低,但是耗时比较长,所以应该尽量减少老年代的GC
+* 新生代+老年代+永久代,新生代又分为eden+s0+s1
 
 
 
@@ -188,7 +189,8 @@
 
 
 * 新生代GC(Scavenge GC):指发生在新生代的GC,因为新生代的java对象大多数都是朝生夕死的,所以ScavengeGC比较频繁,一般回收速度也比较快.当eden空间不足时,会触发ScavengeGC
-* 一般情况下,当新对象生成,并且在eden申请空间失败时,就会触发ScavengeGC,对eden区域进行GC,清除非存活对象,并且把尚且存活的对象移动到Survivor(新生代的from和to)区.然后整理survivor的两个区.这种方式的GC是对年轻代的eden区进行,不会影响到老年代.
+* 一般情况下,当新对象生成,并且在eden申请空间失败时,就会触发ScavengeGC,对eden区域进行GC,清除非存活对象,并且把尚且存活的对象移动到Survivor(新生代的from和to)区.然后整理survivor的两个区.这种方式的GC是对年轻代的eden区进行,不会影响到老年代
+* JDK8默认是Parallel Scavenge+Parallel Old
 
 
 
@@ -206,6 +208,7 @@
 
 
 
+* 也叫YGC,主要对年轻代进行垃圾回收
 * 对于复制算法来说,当年轻代Eden区域满的时候会触发一次Minor GC,将Eden和From Survivor的对象复制到另外一块To Survivor上
 * 如果某个对象存活的时间超过一定Minor gc次数会直接进入老年代,不再分配到To Survivor上(默认15次,对应虚拟机参数 -XX:+MaxTenuringThreshold)
 
@@ -245,6 +248,19 @@
 
 
 
+# 分代回收流程
+
+
+
+* 根据对象大小先分配到适当的分代中
+* YGC回收之后,大多数对象会被回收,活着的会进入S0区
+* 再次YGC,在Eden区和S0区的进入S1区
+* 继续YGC,Eden区+S1区进入S0
+* 经过多次YGC(默认15次),在S0或S1区的对象进入老年代
+* S0或S1区没有足够大小,也会将对象方法老年代
+
+
+
 # 对象
 
 
@@ -266,6 +282,8 @@
 
 
 ## 创建
+
+
 
 * new 类名
 * 根据new的参数在常量池中定义一个类的符号引用
@@ -355,13 +373,13 @@ public class VolatileStopThread extends Thread{
 
 
 * 指令重排的基本原则:
-  * 程序顺序原则：一个线程内保证语义的串行性
-  * volatile规则：volatile变量的写,先发生于读
-  * 锁规则：解锁(unlock)必然发生在随后的加锁(lock)前
-  * 传递性：A先于B,B先于C 那么A必然先于C
+  * 程序顺序原则: 一个线程内保证语义的串行性
+  * volatile规则: volatile变量的写,先发生于读
+  * 锁规则: 解锁(unlock)必然发生在随后的加锁(lock)前
+  * 传递性: A先于B,B先于C 那么A必然先于C
   * 线程的start方法先于它的每一个动作
-  * 线程的所有操作先于线程的终结（Thread.join()）
-  * 线程的中断（interrupt()）先于被中断线程的代码
+  * 线程的所有操作先于线程的终结(Thread.join())
+  * 线程的中断(interrupt())于被中断线程的代码
   * 对象的构造函数执行结束先于finalize()方法
 
 ```java
@@ -579,6 +597,8 @@ S0     S1     E      O      M     CCS    YGC   YGCT    FGC    FGCT     GCT
 
 * -Dname=value:设置启动参数,main方法中可读取
 
+* `java -XX:+PrintFlagsFinal -version|grep gc`: 查看所有与GC相关的参数
+
 * -verbose:gc:可以打印GC的简要信息
 
   ```java
@@ -685,11 +705,13 @@ S0     S1     E      O      M     CCS    YGC   YGCT    FGC    FGCT     GCT
 
 * -XX:+UseParNewGC:在新生代使用并行收集器
 
-* -XX:+UseParallelGC:设置年轻代为并行收集器
+* -XX:+UseParallelGC:设置年轻代为并行收集器(Parallel Scavenge)
 
-* -XX:+UseParalledlOldGC:设置老年代并行收集器
+* -XX:+UseParalledlOldGC:设置老年代并行收集器(Parallel Old)
 
-* -XX:+UseConcMarkSweepGC:新生代使用并行收集器,老年代使用CMS+串行收集器
+* -XX:+UseConcMarkSweepGC:新生代使用并行收集器(ParNew),老年代使用CMS+串行收集器(Serial Old)
+
+* -XX:+UseG1GC: 使用G1收集器
 
 * -XX:ParallelGCThreads:设置用于垃圾回收的线程数
 
@@ -727,6 +749,14 @@ S0     S1     E      O      M     CCS    YGC   YGCT    FGC    FGCT     GCT
 
 
 
+## 日志输出
+
+
+
+* `-Xloggc:/tmp/logs/project/gc-%t.log -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=5 -XX:GCLogFileSize=20M -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCCause`: 将GC日志输出到指定目录,只输出5个文件,每个文件最大20M,若超出5个,循环覆盖前面的日志
+
+
+
 # GC输出
 
 
@@ -758,7 +788,7 @@ Heap
 * JDK8和之前的策略不一样,GC信息也不同
 * `STW`:`Stop The World`,表示垃圾收集时是否需要停顿
 * `GC (Allocation Failure)`:表明进行了一次垃圾回收,且不需要STW
-  * 前面没有Full修饰,表明这是一次Minor GC
+  * 前面没有Full修饰,表明这是一次Minor GC(YGC)
   * 它不表示只GC新生代,并且JDK8垃圾回收不管是新生代还是老年代都会STW
   * `Allocation Failure`表明本次引起GC的原因是年轻代中没有足够的空间能够存储新的数据
 * `[DefNew:896K->63K(960K),0.0009520 secs] 896K->628K(20416K),0.0009838 secs]`:
@@ -766,38 +796,11 @@ Heap
   * `896K->63K(960K)`:GC前该区域已使用容量->GC后该区域已使用容量(该内存区域总容量)
   * `0.0009520 secs`:该内存区域GC所占用的时间
   * `896K->628K(20416K)`:GC前Java堆已使用容量->GC后Java堆已使用容量(Java堆总容量)
+* `Heap`: 表示堆信息,所有used后面的0x开头一次是内存的起始地址,使用空间结束地址,整体空间结束地址
 * `[Tenured: 19079K->1734K(19456K), 0.0012453 secs] 19259K->1734K(20416K)`:
   * `Tenured`:老年代发生垃圾回收
 * `[Metaspace: 2661K->2661K(1056768K)], 0.0025666 secs]`:
   * `Metaspace`:元空间发生垃圾回收.JDK1.8之前为compacting perm gen
+* `class space`: 元空间中专门给class用来存储的空间
 * `[Times: user=0.00 sys=0.00, real=0.00 secs]`:分别表示用户态耗时,内核态耗时和总耗时
 
-
-
-
-
-# JVM调优
-
-
-
-## OOM原因
-
-
-
-* 创建了大量对象实例,导致堆内存溢出.可适当适当堆内存
-* 加载了大量类,创建了大量类,导致元空间溢出.可适当增大服务器内存,增大Perm区内存
-* 直接内存溢出:ByteBuffer.allocateDirect()无法从操作系统获得足够的空间,直接操作内存相关方法会导致直接内存溢出.减少堆内存,增大服务器内存
-
-
-
-## 案例
-
-
-
-* Full GC过长,20-30S
-  * 减小堆内存大小,但是可以部署多个程序,避免内存浪费
-* 不定期内存溢出,把堆内存加大,会加剧溢出.导出堆转储快照信息,没有任何信息.内存监控也正常
-  * 该情况可能是NIO使用直接内存时,直接内存过小,而GC又不能控制直接内存,导致内存被撑爆
-  * 可以修改JVM的DirectMemory相关参数解决或换更大内存的服务器
-* 大量消息从A服务发送到B服务的时候,B服务无法及时处理导致B服务崩溃
-  * 在A和B服务之间添加消息队列

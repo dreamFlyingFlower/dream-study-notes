@@ -231,16 +231,18 @@ Head:指向当前分支,并非指向master.切换到那个分支就是指向那�
 
 
 
-* git reset HEAD <file>:将当前分支暂存区的文件恢复到上一个版本,即将已经add的文件从暂存区退回到工作区,但是修改仍然存在.和checkout不同的是:
+* `git reset [file/dir]`: 将已经add的文件从暂存区退回到工作区,但是修改仍然存在.和checkout不同的是:
   * reset恢复的是已经add到暂存区的,且恢复之后修改仍然存在,只是重新回到了工作区
   * checkout恢复的是没有add到暂存区的,且将文件直接回退到上一个版本
-* git reset --hard [HEAD^]:将本地仓库中的数据回滚到上个版本
-* git reset --hard HEAD^2:将本地仓库中的数据回滚到上2个版本
-* git reset version:将本地仓库中的数据回滚到指定版本,version可从git log中查看
-* git reset version filename:将指定文件回滚到指定版本
-* git reset --hard commtid:已经提交到暂存区的文件,恢复到指定commit,commitid可从`git reflog`查看
-* git reset --soft commtid:将当前分支撤销到指定版本,但是暂存区和工作区不做撤销
-* git reset --mixed commitid:在本地库移动head指针,重置暂存区
+* `git reset --hard [HEAD^]`: 将本地仓库回滚到上个版本,包括暂存区和工作区
+* `git reset --hard HEAD^^^`:将本地仓库回滚到上3个版本,有几个`^`就回退到上几个版本
+* `git reset --hard HEAD~n`:将本地仓库回滚到上n个版本
+* `git reset --hard commtid`:已经提交到暂存区的文件,恢复到指定commit,commitid可从`git reflog`查看
+* `git reset --soft HEAD~n`: 将修改从本地仓库撤销到前n个版本的暂存区,已经在暂存区和工作区的文件不做撤销
+* `git reset --soft commtid`: 将修改从本地仓库撤销到指定版本的暂存区,已经在暂存区和工作区不做撤销
+* `git reset --mixed commitid`:在本地库移动head指针,重置暂存区,但不重置工作区
+* `git reset version`:将本地仓库中的数据回滚到指定版本,version可从git log中查看
+* `git reset version filename`:将指定文件回滚到指定版本
 
 
 

@@ -1478,3 +1478,60 @@ select * from user t1 join class t2 on t1.userid = t2.userid;
   * 在group by 或distinct的列中存在>512字节的string列
 
   * select 中含有>512字节的string列,同时又使用了union或union all语句
+
+
+
+
+
+# 缓存优化
+
+
+
+## 查询缓存
+
+
+
+* `query_cache_size`: 该缓存在8以上版本中被移除
+
+
+
+## Join缓存
+
+
+
+* `join_buffer_size`: 表链接缓存,将主表中数据或索引数据缓存
+
+
+
+## Sort缓存
+
+
+
+* `sort_buffer_size`: 排序缓存,通用缓存大小
+* `innodb_sort_buffer_size`: innodb引擎的排序缓存大小
+
+
+
+## Thread缓存
+
+
+
+* `thread_cache_size`: 线程缓存,非链接缓存
+
+
+
+## Innodb
+
+
+
+* `innodb_buffer_pool_size`: 指定大小的内存来缓冲数据和索引,最大可设置为物理内存的80%
+* `innodb_flush_log_at_trx_commit`: 控制innodb将log buffer中的数据写入日志文件并flush磁盘的时间值,值分别为0,1,2
+* `innodb_thread_concurrency`: 设置innodb线程的并发数,默认为0表示不受限制,如果要设置建议跟服务器的cpu核心数一致或者是cpu核心数的两倍
+* `innodb_log_buffer_size`: 确定日志文件所用的内存大小,以M为单位
+* `innodb_log_file_size`: 确定数据日志文件的大小,以M为单位
+* `innodb_log_files_in_group`: 以循环方式将日志文件写到多个文件中(redo.log)
+* `innodb_file_per_table`: 是否为每张表分配一个新的文件,默认是
+* `read_buffer_size`: mysql读入缓冲区大小,对表进行顺序扫描的请求将分配到一个读入缓冲区
+* `read_rnd_buffer_size`: mysql随机读的缓冲区大小,增删改操作的时候,先从表空间的磁盘文件里读取数据页出来,这个过程是随机读
+
+## 

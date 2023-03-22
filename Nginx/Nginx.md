@@ -245,7 +245,7 @@ source /etc/profile
 
 ```nginx
 master_process on|off;
-worker_process num/auto;
+worker_processes num/auto;
 ```
 
 * master_process:用来指定是否开启工作进程
@@ -288,6 +288,11 @@ events {
 * accept_mutex:设置Nginx网络连接序列化.这个配置主要可以用来解决惊群问题.大致意思是在某个时刻,客户端发来一个请求连接,Nginx后台会有多个worker进程会被同时唤醒,但是最终只会有一个进程可以获取到连接,如果每次唤醒的进程数太多,就会影响Nginx的整体性能.将上述值设置为on,将会对多个Nginx进程接收连接进行序列号,一个个唤醒接收,防止多个进程对连接的争抢
 * multi_accept: 设置是否允许同时接收多个网络连接.如果multi_accept被禁止了,nginx一个工作进程只能同时接受一个新的连接,否则一个工作进程可以同时接受所有的新连接
 * worker_connections: 配置单个worker进程最大的连接数.这里的连接数不仅仅包括和前端用户建立的连接数,而是包括所有可能的连接数.连接数不能大于操作系统支持打开的最大文件句柄数量
+  * 发送1个请求,会占用 woker 的2个或4个连接数
+  * nginx 有一个 master,有四个 woker,每个 woker 支持最大的连接数 1024,支持的 最大并发数计算:
+    * 普通的静态访问最大并发数是: worker_connections * worker_processes /2
+    * 如果是 HTTP 作 为反向代理来说,最大并发数量应该是 worker_connections *  worker_processes/4
+
 * use: 设置Nginx服务器选择哪种事件驱动来处理网络消息.此处所选择事件处理模型是Nginx优化部分的一个重要内容,method的可选值有select/poll/epoll/kqueue等,在linux上最好使用epoll模式.这些值的选择也可以在编译的时候使用:`--with-select_module`,`--without-select_module`,` --with-poll_module`,` --without-poll_module`
 
 
@@ -1607,7 +1612,7 @@ vrrp_instance VI_1 {
     }
     # 将 track_script 块加入 instance 配置块
     track_script {
-        # 执行 Nginx 监控的服务
+        # 执行Nginx 监控的服务
         chk_nginx
     }
     # 虚拟ip,也就是解决写死程序的ip怎么能切换的ip,可配置多个
@@ -1622,8 +1627,8 @@ vrrp_instance VI_1 {
 
 ```shell
 #!/bin/bash
-# chk_nginx.sh
-A=`ps -C nginx -no-header |wc -l`
+# nginx_check.sh
+A=`ps -C nginx --no-header |wc -l`
 if [ $A -eq 0 ];then
     # nginx启动地址,根据实际情况修改
     /usr/local/nginx/sbin/nginx

@@ -289,6 +289,7 @@ events {
 * multi_accept: 设置是否允许同时接收多个网络连接.如果multi_accept被禁止了,nginx一个工作进程只能同时接受一个新的连接,否则一个工作进程可以同时接受所有的新连接
 * worker_connections: 配置单个worker进程最大的连接数.这里的连接数不仅仅包括和前端用户建立的连接数,而是包括所有可能的连接数.连接数不能大于操作系统支持打开的最大文件句柄数量
   * 发送1个请求,会占用 woker 的2个或4个连接数
+  * 对于 HTTP 请 求 本 地 资 源 来 说 ， 能 够 支 持 的 最 大 并 发 数 量 是 worker_connections *  worker_processes，如果是支持 http1.1 的浏览器每次访问要占两个连接，所以普通的静态访 问最大并发数是： worker_connections * worker_processes /2，而如果是 HTTP 作 为反向代 理来说，最大并发数量应该是 worker_connections *  worker_processes/4。因为作为反向代理服务器，每个并发会建立与客户端的连接和与后端服 务的连接，会占用两个连接。
   * nginx 有一个 master,有四个 woker,每个 woker 支持最大的连接数 1024,支持的 最大并发数计算:
     * 普通的静态访问最大并发数是: worker_connections * worker_processes /2
     * 如果是 HTTP 作 为反向代理来说,最大并发数量应该是 worker_connections *  worker_processes/4

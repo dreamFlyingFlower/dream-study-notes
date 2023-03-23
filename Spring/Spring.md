@@ -33,6 +33,24 @@
 
 
 
+## Bean实例化流程
+
+
+
+### 基于XML
+
+
+
+* 加载xml配置文件,解析获取配置中的每个的信息,封装成一个个的BeanDefinition对象
+* 将BeanDefinition存储在DefaultListableBeanFactory类的beanDefinitionMap属性中
+* ApplicationContext底层遍历beanDefinitionMap,创建Bean实例对象
+* 创建好的Bean实例对象,被存储到DefaultSingletonBeanRegistry类的singletonObjects属性
+  * DefaultSingletonBeanRegistry为DefaultListableBeanFactory的父类
+  * singletonObjects是由beanDefinitionMap转换而来
+* 当执行applicationContext.getBean(beanName)时,从singletonObjects去匹配Bean实例返回
+
+
+
 # IOC相关
 
 

@@ -48,6 +48,7 @@
       sentinel: 
         transport:
           dashboard: 192.168.0.150:9100
+          port: 8719
   ```
 
   * 该请求是以心跳包的方式定时向 Dashboard 发送,包含 Sentinel Core 的 AppName,IP,端口信息
@@ -163,7 +164,7 @@ feign.sentinel.enabled=true
 
 * 在 Sentinel Dashboard 中簇点链路,找到需要限流的 URI,点击+流控进入流控设置
 * Sentinel Dashboard 基于懒加载模式,如果在簇点链路没有找到对应的 URI,需要先访问下这个功能的功能后对应的 URI 便会出现
-* 资源名:要流控的 URI,在 Sentinel 中 URI 被称为资源,一般是请求路径
+* 资源名:要流控的 URI,在 Sentinel 中 URI 被称为资源,一般是请求路径,也可以直接从dashboard中的实时监控里查看
 * 针对来源:默认 default 代表所有来源,可以针对某个微服务或者调用者单独设置
 * 阈值类型:是按每秒访问数量(QPS)还是并发数(线程数)进行流控
 * 单机阈值:具体限流的数值是多少
@@ -183,10 +184,12 @@ feign.sentinel.enabled=true
 
 
 
-* 关联限流:当关联的资源请求达到阈值时,就限流自己
-* 配置如下:/hi2的关联资源/hi,并发数超过2时,/hi2就限流自己
-
  ![](image07.png)
+
+
+
+* 关联限流:当关联的资源请求达到阈值时,就限流自己
+* 配置如下:/hi2的关联资源/hi,当hi并发数超过2时,/hi2就限流自己
 
 
 
@@ -194,21 +197,21 @@ feign.sentinel.enabled=true
 
 
 
-一棵典型的调用树如下图所示:
+* 一棵典型的调用树如下图所示:
 
 ```
-     	          machine-root
-                    /       \
-                   /         \
-             Entrance1     Entrance2
-                /             \
-               /               \
-      DefaultNode(nodeA)   DefaultNode(nodeA)
+                          machine-root
+                           /              \
+                         /                  \
+                Entrance1        Entrance2
+                      /                         \
+                    /                             \
+   		 NodeA			  NnodeA
 ```
 
-上图中来自入口Entrance1和Entrance2的请求都调用到了资源NodeA,Sentinel允许只根据某个入口的统计信息对资源限流
+* 上图中来自入口Entrance1和Entrance2的请求都调用到了资源NodeA,Sentinel允许只根据某个入口的统计信息对资源限流
 
-配置如下:表示只针对Entrance1进来的请求做限流限制
+* 配置如下:表示只针对Entrance1进来的请求做限流限制
 
  ![](image08.png)
 
@@ -297,17 +300,14 @@ feign.sentinel.enabled=true
 
 
 
-
-
 ## RT
 
 
 
 * 平均响应时间:当资源的平均响应时间超过阈值(以ms为单位,默认上限4900ms)之后,资源进入准降
-  * 新增降级规则->降级策略->RT
-  * 填写RT和时间窗口的值,RT单位为ms,时间窗口单位为s
-  * 如RT为10,时间窗口为10,表示如果平均响应时间大于10ms时,接下来的10s内服务降级,10s后恢复正常,进行下一轮判断
-
+  * RT单位为ms,时间窗口单位为s
+  * 如RT为100,时间窗口为10,表示如果平均响应时间大于10ms时,接下来的10s内服务降级,10s后恢复正常,进行下一轮判断
+  
 * 配置如下:超时时间100ms,熔断时间10s
 
  ![](image10.png)
@@ -482,9 +482,9 @@ feign.sentinel.enabled=true
               # 取消控制台懒加载
               eager: true 
               datasource:
-              	# 数据源名称,可自定义
+                  # 数据源名称,可自定义,推荐使用服务名
                   consumer: 
-                  	# nacos配置中心
+                      # nacos配置中心
                       nacos: 
                           server-addr: ${spring.cloud.nacos.server-addr}
                           # 定义流控规则data-id,在配置中心设置时data-id必须对应
@@ -592,9 +592,9 @@ feign.sentinel.enabled=true
               # 取消控制台懒加载
               eager: true 
               datasource:
-              	# 数据源名称,可自定义
+                  # 数据源名称,可自定义
                   degrade: 
-                  	# nacos配置中心
+                      # nacos配置中心
                       nacos: 
                           server-addr: ${spring.cloud.nacos.server-addr}
                           # 定义流控规则data-id,在配置中心设置时data-id必须对应
@@ -717,6 +717,8 @@ public class SampleService {
 
 
 # 比较Hystrix
+
+
 
 * 功能:Sentinel->信号量隔离,并发线程数限流;Hystrix->线程池隔离,信号量隔离
 * 熔断降级策略:Sentinel->基于响应时间,异常比例,异常数;Hystrix->基于异常比例

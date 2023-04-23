@@ -145,6 +145,14 @@ ${type_declaration}
 
 
 
+##### Deprecated and restricted API
+
+
+
+* Forbidden reference (access rules):将error改成Ignore
+
+
+
 ##### Annotations
 
 

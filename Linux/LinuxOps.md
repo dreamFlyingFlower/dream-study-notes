@@ -263,6 +263,14 @@ chkconfig keepalived on
 
 
 
+## Grafana
+
+
+
+* 作用同Prometheus,但功能,界面更友好,但Prometheus对docker,k8s支持更好
+
+
+
 ## ZMon
 
 
@@ -290,6 +298,32 @@ chkconfig keepalived on
 
 * 一款Linux文件系统性能测试工具,可以测试不同的操作系统中文件系统的读写性能
 * 下载:`http://www.iozone.org/src/current/`
+
+
+
+## Rancher
+
+
+
+* Docker图形化界面管理
+
+
+
+## Cadvisor
+
+
+
+* 监控Docker容器
+
+
+
+## SkyWalking
+
+
+
+* 分布式系统的应用程序性能监控,服务追踪工具,专为微服务,云原生架构和基于容器的架构设计
+
+
 
 
 

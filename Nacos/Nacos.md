@@ -67,6 +67,46 @@
 
 
 
+## Linux开机启动
+
+
+
+* 在`/usr/lib/systemd/system/`下新建nacos.service文件,内容如下
+
+  ```shell
+  [Unit]
+  Description=nacos
+  After=network.target
+  
+  [Service]
+  Type=forking
+  # 启动命令,注释需要去掉
+  ExecStart=/opt/nacos/nacos-server-2.1.0/bin/startup.sh -m standalone
+  ExecReload=/opt/nacos/nacos-server-2.1.0/bin/shutdown.sh
+  ExecStop=/opt/nacos/nacos-server-2.1.0/bin/shutdown.sh
+  PrivateTmp=true
+  
+  [Install]
+  WantedBy=multi-user.target
+  ```
+
+* 修改nacos启动脚本,将`$HOME/jdk/java`替换为真实JDK路径
+
+  ```shell
+  # [ ! -e "$JAVA_HOME/bin/java" ] && JAVA_HOME=$HOME/jdk/java
+  [ ! -e "$JAVA_HOME/bin/java" ] && JAVA_HOME=/usr/local/java/jdk1.8.0
+  ```
+
+* `systemctl daemon-reload`: 重置服务
+
+* `systemctl enable nacos.service`: 开启启动nacos服务
+
+* `systemctl start nacos.service`: 启动nacos服务
+
+* reboot重启验证
+
+
+
 
 
 ## 数据支持

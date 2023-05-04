@@ -1735,7 +1735,24 @@ ssh admin
 
 
 
-* 直接在`/etc/rc.d/rc.local`中添加需要开机时执行的命令,注意命令执行时的目录路径
+* 直接在`/etc/rc.d/rc.local`中添加需要开机时执行的命令,注意命令执行时的目录路径.该文件默认为空,需要添加`#!/bin/bash`
+
+* `systemctl start rc-local`: 启动rc-local服务
+
+* `systemct status rc-local`: 检查该文件状态
+
+* 如果无法启动,先检查`/usr/lib/systemd/system/rc-local.service`中是否如下命令,如果没有,则添加
+
+  ```shell
+  [Install]
+  WantedBy=multi-user.target
+  ```
+
+* 添加完成后执行命令`systemct darmon-reload`
+
+* `systemctl enable rc-local`: 将rc-local设置为开启启动
+
+* reboot重启
 
 
 
@@ -1744,3 +1761,18 @@ ssh admin
 
 
 * 在定时任务中添加`@reboot 需要执行的操作`,`@reboot`是一个特殊的任务,重启后会自动执行
+
+
+
+# 开机启动Java程序
+
+
+
+* 如果直接在`/etc/rc.d/rc.local`中添加了Java程序启动脚本之后没有作用,可以在启动脚本中添加JDK环境变量
+
+  ```shell
+  export JAVA_HOME="/usr/local/java/jdk1.8/"
+  export PATH=$PATH:$JAVA_HOME/bin
+  ```
+
+  

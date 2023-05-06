@@ -10,6 +10,17 @@
 
 
 
+# String
+
+
+
+```java
+// 以下语句创建了几个对象
+String s = new String("xyz");
+```
+
+
+
 # ThreadPoolExecutor
 
 

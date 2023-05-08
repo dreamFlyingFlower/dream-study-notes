@@ -26,7 +26,7 @@
 
 
 
-* 被所有线程共享
+* 和堆一样,是所有线程共享的内存区域,它用于存储已被虚拟机加载的类信息、常量、静态变量、即时编译后的代码等数据
 * 永久代和元空间都是方法区的实现,只不过不同的虚拟机实现不一样
 
 
@@ -53,6 +53,32 @@
   * 类及方法的信息等比较难确定其大小,因此对于永久代的大小指定比较困难,太小容易出现永久代溢出,太大则容易导致老年代溢出
   * 永久代会为 GC 带来不必要的复杂度,并且回收效率偏低
   * Oracle可能会将HotSpot与JRockit合二为一
+
+
+
+### 元空间替换永久代
+
+
+
+* 永久代的方法区,和堆使用的物理内存是连续的,永久代是通过以下这两个参数配置大小的
+  * `-XX:PremSize`: 设置永久代的初始大小
+  * `-XX:MaxPermSize`: 设置永久代的最大值,默认是64M
+
+![图片](img/026.png)
+
+- 对于永久代,如果动态生成很多class,就很可能出现**java.lang.OutOfMemoryError:PermGen space错误** ,因为永久代空间配置有限.最典型的场景是,在web开发比较多jsp页面的时候
+- JDK8之后,方法区存在于元空间,物理内存不再与堆连续,而是直接存在于本地内存中,理论上机器内存有多大,元空间就有多大
+
+
+
+![图片](F:/repository/dream-study-notes/Jvm/img/027.png)
+
+* 可以通过以下的参数来设置元空间的大小:
+  * `-XX:MetaspaceSize`,初始空间大小,达到该值就会触发垃圾收集进行类型卸载,同时GC会对该值进行调整: 如果释放了大量的空间,就适当降低该值:如果释放了很少的空间,那么在不超过MaxMetaspaceSize时,适当提高该值
+  * `-XX:MaxMetaspaceSize`,最大空间,默认是没有限制的
+  * `-XX:MinMetaspaceFreeRatio`,在GC之后,最小的Metaspace剩余空间容量的百分比,减少为分配空间所导致的垃圾收集
+  * `-XX:MaxMetaspaceFreeRatio`,在GC之后,最大的Metaspace剩余空间容量的百分比,减少为释放空间所导致的垃圾收集
+* 使用元空间替换永久代可以尽量避免OOM异常,且使用PermSize和MaxPermSize设置永久代的大小就决定了永久代的上限,但是不是总能知道应该设置为多大合适, 如果使用默认值很容易遇到OOM错误.当使用元空间时,可以加载多少类的元数据就不再由MaxPermSize控制, 而由系统的实际可用空间来控制啦
 
 
 
@@ -1201,6 +1227,58 @@ invokespecial #5 // Invoke myClass.<init>
 
 
 
+# 对象
+
+
+
+## 结构
+
+
+
+![](F:/repository/dream-study-notes/Jvm/img/025.png)
+
+
+
+![对象头](F:/repository/dream-study-notes/Jvm/img/021.png)
+
+
+
+* 在JVM中,对象在内存中的布局分为三块区域:对象头、实例数据和对齐填充
+* Header:对象头,存储对象的源数据,通常Hotspot虚拟机的对象头主要包括`Mark Word`(标记字段)和`Class Pointer`(类型指针)
+  * `Mark Word`:存储对象自身的运行时数据,哈希值,GC分代年龄,锁动态标志,线程持有的锁,偏向线程ID,偏向时间戳,它是实现轻量级锁和偏向锁的关键
+  * `Class Pointer`:是对象指向它的类元数据的指针,虚拟机通过这个指针来确定这个对象是哪个类的实例
+  * 一般占有2个机器码(在32位虚拟机中,1个机器码等于4字节,也就是32bit;在64位虚拟机中,1个机器码是8个字节,也就是64bit),但是如果对象是数组类型,则需要3个机器码,因为JVM虚拟机可以通过Java对象的元数据信息确定Java对象的大小,但是无法从数组的元数据来确认数组的大小,所以用一块来记录数组长度
+* InstanceData:实例数据,存放类的属性数据信息,包括父类的属性信息
+* Padding:无实际意义,主要用来填充以达到字节数为8的倍数,仅仅是为了字节对齐,因为虚拟机要求对象起始地址必须是8字节的整数倍
+
+
+
+### 监视器Monitor
+
+
+
+* 任何一个对象都有一个Monitor与之关联,当且只有一个Monitor被持有后,它将处于锁定状态
+* Monitor可以理解为一个同步工具,也可以描述为一种同步机制,它通常被描述为一个对象
+* `synchronized`在JVM里的实现都是基于进入和退出Monitor对象来实现方法同步和代码块同步,虽然具体实现细节不一样,但是都可以通过成对的`MonitorEnter`和`MonitorExit`指令来实现
+  * MonitorEnter: 插入在同步代码块的开始位置,当代码执行到该指令时,将会尝试获取该对象Monitor的所有权,即尝试获得锁
+  * MonitorExit: 插入在方法结束处和异常处,JVM保证每个`MonitorEnter`必须有对应的`MonitorExit`
+* `Synchronized`对象锁一般就是指Monitor,MarkWord锁标识位为10,其中指针指向的是Monitor对象的起始地址.在Java虚拟机(HotSpot)中,Monitor是由`ObjectMonitor`实现的
+
+
+
+## 创建
+
+
+
+* new 类名
+* 根据new的参数在常量池中定义一个类的符号引用
+* 如果没有找到这个符号引用,说明类还没有被加载,则进行类加载,解析和初始化
+* 虚拟机在堆中为对象分配内存
+* 将分配的内存初始化为零值,不包含对象头
+* 调用对象的初始化方法
+
+
+
 # 字节码指令
 
 
@@ -1257,6 +1335,9 @@ public void spin() {
 
 * <clinit>():
 * <init>():
+* nop:什么都不做
+* dup:复制栈顶数值并将复制值压入栈顶
+* new:创建一个对象,并将其引用值压入栈顶
 
 
 
@@ -1330,13 +1411,13 @@ public void spin() {
 
 * aconst_null:null对象入栈
 * iconst_m1:int常量-1入栈
-* iconst_0:int常量0入栈
+* iconst_0(要入栈的数字):int常量0入栈
 * lconst_1:long常量1入栈
 * fconst_1:float 1.0入栈
 * dconst_1:double 1.0 入栈
 * bipush:8位带符号整数入栈
 * sipush:16位带符号整数入栈
-* ldc:常量池中的项入栈
+* ldc:常量池中的常量压入栈顶
 
 
 
@@ -1344,7 +1425,7 @@ public void spin() {
 
 
 
-* xload(x为i l f d a):分别表示int,long,float,double,object ref
+* xload(x为i l f d a):分别表示int,long,float,double,object ref,将指定类型的局部变量推送至栈顶
 * xload_n(n为0 1 2 3)
 * xaload(x为i l f d a b c s)
   * 分别表示int,long,float,double,obj ref ,byte,char,short
@@ -1360,7 +1441,7 @@ public void spin() {
 
 
 
-* xstore(x为i l f d a):出栈,存入局部变量
+* xstore(x为i l f d a):出栈,存入局部变量,将栈顶指定类型数值存入指定局部变量
 * xstore_n(n 0 1 2 3):出栈,将值存入第n个局部变量
 * xastore(x为i l f d a b c s)
   * 将值存入数组中
@@ -1407,6 +1488,7 @@ public void spin() {
 * invokespecial:用于调用一些需要特殊处理的实例方法,包括实例初始化方法,私有方法和父类方法.通常根据引用的类型选择方法,而不是对象的类来选择,即它使用静态绑定而不是动态绑定
 * invokestatic:用于调用类方法(static方法)
 * 方法返回指令是根据返回值的类型区分的,包括有ireturn(当返回值是boolean,byte,char,short和int 类型时使用),lreturn,freturn,dreturn和areturn.return指令供声明为void的方法,实例初始化方法,类和接口的类初始化方法使用
+* invokedynamic:调用动态链接方法
 
 
 
@@ -2175,60 +2257,3 @@ _idiv                 = 108, // 0x6c
 * Class类中的getDeclaredField()只能拿到当前类中的字段,不能拿到父类中的字段,需要递归
 * Class类中的`getField()/getDeclaredField()`拿到的字段顺序是不固定的,但是长度和每个字段内容都仍然是相同的
 * 类中的修饰符在编译器就已经在字节码文件中确定了,不需要等到运行期
-
-
-
-# JVM调优
-
-
-
-## OOM原因
-
-
-
-* 创建了大量对象实例,导致堆内存溢出.可适当适当堆内存
-* 加载了大量类,创建了大量类,导致元空间溢出.可适当增大服务器内存,增大Perm区内存
-* 直接内存溢出:ByteBuffer.allocateDirect()无法从操作系统获得足够的空间,直接操作内存相关方法会导致直接内存溢出.减少堆内存,增大服务器内存
-
-
-
-## 案例1
-
-
-
-* Full GC过长,20-30S
-  * 减小堆内存大小,但是可以部署多个程序,避免内存浪费
-* 不定期内存溢出,把堆内存加大,会加剧溢出.导出堆转储快照信息,没有任何信息.内存监控也正常
-  * 该情况可能是NIO使用直接内存时,直接内存过小,而GC又不能控制直接内存,导致内存被撑爆
-  * 可以修改JVM的DirectMemory相关参数解决或换更大内存的服务器
-* 大量消息从A服务发送到B服务的时候,B服务无法及时处理导致B服务崩溃
-  * 在A和B服务之间添加消息队列
-
-
-
-## 案例2
-
-
-
-* 垂直电商,最高每天百万订单,JVM内存应该设置多大才能使响应时间不超过100ms
-* 需要根据业务估算最高峰时期的QPS,TPS,如果QPS是1000/S,则1个小时就是36W,一次类推计算
-* 进行压测,同时记录GC日志,根据GC日志中回收的频率以及回收时每个区的大小计算内存大小(估值)
-* 解决办法: 加CPU,加内存,上云,加缓存
-
-
-
-## 案例3
-
-
-
-* CPU经常跑满
-* 找到CPU占用最高的Java进程,导出该线程的堆栈(jstack),查找那个方法(栈帧)消耗时间高(jstack)
-
-
-
-## 案例4
-
-
-
-* CPU内存飚高
-* 导出堆内存(jmap),分析(jhat,jvisualvm,mat,jprofiler)

@@ -186,44 +186,18 @@
 
 
 
-* 对象进入老年代的**动态年龄判断规则** (动态晋升年龄计算阈值): Minor GC 时,Survivor 中年龄 1 到 N 的对象大小超过 Survivor 的 50% 时,则将大于等于年龄 N 的对象放入老年代。
-
-**核心的优化策略是: 是让短期存活的对象尽量都留在survivor里,不要进入老年代,这样在minor gc的时候这些对象都会被回收,不会进到老年代从而导致full gc** 。
-
-### 应该如何去评估新生代内存和分配合适？
-
-这里特别说一下,JVM最重要最核心的参数是去评估内存和分配,
-
-第一步需要指定堆内存的大小,这个是系统上线必须要做的,-Xms 初始堆大小,-Xmx 最大堆大小,
-
-后台Java服务中一般都指定为系统内存的一半,过大会佔用服务器的系统资源,过小则无法发挥JVM的最佳性能。
-
-其次需要指定-Xmn新生代的大小,这个参数非常关键,灵活度很大,虽然sun官方推荐为3/8大小,但是要根据业务场景来定: 
-
-- 针对于无状态或者轻状态服务(现在最常见的业务系统如Web应用)来说,一般新生代甚至可以给到堆内存的3/4大小；
-- 而对于有状态服务(常见如IM服务、网关接入层等系统)新生代可以按照默认比例1/3来设置。
-
-服务有状态,则意味著会有更多的本地缓存和会话状态信息常驻内存,应为要给老年代设置更大的空间来存放这些对象
+* 对象进入老年代的动态晋升年龄计算阈值: Minor GC 时,Survivor 中年龄 1 到 N 的对象大小超过 Survivor 的 50% 时,则将大于等于年龄 N 的对象放入老年代
+* 核心的优化策略: 让短期存活的对象尽量都留在survivor里,不要进入老年代,这样在minor gc时这些对象都会被回收,不会进到老年代从而导致full gc
 
 
 
-## 栈内存大小多少比较合适
-
--Xss栈内存大小,设置单个线程栈大小,默认值和JDK版本、系统有关,一般默认512~1024kb。一个后台服务如果常驻线程有几百个,那麽栈内存这边也会佔用了几百M的大小。
+## 评估对象从新生代到老年代
 
 
 
-### 对象年龄应该为多少才移动到老年代比较合适？
-
-假设一次minor gc要间隔二三十秒,并且,大多数对象一般在几秒内就会变为垃圾,
-
-如果对象这么长时间都没被回收,比如2分钟没有回收,可以认为这些对象是会存活的比较长的对象,从而移动到老年代,而不是继续一直占用survivor区空间。
-
-所以,可以将默认的15岁改小一点,比如改为5,
-
-那么意味着对象要经过5次minor gc才会进入老年代,整个时间也有一两分钟了(5*30s= 150s),和几秒的时间相比,对象已经存活了足够长时间了。
-
-所以: 可以适当调整JVM参数如下: 
+* 假设一次minor gc要间隔二三十秒,并且,大多数对象一般在几秒内就会变为垃圾,如果对象这么长时间都没被回收,可以认为这些对象是会存活的比较长的对象,从而移动到老年代
+* 可以将默认的15改小一点,比如10,那么对象要经过10次minor gc才会进入老年代,整个时间也有5-6分钟了(10*30s= 300s),和几秒的时间相比,对象已经存活了足够长时间了
+* 所以,可以适当调整JVM参数如下: 
 
 ```java
 ‐Xms3072M ‐Xmx3072M ‐Xmn2048M ‐Xss1M ‐XX:MetaspaceSize=256M ‐XX:MaxMetaspaceSize=256M ‐XX:SurvivorRatio=8 ‐XX:MaxTenuringThreshold=5 
@@ -231,132 +205,95 @@
 
 
 
-## 多大的对象,可以直接到老年代比较合适？
+## 评估对象直接到老年代
 
-对于多大的对象直接进入老年代(参数-XX:PretenureSizeThreshold),一般可以结合自己系统看下有没有什么大对象 生成,预估下大对象的大小,一般来说设置为1M就差不多了,很少有超过1M的大对象,
 
-所以: 可以适当调整JVM参数如下: 
+
+* 对于多大的对象直接进入老年代(参数-XX:PretenureSizeThreshold),可以结合实际业务看下有没有什么大对象生成,预估大对象的大小,一般来说设置为1M就差不多了,很少有超过1M的大对象,所以: 可以适当调整JVM参数如下: 
 
 ```java
 ‐Xms3072M ‐Xmx3072M ‐Xmn2048M ‐Xss1M ‐XX:MetaspaceSize=256M ‐XX:MaxMetaspaceSize=256M ‐XX:SurvivorRatio=8 ‐XX:MaxTenuringThreshold=5 ‐XX:PretenureSizeThreshold=1M
-
 ```
 
 
 
-## 垃圾回收器CMS老年代的参数优化
+## CMS老年代参数优化
 
-JDK8默认的垃圾回收器是-XX:+UseParallelGC(年轻代)和-XX:+UseParallelOldGC(老年代),
 
-如果内存较大(超过4个G,只是经验 值),还是建议使用G1.
 
-这里是4G以内,又是主打“低延时” 的业务系统,可以使用下面的组合: 
+* JDK8默认的垃圾回收器是-XX:+UseParallelGC(年轻代)和-XX:+UseParallelOldGC(老年代),如果内存较大(超过4G,只是经验值),还是建议使用G1
+* 这里是4G以内,又是主打低延时的业务系统,可以使用下面的组合: 
 
 ```java
 ParNew+CMS(-XX:+UseParNewGC -XX:+UseConcMarkSweepGC)
 ```
 
-新生代的采用ParNew回收器,工作流程就是经典复制算法,在三块区中进行流转回收,只不过采用多线程并行的方式加快了MinorGC速度。
-
-老生代的采用CMS。再去**优化老年代参数** : 比如老年代默认在标记清除以后会做整理,还可以在CMS的增加GC频次还是增加GC时长上做些取舍,
-
-如下是响应优先的参数调优: 
+* 新生代的采用ParNew,工作流程就是经典复制算法,在三块区中进行流转回收,只不过采用多线程并行的方式加快了MinorGC速度
+* 老年代的采用CMS,优化老年代参数: 比如老年代默认在标记清除以后会做整理,还可以在CMS增加GC频次还是增加GC时长上做些取舍,如下是响应优先的参数调优: 
 
 ```java
 XX:CMSInitiatingOccupancyFraction=70
-
 ```
 
+* 设定CMS在对内存占用率达到70%的时候开始GC(因为CMS会有浮动垃圾,所以一般都较早启动GC)
 
-
-设定CMS在对内存占用率达到70%的时候开始GC(因为CMS会有浮动垃圾,所以一般都较早启动GC)
-
-```
+```java
 XX:+UseCMSInitiatinpOccupancyOnly
 ```
 
+* 和上面搭配使用,否则只生效一次
 
-
-和上面搭配使用,否则只生效一次
-
-```
+```java
 -XX:+AlwaysPreTouch
 ```
 
-强制操作系统把内存真正分配给IVM,而不是用时才分配。
+* 强制操作系统把内存真正分配给JVM,而不是用时才分配
+* 只要年轻代参数设置合理,老年代CMS的参数设置基本都可以用默认值,如下所示: 
 
-综上,只要年轻代参数设置合理,老年代CMS的参数设置基本都可以用默认值,如下所示: 
-
-```
+```java
 ‐Xms3072M ‐Xmx3072M ‐Xmn2048M ‐Xss1M ‐XX:MetaspaceSize=256M ‐XX:MaxMetaspaceSize=256M ‐XX:SurvivorRatio=8  ‐XX:MaxTenuringThreshold=5 ‐XX:PretenureSizeThreshold=1M ‐XX:+UseParNewGC ‐XX:+UseConcMarkSweepGC ‐XX:CMSInitiatingOccupancyFraction=70 ‐XX:+UseCMSInitiatingOccupancyOnly ‐XX:+AlwaysPreTouch
 ```
 
-参数解释
 
-1.`‐Xms3072M ‐Xmx3072M` 最小最大堆设置为3g,最大最小设置为一致防止内存抖动
 
-2.`‐Xss1M` 线程栈1m
-
-3.`‐Xmn2048M ‐XX:SurvivorRatio=8` 年轻代大小2g,eden与survivor的比例为8:1:1,也就是1.6g:0.2g:0.2g
-
-4.`-XX:MaxTenuringThreshold=5` 年龄为5进入老年代 5.‐`XX:PretenureSizeThreshold=1M` 大于1m的大对象直接在老年代生成
-
-6.`‐XX:+UseParNewGC ‐XX:+UseConcMarkSweepGC` 使用ParNew+cms垃圾回收器组合
-
-7.`‐XX:CMSInitiatingOccupancyFraction=70` 老年代中对象达到这个比例后触发fullgc
-
-8.`‐XX:+UseCMSInitiatinpOccupancyOnly` 老年代中对象达到这个比例后触发fullgc,每次
-
-9.`‐XX:+AlwaysPreTouch` 强制操作系统把内存真正分配给IVM,而不是用时才分配。
+## 配置dump文件和GC日志
 
 
 
-## 配置OOM时候的内存dump文件和GC日志
+* 额外增加了GC日志打印、OOM自动dump等配置内容,帮助进行问题排查
 
-额外增加了GC日志打印、OOM自动dump等配置内容,帮助进行问题排查
-
-```
+```java
 -XX:+HeapDumpOnOutOfMemoryError
 ```
 
-在Out Of Memory,JVM快死掉的时候,输出Heap Dump到指定文件。
+* 在OOM,JVM快死掉的时候,输出Heap Dump到指定文件
+* 路径只指向目录,JVM会保持文件名的唯一性,叫java_pid${pid}.hprof
 
-不然开发很多时候还真不知道怎么重现错误。
-
-路径只指向目录,JVM会保持文件名的唯一性,叫java_pid${pid}.hprof。
-
-```
--XX:+HeapDumpOnOutOfMemoryError 
+```java
+-XX:+HeapDumpOnOutOfMemoryError
 -XX:HeapDumpPath=${LOGDIR}/
 ```
 
-因为如果指向特定的文件,而文件已存在,反而不能写入。
+* 输出4G的HeapDump,会导致IO性能问题,在普通硬盘上,会造成20秒以上的硬盘IO跑满,在容器环境下,这个也会影响同一宿主机上的其他容器
+* GC的日志的输出也很重要: 
 
-输出4G的HeapDump,会导致IO性能问题,在普通硬盘上,会造成20秒以上的硬盘IO跑满,
-
-需要注意一下,但在容器环境下,这个也会影响同一宿主机上的其他容器。
-
-GC的日志的输出也很重要: 
-
-```
+```java
 -Xloggc:/dev/xxx/gc.log 
 -XX:+PrintGCDateStamps 
 -XX:+PrintGCDetails
 ```
 
-GC的日志实际上对系统性能影响不大,打日志对排查GC问题很重要。
+* GC的日志实际上对系统性能影响不大,打日志对排查GC问题很重要
 
 
 
-### 一份通用的JVM参数模板
+## 一份通用的JVM参数模板
 
 
 
+* 基于4C8G系统的ParNew+CMS回收器模板(响应优先),新生代大小根据业务灵活调整
 
-
-**基于4C8G系统的ParNew+CMS回收器模板(响应优先),新生代大小根据业务灵活调整！**
-
-```
+```java
 -Xms4g
 -Xmx4g
 -Xmn2g
@@ -375,17 +312,9 @@ GC的日志实际上对系统性能影响不大,打日志对排查GC问题很重
 -Xloggc:gc.log
 ```
 
-#### 如果是GC的吞吐优先,推荐使用G1,基于8C16G系统的G1回收器模板: 
+* 如果是GC的吞吐优先,推荐使用G1,基于8C16G系统的G1回收器模板: 
 
-G1收集器自身已经有一套预测和调整机制了,因此我们首先的选择是相信它,
-
-即调整-`XX:MaxGCPauseMillis=N`参数,这也符合G1的目的——让GC调优尽量简单！
-
-同时也不要自己显式设置新生代的大小(用-Xmn或-XX:NewRatio参数),
-
-如果人为干预新生代的大小,会导致目标时间这个参数失效。
-
-```
+```java
 -Xms8g
 -Xmx8g
 -Xss1m
@@ -400,11 +329,9 @@ G1收集器自身已经有一套预测和调整机制了,因此我们首先的�
 -Xloggc:gc.log
 ```
 
-| G1参数                              | 描述                                               | 默认值 |
-| :---------------------------------- | :------------------------------------------------- | :----- |
-| XX:MaxGCPauseMillis=N               | 最大GC停顿时间。柔性目标,JVM满足90%,不保证100%。   | 200    |
-| -XX:nitiatingHeapOccupancyPercent=n | 当整个堆的空间使用百分比超过这个值时,就会融发MixGC | 45     |
-
-针对`-XX:MaxGCPauseMillis`来说,参数的设置带有明显的倾向性: 调低↓: 延迟更低,但MinorGC频繁,MixGC回收老年代区减少,增大Full GC的风险。调高↑: 单次回收更多的对象,但系统整体响应时间也会被拉长。
-
-针对`InitiatingHeapOccupancyPercent`来说,调参大小的效果也不一样: 调低↓: 更早触发MixGC,浪费cpu。调高↑: 堆积过多代回收region,增大FullGC的风险
+* `XX:MaxGCPauseMillis=N`: 最大GC停顿时间.柔性目标,JVM满足90%,不保证100%,默认200
+  * 调低:延迟更低,但MinorGC频繁,MixGC回收老年代区减少,增大Full GC的风险
+  * 调高:单次回收更多的对象,但系统整体响应时间也会被拉长
+* `-XX:InitiatingHeapOccupancyPercent=n`: 当整个堆的空间使用百分比超过这个值时,就会融发MixGC,默认45
+  * 调低: 更早触发MixGC,浪费cpu
+  * 调高: 堆积过多代回收region,增大FullGC的风险

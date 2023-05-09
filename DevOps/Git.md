@@ -137,6 +137,27 @@ Head:指向当前分支,并非指向master.切换到那个分支就是指向那�
 
 
 
+## git tag
+
+
+
+* `git tag`: 显示本地所有标签,可能和远程不同步
+* `git tag -l | xargs git tag -d`: 删除所有本地分支
+* `git fetch origin --prune`或者`git fetch origin -p`或者`git feich -p`: 从远程拉取所有信息,加上一个命令可以更新远程tag到本地
+* `git ls-remote --tags origin`: 查询远程仓库的tag
+* `git tag -l v1.*`: 列出符合条件的tag
+* `git tag v1.0.0`: 创建版本为v1.0.0的tag
+* `git tag -am v1.0.0`: 创建含标注tag
+* `git tag -a f1bb97a(commit id)`: 为之前提交打tag
+* `git push origin --tags`: 推送所有本地tag到远程
+* `git push origin v1.0.0`: 推送指定本地tag到远程
+* `git tag -d v1.0.0`: 删除本地指定tag
+* `git push origin :refs/tags/`: 删除远程指定tag
+* `git fetch origin`: 拉取远程指定tag
+* `git show v1.0.0`: 显示指定tag详细信息
+
+
+
 ## git log
 
 

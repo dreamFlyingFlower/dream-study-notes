@@ -691,6 +691,10 @@ S0     S1     E      O      M     CCS    YGC   YGCT    FGC    FGCT     GCT
 
 * -Xss:指定线程的最大栈空间大小,通常只有几百k
 
+* -XX:MetaspaceSize:初始元空间大小
+
+* -XX:MaxMetaspaceSize:最大元空间大小
+
 * -XX:NewSize=n:设置新生代大小
 
 * -XX:PermSize:设置老年代的初始大小,默认是64M
@@ -733,7 +737,7 @@ S0     S1     E      O      M     CCS    YGC   YGCT    FGC    FGCT     GCT
 
 * -XX:+HeapDumpOnOutOfMemoryError:使用该参数可以在OOM时导出整个堆信息,文件将导出在程序目录下
 
-* -XX:HeapDumpPath=filePath:设置OOM时导出的信息存放地址
+* -XX:HeapDumpPath=filePath:设置OOM时导出的信息存放地址,最好是一个目录,不是一个文件
 
 * -XX:OnOutOfMemoryError=filePath:在OOM时,执行一个脚本,如发送邮件
 

@@ -562,6 +562,10 @@ private static int ctlOf(int rs, int wc) {
 
 
 
+* JMM是一套规范,在多线程中,即要让编译器和CPU可以灵活地重排序;又要明确告知开发者不需要感知什么样的重排序,需要感知什么样的重排序.开发者根据需要决定重排序对程序是否有影响,如果有,就需要显示地通过volatile、synchronized等线程同步机制来禁止重排序
+
+
+
 ## CPU缓存
 
 
@@ -590,20 +594,23 @@ private static int ctlOf(int rs, int wc) {
 
 * 因为存在CPU缓存一致性协议,例如MESI,多个CPU核心之间缓存不会出现不同步的问题,不会有内存可见性问题
 * 缓存一致性协议对性能有很大损耗,为解决这个问题,又进行了各种优化.例如,在计算单元和L1之间加了Store Buffer,Load Buffer以及其他其他各种Buffer
-* L1、L2、L3和主内存之间是同步的,有缓存一致性协议的保证,但是Store Buffer、Load Buffer和L1之间却是异步的,向内存中写入一个变量,这个变量会保存在Store Buffer里面,稍后才异步地写入L1中,同时同步写入主内存中
-* 操作系统内核视角下的CPU缓存模型: 
+  * Store Buffer: 写变量
+  * Load Buffer: 读变量
+
+* L1、L2、L3和主内存之间是同步的,有缓存一致性协议的保证,但是Store Buffer,Load Buffer和L1之间却是异步的,向内存中写入一个变量,这个变量会保存在Store Buffer里面,稍后才异步写入L1中,同时同步写入主内存中
+* 多CPU,每个CPU多核,每个核上面可能还有多个硬件线程,对于操作系统来讲,就相当于一个个的逻辑CPU,每个逻辑CPU都有自己的缓存,这些缓存和主内存之间不是完全同步的.对应到Java里,就是JVM抽象内存模型:
+
+
 
 ![](img/004.png)
 
 
 
-* 多CPU,每个CPU多核,每个核上面可能还有多个硬件线程,对于操作系统来讲,就相当于一个个的逻辑CPU,每个逻辑CPU都有自己的缓存,这些缓存和主内存之间不是完全同步的.对应到Java里,就是JVM抽象内存模型,如下图所示:
-
-![](img/005.png)
+## 内存可见性
 
 
 
-* 多核CPU以及缓存,主内存之间的数据共享造成了内存可见性问题
+* CPU缓存与主存之间数据共享导致了内存可见性问题
 
 
 
@@ -611,16 +618,16 @@ private static int ctlOf(int rs, int wc) {
 
 
 
-### 重排序与内存可见性
+### 重排序
 
 
 
-* Store Buffer的延迟写入是重排序的一种,称为内存重排序(Memory Ordering).除此之外,还有编译器和CPU的指令重排序
-* 重排序类型: 
+* Store Buffer的延迟写入(异步写入)是重排序的一种,称为内存重排序(Memory Ordering),即其他核心从L1读数据的时候,写入数据的核心还没有将数据写入到L1中,导致其他核心读取数据不是最新
+* 除了内存重排序,还有编译器和CPU的指令重排序
   * 编译器重排序.对于没有先后依赖关系的语句,编译器可以重新调整语句的执行顺序
   * CPU指令重排序:在指令级别,让没有依赖关系的多条指令并行
-  * CPU内存重排序: CPU有自己的缓存,指令的执行顺序和写入主内存的顺序不完全一致
-* 在三种重排序中,第三类就是造成内存可见性问题的主因,如下案例: 
+  * CPU内存重排序: CPU有自己的缓存,指令的执行顺序和写入主内存的顺序不完全一致,是造成内存可见性问题的主因
+* 假设X,Y是两个全局变量,初始X,Y=0,线程1和线程2的执行先后顺序是不确定的,最终结果也是不确定的:
 
 ```
 线程1
@@ -629,18 +636,13 @@ a=Y
 线程2: 
 Y=1
 b=X
-```
 
-* 假设X、Y是两个全局变量,初始的时候,X=0,Y=0.线程1和线程2的执行先后顺序是不确定的,可能顺序执行,也可能交叉执行,最终正确的结果可能是: 
-
-```
 1. a=0,b=1
 2. a=1,b=0
 3. a=1,b=1
 ```
 
-* 不管谁先谁后,执行结果应该是这三种场景中的一种,但实际可能是a=0,b=0
-* 两个线程的指令都没有重排序,执行顺序就是代码的顺序,但仍然可能出现a=0,b=0.原因是线程1先执行X=1,后执行a=Y,但此时X=1还在自己的Store Buffer里面,没有及时写入主内存中.所以,线程2看到的X还是0.线程2的道理与此相同
+* 不管谁先谁后,执行结果应该是这三种场景中的一种,但实际可能是a=0,b=0.两个线程的指令都没有重排序,执行顺序也没重排序,仍然出现这种结果的原因是线程1先执行X=1,后执行a=Y,但此时X=1还在自己的Store Buffer里,没有写入主存中,所以线程2看到的X还是0.线程2同理
 
 
 
@@ -648,10 +650,10 @@ b=X
 
 
 
-* 为了禁止编译器重排序和 CPU 重排序,在编译器和 CPU 层面都有对应的指令,也就是内存屏障(Memory Barrier),这也正是JMM和happen-before规则的底层实现原理
-* 编译器的内存屏障,只是为了告诉编译器不要对指令进行重排序.当编译完成之后,这种内存屏障就消失了,CPU并不会感知到编译器中内存屏障的存在
-* 而CPU的内存屏障是CPU提供的指令,可以由开发者显示调用
-* 内存屏障是很底层的概念,一般用 volatile 关键字就足够了.但从JDK 8开始,Java在Unsafe类中提供了三个内存屏障函数
+* Memory Barrier.为了禁止编译器和 CPU 重排序,在编译器和 CPU 层面产生的对应指令,这也是JMM和happen-before的底层实现原理
+* 编译器的内存屏障,只在编译期告诉编译器不要进行指令重排.当编译完成之后,内存屏障就消失了,CPU并不会感知到编译器中的内存屏障
+* CPU的内存屏障是CPU提供的指令,可以由开发者显示调用
+* 内存屏障是很底层的概念,一般用 volatile 关键字就足够了.但从JDK 8开始,Unsafe类中提供了三个内存屏障函数
 
 ```java
 public final class Unsafe {
@@ -664,10 +666,10 @@ public final class Unsafe {
 ```
 
 * 在理论层面,可以把基本的CPU内存屏障分成四种: 
-  * LoadLoad: 禁止读和读的重排序
-  * StoreStore: 禁止写和写的重排序
-  * LoadStore: 禁止读和写的重排序
-  * StoreLoad: 禁止写和读的重排序
+  * LoadLoad: 禁止读读重排序
+  * StoreStore: 禁止写写重排序
+  * LoadStore: 禁止读写重排序
+  * StoreLoad: 禁止写读重排序
 * Unsafe中的方法: 
   * loadFence=LoadLoad+LoadStore
   * storeFence=StoreStore+LoadStore
@@ -679,17 +681,12 @@ public final class Unsafe {
 
 
 
-* 重排序
-
-
-
 #### 单线程重排序
 
 
 
-* 无论什么语言,站在编译器和CPU的角度来说,不管怎么重排序,单线程程序的执行结果不能改变,这就是单线程程序的重排序规则
-* 即只要操作之间没有数据依赖性,编译器和CPU都可以任意重排序,因为执行结果不会改变,这也就是as-if-serial语义
-* 对于单线程程序来说,编译器和CPU可能做了重排序,但开发者感知不到,也不存在内存可见性问题
+* 无论什么语言,站在编译器和CPU的角度,不管怎么重排序,单线程程序的执行结果不能改变,这就是单线程程序的重排序规则.即只要操作之间没有数据依赖性,编译器和CPU都可以任意重排序,因为执行结果不会改变,这也就是as-if-serial语义
+* 对于单线程程序来说,即使编译器和CPU做了重排序,也不存在内存可见性问题
 
 
 
@@ -697,10 +694,8 @@ public final class Unsafe {
 
 
 
-* 对于多线程程序来说,线程之间的数据依赖性太复杂,编译器和CPU没有办法完全理解这种依赖性并据此做出最合理的优化
-* 编译器和CPU只能保证每个线程的as-if-serial语义
-* 线程之间的数据依赖和相互影响,需要编译器和CPU的上层来确定
-* 上层要告知编译器和CPU在多线程场景下什么时候可以重排序,什么时候不能重排序
+* 多线程之间的数据依赖性太复杂,编译器和CPU不能完全理解这种依赖性并做出优化,只能保证每个线程的as-if-serial语义
+* 线程之间的数据依赖和相互影响,需要编译器和CPU的上层告知编译器和CPU在多线程场景下什么时候可以重排序,什么时候不能重排序
 
 
 
@@ -708,88 +703,80 @@ public final class Unsafe {
 
 
 
-* 使用happen-before描述两个操作之间的内存可见性
-
-* Java内存模型(JMM)是一套规范,在多线程中,一方面,要让编译器和CPU可以灵活地重排序;另一方面,要对开发者做一些承诺,明确告知开发者不需要感知什么样的重排序,需要感知什么样的重排序.然后,根据需要决定这种重排序对程序是否有影响.如果有影响,就需要开发者显示地通过
-
-* volatile、synchronized等线程同步机制来禁止重排序
-
-* 关于happen-before:
-
+* 描述两个操作之间的内存可见性(hb):
   * 如果A happen-before B,意味着A的执行结果必须对B可见,也就是保证跨线程的内存可见性
-  * A happen before B不代表A一定在B之前执行.因为,对于多线程程序而言,两个操作的执行顺序是不确定的
+  * A happen before B不代表A一定在B之前执行.因为多线程程序中,两个操作的执行顺序是不确定的
   * happen-before只确保如果A在B之前执行,则A的执行结果必须对B可见
-
-* 定义了内存可见性的约 束,也就定义了一系列重排序的约束
-
 * 基于happen-before的这种描述方法,JMM对开发者做出了一系列承诺: 
 
   * 单线程中的每个操作,happen-before 对应该线程中任意后续操作(也就是 as-if-serial语义保证)
-  * 对volatile变量的写入,happen-before对应后续对这个变量的读取
-  * 对synchronized的解锁,happen-before对应后续对这个锁的加锁
+  * 对volatile变量的写入,happen-before对应后续对这个变量的读取,即保证先写后读
+  * 对synchronized的解锁,happen-before对应后续对这个锁的加锁,即保证先解锁后加锁
+* JMM对编译器和CPU来说,volatile 变量不能重排序;非 volatile 变量可以任意重排序
 
-* JMM对编译器和CPU 来说,volatile 变量不能重排序;非 volatile 变量可以任意重排序
 
-* happen-before的传递性:
 
-  * 除了这些基本的happen-before规则,happen-before还具有**传递性**,即若A happen-before B,B happen-before C,则A happen-before C
+#### 传递性
 
-  * 如果一个变量不是volatile变量,当一个线程读取、一个线程写入时可能有问题。那岂不是说,在多 线程程序中,我们要么加锁,要么必须把所有变量都声明为volatile变量?这显然不可能,而这就得归功 于happen-before的传递性
 
-    ```java
-    class A {
-        private int a = 0;
-        private volatile int c = 0;
-        public void set() {
-            a = 5; // 操作1
-            c = 1; // 操作2
-        }
-        public int get() {
-            int d = c; // 操作3
-            return a; // 操作4
-        }
-    }
-    ```
 
-  * 假设线程A先调用了set,设置了a=5；之后线程B调用了get,返回值一定是a=5。为什么呢?
+* 即若A hb B,B hb C,则A hb C
 
-  * 操作1和操作2是在同一个线程内存中执行的,操作1 happen-before 操作2,同理,操作3 happen-before操作4。又因为c是volatile变量,对c的写入happen-before对c的读取,所以操作2 happen-before操作3。利用happen-before的传递性,就得到: 
+  ```java
+  class A {
+      private int a = 0;
+      private volatile int c = 0;
+      public void set() {
+          a = 5; // 操作1
+          c = 1; // 操作2
+      }
+      public int get() {
+          int d = c; // 操作3
+          return a; // 操作4
+      }
+  }
+  ```
 
-    * 操作1 happen-before 操作2 happen-before 操作3 happen-before操作4。所以,操作1的结果,一定对操作4可见
+* 假设线程A先调用了set,设置了a=5;之后线程B调用了get,则返回值一定是a=5
 
-    ```java
-    class A {
-        private int a = 0;
-        private int c = 0;
-        public synchronized void set() {
-            a = 5; // 操作1
-            c = 1; // 操作2
-        }
-        public synchronized int get() {
-            return a;
-        }
-    }
-    ```
+* 操作1和操作2是在同一个线程内存中执行的,操作1 hb 操作2,操作3 hb 操作4
 
-  * 假设线程A先调用了set,设置了a=5；之后线程B调用了get,返回值也一定是a=5
+* 而c是volatile变量,对c的写入 hb 对c的读取,所以操作2 hb 操作3
 
-  * 因为与volatile一样,synchronized同样具有happen-before语义。展开上面的代码可得到类似于下面的伪代码: 
+* 利用hb的传递性,就得到: 操作1 hb 操作2 hb 操作3 hb操作4,所以,操作1的结果,一定对操作4可见
 
-    ```
-    线程A：
-    加锁; // 操作1
-    a = 5; // 操作2
-    c = 1; // 操作3
-    解锁; // 操作4
-    线程B：
-    加锁; // 操作5
-    读取a; // 操作6
-    解锁; // 操作7
-    ```
+  ```java
+  class A {
+      private int a = 0;
+      private int c = 0;
+      public synchronized void set() {
+          a = 5; // 操作1
+          c = 1; // 操作2
+      }
+      public synchronized int get() {
+          return a;
+      }
+  }
+  ```
+  
+* 假设线程A先调用了set,设置了a=5;之后线程B调用了get,返回值也一定是a=5
 
-  * 根据synchronized的happen-before语义,操作4 happen-before 操作5,再结合传递性,最终就会得到: 
+* 因为与volatile一样,synchronized同样具有hb语义,展开上面的代码可得到类似于下面的伪代码: 
 
-    * 操作1 happen-before 操作2……happen-before 操作7。所以,a、c都不是volatile变量,但仍然有内存可见性
+  ```
+  线程A：
+  加锁; // 操作1
+  a = 5; // 操作2
+  c = 1; // 操作3
+  解锁; // 操作4
+  线程B：
+  加锁; // 操作5
+  读取a; // 操作6
+  解锁; // 操作7
+  ```
+
+* 根据synchronized的hb语义,操作4 hb 操作5,再结合传递性,最终就会得到: 操作1 hb 操作2 ...... hb 操作7,所以,a、c都不是volatile变量,但仍然有内存可见性
+
 
 
 
@@ -801,23 +788,9 @@ public final class Unsafe {
 
 
 
-* 如,对于一个long型变量的赋值和取值操作而言,在多线程场景下,线程A调用set(100),线程B调 用get(),在某些场景下,返回值可能不是100
+* 对于一个long型变量的赋值和取值操作而言,在多线程某些场景下,返回值可能不是并不准确
 
-  ```java
-  public class MyClass {
-  private long a = 0;
-  // 线程A调用set(100)
-  public void set(long a) {
-  this.a = a;
-  }
-  // 线程B调用get()，返回值一定是100吗？
-  public long get() {
-  return this.a;
-  }
-  }
-  ```
-
-* 因为JVM的规范并没有要求64位的long或者double的写入是原子的。在32位的机器上,一个64位变 量的写入可能被拆分成两个32位的写操作来执行。这样一来,读取的线程就可能读到“一半的值”。解决 办法也很简单,在long前面加上volatile关键字
+* 因为JVM的规范并没有要求64位的long或者double的写入是原子的.在32位的机器上,一个64位变量的写入可能被拆分成两个32位的写操作来执行,这样读取的线程就可能读到一半的值,另外一半读取不到.解决办法也很简单,在long前面加上volatile
 
 
 
@@ -825,13 +798,31 @@ public final class Unsafe {
 
 
 
-* 单例模式的线程安全的写法不止一种,常用写法为DCL(Double Checking Locking),如下所示: 
-* 上述的 instance = new Singleton(); 代码有问题: 其底层会分为三个操作: 
-  * 分配一块内存
-  * 在内存上初始化成员变量
-  * 把instance引用指向内存
-* 在这三个操作中,操作2和操作3可能重排序,即先把instance指向内存,再初始化成员变量,因为 二者并没有先后的依赖关系。此时,另外一个线程可能拿到一个未完全初始化的对象。这时,直接访问 里面的成员变量,就可能出错。这就是典型的“构造方法溢出”问题
-* 解决办法也很简单,就是为instance变量加上volatile修饰
+* 单例模式的线程安全的写法不止一种,常用写法为DCL(Double Checking Locking)-双重检查锁定,如下所示: 
+
+```java
+public class Singleton {
+    private static Singleton instance;
+    public static Singleton getInstance() {
+        if (instance == null) {
+            synchronized(Singleton.class) {
+                if (instance == null) {
+                    // 此处代码有问题
+                    instance = new Singleton();
+                }
+            }
+        }
+        return instance;
+    }
+}
+```
+
+* 上述的 `instance = new Singleton();` 代码有问题,其底层会分为三个操作: 
+  * 1.分配一块内存
+  * 2.在内存上初始化成员变量
+  * 3.把instance引用指向内存
+* 在这三个操作中,操作2和操作3可能重排序,即先把instance指向内存,再初始化成员变量,因为二者并没有先后的依赖关系.此时,另外一个线程可能拿到一个未完全初始化的对象,这时,直接访问里面的成员变量,就可能出错.这就是典型的构造方法溢出问题
+* 为instance变量加上volatile可解决该问题
 * volatile的三重功效: 64位写入的原子性、内存可见性和禁止重排序
 
 
@@ -840,21 +831,20 @@ public final class Unsafe {
 
 
 
-* 由于不同的CPU架构的缓存体系不一样,重排序的策略不一样,所提供的内存屏障指令也就有差异。
 * 这里只探讨为了实现volatile关键字的语义的一种参考做法: 
-  * 在volatile写操作的前面插入一个StoreStore屏障。保证volatile写操作不会和之前的写操作重 排序
-  * 在volatile写操作的后面插入一个StoreLoad屏障。保证volatile写操作不会和之后的读操作重排序
-  * 在volatile读操作的后面插入一个LoadLoad屏障+LoadStore屏障。保证volatile读操作不会和 之后的读操作、写操作重排序
-* 具体到x86平台上,其实不会有LoadLoad、LoadStore和StoreStore重排序,只有StoreLoad一种 重排序(内存屏障),也就是只需要在volatile写操作后面加上StoreLoad屏障
+  * 在volatile写操作的前面插入一个StoreStore屏障,保证volatile写操作不会和之前的写操作重排序
+  * 在volatile写操作的后面插入一个StoreLoad屏障,保证volatile写操作不会和之后的读操作重排序
+  * 在volatile读操作的后面插入一个LoadLoad屏障+LoadStore屏障,保证volatile读操作不会和之后的读操作、写操作重排序
+* 具体到x86平台上,其实不会有LoadLoad、LoadStore和StoreStore,只有StoreLoad一种重排序(内存屏障),也就是只需要在volatile写操作后面加上StoreLoad屏障
 
 
 
-### JSR-133对volatile的增强
+### volatile增强
 
 
 
-* 在JSR -133之前的旧内存模型中,一个64位long/ double型变量的读/ 写操作可以被拆分为两个32位的读/写操作来执行。从JSR -133内存模型开始 (即从JDK5开始),仅仅只允许把一个64位long/ double 型变量的**写操作拆分**为两个32位的写操作来执行,任意的**读操作**在JSR -133中都**必须具有原子性**(即 任意读操作必须要在单个读事务中执行)
-* 这也正体现了Java对happen-before规则的严格遵守
+* 在之前的旧内存模型中,一个64位`long/double`变量的`读/写`操作可以被拆分为两个32位的`读/写`操作来执行
+* 从JSR -133内存模型开始 (即JDK5),仅仅只允许把一个64位`long/double`变量的**写操作拆分**为两个32位的写操作来执行,任意的**读操作**在JSR -133中都**必须具有原子性**(即任意读操作必须要在单个读事务中执行)
 
 
 
@@ -862,36 +852,26 @@ public final class Unsafe {
 
 
 
-### 构造方法溢出问题
+### 构造方法溢出
 
 
 
-* 考虑下面的代码: 
-* num3和num4的值是否一定是1和2?
-* num3、num4不见得一定等于1,2。和DCL的例子类似,也就是构造方法溢出问题。myClass = new MyClass()这行代码,分解成三个操作: 
-  * 分配一块内存
-  * 在内存上初始化i=1,j=2
-  * 把myClass指向这块内存
-* 操作2和操作3可能重排序,因此线程B可能看到未正确初始化的值。对于构造方法溢出,就是一个 对象的构造并不是“原子的”,当一个线程正在构造对象时,另外一个线程却可以读到未构造好的一半对象
+* 详见重排序DCL问题
 
 
 
-### final的happen-before
+### final的hb
 
 
 
-* 要解决这个问题,不止有一种办法
-* 办法1: 给num1,num2加上volatile关键字
-* 办法2: 为read/write方法都加上synchronized关键字
-* 如果num1,num2只需要初始化一次,还可以使用final关键字
-* 之所以能解决问题,是因为同volatile一样,final关键字也有相应的happen-before语义: 
-  * 对final域的写(构造方法内部),happen-before于后续对final域所在对象的读
-  * 对final域所在对象的读,happen-before于后续对final域的读
-* 通过这种happen-before语义的限定,保证了final域的赋值,一定在构造方法之前完成,不会出现 另外一个线程读取到了对象,但对象里面的变量却还没有初始化的情形,避免出现构造方法溢出的问 题
+* final也有相应的hb语义: 
+  * 对final域的写(构造方法内部) hb 对final域所在对象的读
+  * 对final域所在对象的读 hb 对final域字段的读
+* 通过hb语义的限定,保证了final域的赋值,一定在构造方法之前完成,不会出现另外一个线程读取到了对象,但对象里面的变量却还没有初始化的情形,避免出现构造方法溢出的问 题
 
 
 
-## happen-before规则总结
+## happen-before总结
 
 
 
@@ -899,9 +879,11 @@ public final class Unsafe {
 * 对volatile变量的写,happen-before于后续对这个变量的读
 * 对synchronized的解锁,happen-before于后续对这个锁的加锁
 * 对final变量的写,happen-before于final域对象的读,happen-before于后续对final变量的读
-* 四个基本规则再加上happen-before的传递性,就构成JMM对开发者的整个承诺。在这个承诺以外 的部分,程序都可能被重排序,都需要开发者小心地处理内存可见性问题
+* 四个基本规则再加上happen-before的传递性,就构成JMM对开发者的整个承诺
 
-![](img/006.png)
+
+
+![](img/005.png)
 
 
 
@@ -918,9 +900,6 @@ public final class Unsafe {
 
 
 * BlockingQueue是一个带阻塞功能的队列,当入队列时,若队列已满,则阻塞调用者;当出队列时,若队列为空,则阻塞调用者
-* 该接口和JDK集合包中的Queue接口是兼容的,同时在其基础上增加了阻塞功能
-* 入队提供了add()、offer()、put()3个方法,add()和offer()的返回值是布尔类型,而put无返回值,还会抛出中断异常,所以add()和offer()是无阻塞的,也是Queue本身定义的接口,而put()是阻塞的.add()和offer()的区别不大,当队列为满的时候,前者会抛出异常,后者则直接返回false
-* 出队列与之类似,提供了remove()、poll()、take()等方法,remove()是非阻塞式的,take()和poll()是阻塞式的
 
 
 
@@ -929,11 +908,23 @@ public final class Unsafe {
 
 
 * 是一个用数组实现的环形队列,在构造方法中,会要求传入数组的容量
-* 其核心数据结构如下: 
-* 其put/take方法也很简单,如下所示。
-* ![](media/image11.jpeg)![](media/image12.jpeg)
-* put方法: ![](media/image13.jpeg)
-* take方法: ![](media/image14.jpeg)
+
+```java
+public class ArrayBlockingQueue<E> extends AbstractQueue<E> implements BlockingQueue<E>, java.io.Serializable {
+    final Object[] items;
+    // 队头指针索引
+    int takeIndex;
+    // 队尾指针索引
+    int putIndex;
+    int count;
+    // 1把锁+2个条件
+    final ReentrantLock lock;
+    private final Condition notEmpty;
+    private final Condition notFull;
+
+    // ....
+}
+```
 
 
 
@@ -941,26 +932,7 @@ public final class Unsafe {
 
 
 
-* 是一种基于**单向链表**的阻塞队列,因为队头和队尾是2个指针分开操作的,所以用了2把锁+2个条件,同时有1个AtomicInteger的原子变量记录count
-* 在其构造方法中,也可以指定队列的总容量,如果不指定,默认为Integer.MAX_VALUE
-
-![](media/image15.png)![](media/image16.jpeg)
-
-
-
-![](media/image17.jpeg)put/take实现
-
-
-
-![](media/image18.jpeg)
-
-
-
-* LinkedBlockingQueue和ArrayBlockingQueue的差异: 
-  * 为了提高并发度,用2把锁,分别控制队头、队尾的操作,意味着在put()和put()之间、take()与take()之间是互斥的,put()和take()之间并不互斥,但对于count变量,双方都需要 操作,所以必须是原子类型
-  * 因为各自拿了一把锁,所以当需要调用对方的condition的signal时,还必须再加上对方的锁, 就是signalNotEmpty()和signalNotFull()方法.示例如下所示
-  * ![](media/image19.jpeg)
-  * 不仅put会通知 take,take 也会通知 put.当put发现非满的时候,也会通知其他put线程;当take发现非空的时候,也会通知其他take线程
+* 基于**单向链表**的阻塞队列,因为队头和队尾是2个指针分开操作的,所以用了2把锁+2个条件,同时有1个AtomicInteger的记录count
 
 
 
@@ -968,18 +940,7 @@ public final class Unsafe {
 
 
 
-* 队列通常是先进先出的,而PriorityQueue是按照元素的优先级从小到大出队列的.正因为如此,PriorityQueue中的2个元素之间需要可以比较大小,并实现Comparable接口
-* 其核心数据结构如下: 其构造方法如下所示,如果不指定初始大小,内部会设定一个默认值11,当元素个数超过这个大小 之后,会自动扩容
-* ![](media/image20.jpeg)
-* ![](media/image21.png)![](media/image22.jpeg)
-* 下面是对应的put/take方法的实现
-* ![](media/image23.jpeg)
-* put方法的实现: 
-* ![](media/image24.jpeg)
-* take的实现: 
-* ![](media/image25.jpeg)
-* ![](media/image26.jpeg)
-* 从上面可以看到,在阻塞的实现方面,和ArrayBlockingQueue的机制相似,主要区别是用数组实现 了一个二叉堆,从而实现按优先级从小到大出队列.另一个区别是没有notFull条件,当元素个数超出数组长度时,执行扩容操作
+* 队列通常是先进先出的,而PriorityQueue是按照元素的优先级从小到大出队列的.PriorityQueue中的2个元素之间需要可以比较大小,并实现Comparable接口
 
 
 
@@ -988,19 +949,6 @@ public final class Unsafe {
 
 
 * 延迟队列,是一个按延迟时间从小到大出队的PriorityQueue,放入DelayQueue中的元素,必须实现Delayed接口
-* [](media/image27.jpeg)口,如下所示
-* 关于该接口: 
-* 如果getDelay的返回值小于或等于0,则说明该元素到期,需要从队列中拿出来执行
-* 该接口首先继承了 Comparable 接口,所以要实现该接口,必须实现 Comparable 接口.具体来说,就是基于getDelay()的返回值比较两个元素的大小
-* 下面看一下DelayQueue的核心数据结构
-* 下面介绍put/take的实现,先从take说起,因为这样更能看出DelayQueue的特性
-* ![](D:/software/Typora/media/image28.jpeg)![](D:/software/Typora/media/image29.jpeg)
-* 关于take()方法: 
-  * 不同于一般的阻塞队列,只在队列为空的时候,才阻塞。如果堆顶元素的延迟时间没到,也会 阻塞
-  * 在上面的代码中使用了一个优化技术,用一个Thread leader变量记录了等待堆顶元素的第1个线程。为什么这样做呢?通过 getDelay(..)可以知道堆顶元素何时到期,不必无限期等待,可以使用condition.awaitNanos()等待一个有限的时间；只有当发现还有其他线程也在等待堆顶 元素(leader！=NULL)时,才需要无限期等待
-  * ![](media/image30.png)![](media/image31.jpeg)
-* put的实现: 
-* 不是每放入一个元素,都需要通知等待的线程.放入的元素,如果其延迟时间大于当前堆顶 的元素延迟时间,就没必要通知等待的线程；只有当延迟时间是最小的,在堆顶时,才有必要通知等待 的线程,也就是上面代码中 ![](media/image32.png) 部分
 
 
 
@@ -1008,18 +956,8 @@ public final class Unsafe {
 
 
 
-* 是一种特殊的BlockingQueue,它本身没有容量,先调put(),线程会阻塞;直到另外一个线程调用了take(),两个线程才同时解锁,反之亦然
+* 本身没有容量,先调put(),线程会阻塞;直到另外一个线程调用了take(),两个线程才同时解锁,反之亦然
 * 对于多个线程而言,例如3个线程, 调用3次put(),3个线程都会阻塞;直到另外的线程调用3次take(),6个线程才同时解锁,反之亦然
-* 接下来看SynchronousQueue的实现。构造方法: 
-* ![](D:/software/Typora/media/image33.jpeg)
-* 和锁一样,也有公平和非公平模式。如果是公平模式,则用TransferQueue实现;如果是非公平模式,则用TransferStack实现。这两个类分别是什么呢?先看一下put/take的实现
-* ![](D:/software/Typora/media/image34.jpeg)![](D:/software/Typora/media/image35.jpeg)
-* ![](media/image36.jpeg)
-* 可以看到,put/take都调用了transfer(),而TransferQueue和TransferStack分别实现了这个接口.该接口在SynchronousQueue内部,如下所示。如果是put(),则第1个参数就是对应的元素; 如果是take(),则第1个参数为null.后2个参数分别为是否设置超时和对应的超时时间
-* 什么是公平模式和非公平模式?假设3个线程分别调用了put(),3个线程会进入阻塞状态,直到其他线程调用3次take(),和3个put()一一配对
-* 如果是公平模式(队列模式),则第1个调用put()的线程1会在队列头部,第1个到来的take()线程 和它进行配对,遵循先到先配对的原则,所以是公平的;如果是非公平模式(栈模式),则第3个调用put()的线程3会在栈顶,第1个到来的take()线程和它进行配对,遵循的是后到先配对的原则,所以是 非公平的
-
-![](D:/software/Typora/media/image37.jpeg)
 
 
 
@@ -1027,61 +965,79 @@ public final class Unsafe {
 
 
 
-* 从上面的代码可以看出,TransferQueue是一个基于单向链表而实现的队列,通过head和tail 2个指针记录头部和尾部.初始的时候,head和tail会指向一个空节点,构造方法如下所示
+* TransferQueue是一个基于单向链表而实现的队列,通过head和tail 2个指针记录头部和尾部.初始的时候,head和tail会指向一个空节点
+* `TransferQueue#transfer()`
 
-* ![](D:/software/Typora/media/image38.jpeg)
+```java
+E transfer(E e, boolean timed, long nanos) {
+    QNode s = null;
+    boolean isData = (e != null);
 
-* 阶段(a): 队列中是一个空的节点,head/tail都指向这个空节点
+     // 队列还未初始化,自旋等待
+    for (;;) {
+        QNode t = tail;
+        QNode h = head;
+        if (t == null || h == null)
+            continue;                      
+	// 队列为空或者当前线程和队列中元素为同一种模式
+        if (h == t || t.isData == isData) { 
+            QNode tn = t.next;
+            // 不一致读,重新执行for循环
+            if (t != tail)
+                continue;
+            if (tn != null) {
+                advanceTail(t, tn);
+                continue;
+            }
+            if (timed && nanos <= 0)
+                return null;
+            if (s == null)
+                s = new QNode(e, isData);
+            if (!t.casNext(null, s))
+                continue;
+	    // 后移tail指针
+            advanceTail(t, s);
+            // 进入阻塞状态
+            Object x = awaitFulfill(s, e, timed, nanos);
+            if (x == s) {
+                clean(t, s);
+                return null;
+            }
+	    // 从阻塞中唤醒,确定已经处于队列中的第1个元素
+            if (!s.isOffList()) {
+                advanceHead(t, s);
+                if (x != null)
+                    s.item = s;
+                s.waiter = null;
+            }
+            return (x != null) ? (E)x : e;
+        } else {
+            // 当前线程可以和队列中的第一个元素配对
+            // 取队列中第一个元素
+            QNode m = h.next;
+            // 不一致读,重新for循环
+            if (t != tail || m == null || h != head)
+                continue;
 
-* 阶段(b): 3个线程分别调用put,生成3个QNode,进入队列
-
-* ![](media/image39.jpeg)
-
-* 阶段(c): 来了一个线程调用take,会和队列头部的第1个QNode进行配对
-
-* 阶段(d): 第1个QNode出队列
-
-* 这里有一个关键点: put节点和take节点一旦相遇,就会配对出队列,所以在队列中不可能同时存在
-
-* put节点和take节点,要么所有节点都是put节点,要么所有节点都是take节点
-
-* 接下来看一下TransferQueue的代码实现
-
-* ![](D:/software/Typora/media/image40.jpeg)
-
-  ```
-  QNode 至 = nu ll ; / / constructed/reused as needed
-  boolean 1sData = ( e != nu ll ) ;
-  fo r ( ; ; ) {
-  QNode t = t a i l ;
-   QNode h = head ; 队列还未初始化,自旋等待 ．．
-  if ( t == null 11 h == nu ll ) //
-  saw un1.n1.t1.al1.zed val
-  cont in ue ; // spin
-  队列为空或者当前线程和队列中元索为同一种模式
-  ![](D:/software/Typora/media/image41.png)
-  ![](media/image42.png)694 从阻塞中 唤醒,确定已 经处于队列中的第1个元素 』
-  if ( ! 至. i s Off L i s t ( ) ) { ad va nce He ad ( t , 旦)； if ( x ! = nu ll )
-  .§.. i t em = 实
-  旦 .waiter = nu ll ;
-  ｝
-  return ( x ! = nu ll ) ? ( E ) x : e;
-  II not already unlinked
-  II unlink if head
-  II and forget fields
-  当前线程可以和队列中的第1个元素
-  } else { 进行配对 II complementary-mode
-  取队列中第1个元素 QNode m = h. next ; II node to fulfill
-  不一致读,茧新执行 for循环if ( t != tail 11m == null 1 1 h != he a d )
-  continue ;
-  II inconsistent read
-  ```
-
-* ![](D:/software/Typora/media/image43.jpeg)
-
-* 整个 for 循环有两个大的 if-else 分支,如果当前线程和队列中的元素是同一种模式(都是put节点或者take节点),则与当前线程对应的节点被加入队列尾部并且阻塞；如果不是同一种模式,则选取队 列头部的第1个元素进行配对
-
-* 这里的配对就是m.casItem(x,e),把自己的item x换成对方的item e,如果CAS操作成功,则配对成功。如果是put节点,则isData=true,item！=null；如果是take节点,则isData=false,item=null。如果CAS操作不成功,则isData和item之间将不一致,也就是isData！=(x！=null),通过 这个条件可以判断节点是否已经被匹配过了
+            Object x = m.item;
+            // 已经配对
+            if (isData == (x != null) ||
+                x == m ||
+                // 尝试配对
+                !m.casItem(x, e)) {
+                // 已经配对,直接对队列
+                advanceHead(h, m);
+                continue;
+            }
+	    // 配对成功,出队列
+            advanceHead(h, m);
+            // 唤醒队列中与第一个元素对应的线程
+            LockSupport.unpark(m.waiter);
+            return (x != null) ? (E)x : e;
+        }
+    }
+}
+```
 
 
 
@@ -1089,17 +1045,78 @@ public final class Unsafe {
 
 
 
-* TransferStack的定义如下所示,首先,它也是一个单向链表。不同于队列,只需要head指针就能 实现入栈和出栈操作
+* 一个单向链表,只需要head指针就能 实现入栈和出栈操作
 * 链表中的节点有三种状态,REQUEST对应take节点,DATA对应put节点,二者配对之后,会生成一个FULFILLING节点,入栈,然后FULLING节点和被配对的节点一起出栈
-* 阶段(a): head指向NULL。不同于TransferQueue,这里没有空的头节点
-* 阶段(b): 3个线程调用3次put,依次入栈
-* ![](media/image44.jpeg)
-* 阶段(c): 线程4调用take,和栈顶的第1个元素配对,生成FULLFILLING节点,入栈。阶段(d): 栈顶的2个元素同时入栈
-* ![](D:/software/Typora/media/image45.png)
-* ![](D:/software/Typora/media/image46.jpeg)
-* 下面看一下具体的代码实现
-* ![](D:/software/Typora/media/image47.jpeg)
-* ![](D:/software/Typora/media/image48.png)
+* `TransferQueue#transfer()`
+
+```java
+E transfer(E e, boolean timed, long nanos) {
+    SNode s = null;
+    int mode = (e == null) ? REQUEST : DATA;
+
+    for (;;) {
+        SNode h = head;
+        // 同一种模式
+        if (h == null || h.mode == mode) {
+            if (timed && nanos <= 0) {
+                if (h != null && h.isCancelled())
+                    casHead(h, h.next);
+                else
+                    return null;
+            } 
+            // 入栈
+            else if (casHead(h, s = snode(s, e, h, mode))) {
+                // 阻塞等待
+                SNode m = awaitFulfill(s, timed, nanos);
+                if (m == s) {
+                    clean(s);
+                    return null;
+                }
+                if ((h = head) != null && h.next == s)
+                    casHead(h, s.next);
+                return (E) ((mode == REQUEST) ? m.item : s.item);
+            }
+        } 
+        // 非同一种模式,待匹配
+        else if (!isFulfilling(h.mode)) {
+            if (h.isCancelled())
+                casHead(h, h.next);
+            // 生成一个FULFILLING节点,入栈
+            else if (casHead(h, s=snode(s, e, h, FULFILLING|mode))) {
+                for (;;) {
+                    SNode m = s.next;
+                    if (m == null) {
+                        casHead(s, null);
+                        s = null;
+                        break;
+                    }
+                    SNode mn = m.next;
+                    if (m.tryMatch(s)) {
+                        // 2个节点一处出栈
+                        casHead(s, mn);
+                        return (E) ((mode == REQUEST) ? m.item : s.item);
+                    } else
+                        s.casNext(m, mn);
+                }
+            }
+        } 
+        // 已经匹配过了,出栈
+        else {
+            SNode m = h.next;
+            if (m == null)
+                casHead(h, null);
+            else {
+                SNode mn = m.next;
+                if (m.tryMatch(h))
+                    // 配对,一起出栈
+                    casHead(h, mn);
+                else
+                    h.casNext(m, mn);
+            }
+        }
+    }
+}
+```
 
 
 
@@ -1107,13 +1124,9 @@ public final class Unsafe {
 
 
 
-* 定义了一个阻塞的双端队列接口,如下所示
-* 该接口继承了BlockingQueue接口,同时增加了对应的双端队列操作接口。该接口只有一个实现, 就是LinkedBlockingDeque
-* 其核心数据结构如下所示,是一个双向链表
+* 一个阻塞的双端队列接口,继承了BlockingQueue,同时增加了对应的双端队列操作接口
+* 该接口只有一个实现, 就是LinkedBlockingDeque,其核心数据结构是一个双向链表
 * 对应的实现原理,和LinkedBlockingQueue基本一样,只是LinkedBlockingQueue是单向链表,而LinkedBlockingDeque是双向链表
-* ![](D:/software/Typora/media/image49.jpeg)![](D:/software/Typora/media/image50.jpeg)
-* ![](D:/software/Typora/media/image51.jpeg)
-* ![](D:/software/Typora/media/image52.jpeg)
 
 
 
@@ -1130,10 +1143,7 @@ public final class Unsafe {
 
 
 
-* 和ArrayList一样,CopyOnWriteArrayList的核心数据结构也是一个数组,代码如下: 
-* 下面是CopyOnArrayList的几个“读”方法: 
-* 既然这些“读”方法都没有加锁,那么是如何保证“线程安全”呢?答案在“写”方法里面
-* 其他“写”方法,例如remove和add类似,此处不再详述
+* 线程安全的ArrayList,有读写数据不一致问题
 
 
 
@@ -1141,29 +1151,16 @@ public final class Unsafe {
 
 
 
-* CopyOnWriteArraySet 就是用 Array 实现的一个 Set,保证所有元素都不重复,其内部是封装的一个CopyOnWriteArrayList
+* 就是用 Array 实现的一个 Set,保证所有元素都不重复,其内部是封装的一个CopyOnWriteArrayList
 
 
 
-### ConcurrentLinkedQueue/Deque
+### ConcurrentLinkedQueue
 
 
 
-* AQS内部的阻塞队列实现原理: 基于双向链表,通过对head/tail进行CAS操作,实现入队和出队
-* ConcurrentLinkedQueue 的实现原理和AQS 内部的阻塞队列类似: 同样是基于CAS,同样是通过head/tail指针记录队列头部和尾部,但还是有稍许差别
-* 首先,它是一个单向链表,定义如下: 
-* 其次,在AQS的阻塞队列中,每次入队后,tail一定后移一个位置；每次出队,head一定后移一个 位置,以保证head指向队列头部,tail指向链表尾部
-* 但在ConcurrentLinkedQueue中,head/tail的更新可能落后于节点的入队和出队,因为它不是直接对 head/tail指针进行 CAS操作的,而是对 Node中的 item进行操作。下面进行详细分析: 
-
-
-
-#### 初始化
-
-
-
-* 初始的时候, head 和 tail 都指向一个 null 节点。对应的代码如下
-
-![](D:/software/Typora/media/image53.png)
+* 线程安全的LinkedQueue
+* 初始化的时候, head 和 tail 都指向一个 null 节点
 
 
 
@@ -1171,24 +1168,54 @@ public final class Unsafe {
 
 
 
-* 代码如下所示
+```java
+    public boolean offer(E e) {
+        checkNotNull(e);
+        final Node<E> newNode = new Node<E>(e);
 
-![](D:/software/Typora/media/image54.jpeg)
+        for (Node<E> t = tail, p = t;;) {
+            Node<E> q = p.next;
+            if (q == null) {
+                // 对tail的next指针进行CAS操作而不是对tail指针进行CAS操作
+                if (p.casNext(null, newNode)) {
+                    if (p != t)
+                        // 每入列2个节点,后移一次tail指针,失败也没问题
+                        casTail(t, newNode);
+                    return true;
+                }
+            }
+            else if (p == q)
+                // 已经达到队列尾部
+                p = (t != (t = tail)) ? t : head;
+            else
+                // 后移p指针
+                p = (p != t && t != (t = tail)) ? t : q;
+        }
+    }
+```
 
-* 上面的入队其实是每次在队尾追加2个节点时,才移动一次tail节点。如下图所示: 
-* 初始的时候,队列中有1个节点item1,tail指向该节点,假设线程1要入队item2节点: 
-* step1:p=tail,q=p.next=NULL.
-* step2: 对p的next执行CAS操作,追加item2,成功之后,p=tail。所以上面的casTail方法不会执 行,直接返回。此时tail指针没有变化
-* ![](D:/software/Typora/media/image55.jpeg)
-* 之后,假设线程2要入队item3节点,如下图所示: 
-* step3:p=tail,q=p.next.
-* step4: q！=NULL,因此不会入队新节点。p,q都后移1位
-* step5: q=NULL,对p的next执行CAS操作,入队item3节点
-* step6: p！=t,满足条件,执行上面的casTail操作,tail后移2个位置,到达队列尾部
-* ![](D:/software/Typora/media/image56.jpeg)
-* 最后总结一下入队列的两个关键点: 
-  * 即使tail指针没有移动,只要对p的next指针成功进行CAS操作,就算成功入队列
-  * 只有当 p != tail的时候,才会后移tail指针。也就是说,每连续追加2个节点,才后移1次tail指针。即使CAS失败也没关系,可以由下1个线程来移动tail指针
+
+
+![](img/006.png)
+
+
+
+![](img/007.png)
+
+
+
+* 上面的入队其实是每次在队尾追加2个节点时,才移动一次tail节点
+* 初始的时候,队列中有1个节点item1,tail指向该节点,假设线程1要入队item2节点:
+  * 1:p=tail,q=p.next=NULL
+  * 2: 对p的next执行CAS操作,追加item2,成功之后,p=tail.所以上面的casTail方法不会执行,直接返回.此时tail指针没有变化
+  * 之后,假设线程2要入队item3节点
+  * 3:p=tail,q=p.next
+  * 4: q!=NULL,因此不会入队新节点,p,q都后移1位
+  * 5: q=NULL,对p的next执行CAS操作,入队item3节点
+  * 6: p!=t,满足条件,执行上面的casTail操作,tail后移2个位置,到达队列尾部
+
+* 即使tail指针没有移动,只要对p的next指针成功进行CAS操作,就算成功入队列
+* 只有当 p != tail时,才会后移tail指针.即每连续追加2个节点,才后移1次tail指针.即使CAS失败也没关系,可以由下1个线程来移动tail指针
 
 
 
@@ -1196,17 +1223,45 @@ public final class Unsafe {
 
 
 
-* 上面说了入队列之后,tail指针不变化,那是否会出现入队列之后,要出队列却没有元素可出的情况呢?
-* ![](D:/software/Typora/media/image57.jpeg)
-* 出队列的代码和入队列类似,也有p、q2个指针,整个变化过程如图5-8所示。假设初始的时候head 指向空节点,队列中有item1、item2、item3 三个节点
-* step1:p=head,q=p.next.p!=q.
-* step2:  后 移 p 指 针 , 使 得 p=q 
-* step3: 出队列。关键点: 此处并没有直接删除item1节点,只是把该节点的item通过CAS操作置为了NULL
-* step4: p！=head,此时队列中有了2个 NULL 节点,再前移1次head指针,对其执行updateHead 操作
-* ![](D:/software/Typora/media/image58.jpeg)
-* 最后总结一下出队列的关键点: 
-  * 出队列的判断并非观察 tail 指针的位置,而是依赖于 head 指针后续的节点是否为NULL这一条件
-  * 只要对节点的item执行CAS操作,置为NULL成功,则出队列成功。即使head指针没有成功移 动,也可以由下1个线程继续完成
+```java
+public E poll() {
+    restartFromHead:
+    for (;;) {
+        for (Node<E> h = head, p = h, q;;) {
+            E item = p.item;
+	    // 在出队时,没有移动head,而是把item置为null
+            if (item != null && p.casItem(item, null)) {
+                if (p != h)
+                    // 每产生2个NULL节点才将head后移2位
+                    updateHead(h, ((q = p.next) != null) ? q : p);
+                return item;
+            }
+            else if ((q = p.next) == null) {
+                updateHead(h, p);
+                return null;
+            }
+            else if (p == q)
+                continue restartFromHead;
+            else
+                p = q;
+        }
+    }
+}
+```
+
+
+
+![](img/008.png)
+
+
+
+* 出队列的代码和入队列类似,也有p,q2个指针.假设初始的时候head 指向空节点,队列中有item1、item2、item3 三个节点
+  * 1:p=head,q=p.next.p!=q.
+  * 2: 后移 p 指针,使得 p=q
+  * 3: 出队列.此处并没有直接删除item1节点,只是把该节点的item通过CAS操作置为了NULL
+  * 4: p!=head,此时队列中有了2个 NULL 节点,再前移1次head指针,对其执行updateHead 操作
+* 出队列的判断并非观察 tail 指针的位置,而是依赖于 head 指针后续的节点是否为NULL这一条件
+* 只要对节点的item执行CAS操作,置为NULL成功,则出队列成功.即使head指针没有成功移动,也可以由下1个线程继续完成
 
 
 
@@ -1214,8 +1269,15 @@ public final class Unsafe {
 
 
 
-* ![](media/image59.jpeg)![](media/image60.jpeg)
-* 因为head/tail 并不是精确地指向队列头部和尾部,所以不能简单地通过比较 head/tail 指针来判断队列是否为空,而是需要从head指针开始遍历,找第1个不为NULL的节点.如果找到,则队列不为空;如果找不到,则队列为空。代码如下所示: 
+* 因为head/tail 并不是精确地指向队列头部和尾部,所以不能简单地通过比较 head/tail 指针来判断队列是否为空,而是需要从head指针开始遍历,找第1个不为NULL的节点.如果找到,则队列不为空;如果找不到,则队列为空
+
+
+
+### ConcurrentLinkedDeque
+
+
+
+* 实现和ConcurrentLinkedQueue相似,双向队列
 
 
 
@@ -1223,51 +1285,109 @@ public final class Unsafe {
 
 
 
-* 首先是所有数据都放在一个大的HashMap中；其次是引入了红黑树。其原理如下图所示: 
-* ![](D:/software/Typora/media/image61.png)
-* 如果头节点是Node类型,则尾随它的就是一个普通的链表;如果头节点是TreeNode类型,它的后面就是一颗红黑树,TreeNode是Node的子类
-* 链表和红黑树之间可以相互转换: 初始的时候是链表,当链表中的元素超过某个阈值时,把链表转 换成红黑树;反之,当红黑树中的元素个数小于某个阈值时,再转换为链表
-* 那为什么要做这种设计呢?
-  * 使用红黑树,当一个槽里有很多元素时,其查询和更新速度会比链表快很多,Hash冲突的问 题由此得到较好的解决
-  * 加锁的粒度,并非整个ConcurrentHashMap,而是对每个头节点分别加锁,即并发度,就是Node数组的长度,初始长度为16
-  * 并发扩容,这是难度最大的。当一个线程要扩容Node数组的时候,其他线程还要读写,因此 处理过程很复杂,后面会详细分析
-* ![](media/image62.jpeg)
-* 由上述对比可以总结出来: 这种设计一方面降低了Hash冲突,另一方面也提升了并发度
-* 下面从构造方法开始,一步步深入分析其实现过程
-
-
-
-#### 构造方法分析
-
-
-
-* ![](D:/software/Typora/media/image63.png)
-* 在上面的代码中,变量cap就是Node数组的长度,保持为2的整数次方。tableSizeFor(...)方法是根 据传入的初始容量,计算出一个合适的数组长度。具体而言: 1.5倍的初始容量+1,再往上取最接近的2 的整数次方,作为数组长度cap的初始值
-* 这里的 sizeCtl,其含义是用于控制在初始化或者并发扩容时候的线程数,只不过其初始值设置成cap
-
-
-
 #### 初始化
 
 
 
-* 在上面的构造方法里只计算了数组的初始大小,并没有对数组进行初始化。当多个线程都往里面放 入元素的时候,再进行初始化。这就存在一个问题: 多个线程重复初始化。下面看一下是如何处理的
-* 通过上面的代码可以看到,多个线程的竞争是通过对sizeCtl进行CAS操作实现的。如果某个线程成功地把 sizeCtl 设置为-1,它就拥有了初始化的权利,进入初始化的代码模块,等到初始化完成,再把sizeCtl设置回去；其他线程则一直执行while循环,自旋等待,直到数组不为null,即当初始化结束时, 退出整个方法
-* 因为初始化的工作量很小,所以此处选择的策略是让其他线程一直等待,而没有帮助其初始化
-* ![](media/image64.jpeg)
+```java
+private final Node<K,V>[] initTable() {
+    Node<K,V>[] tab; int sc;
+    while ((tab = table) == null || tab.length == 0) {
+        if ((sc = sizeCtl) < 0)
+            Thread.yield(); // 自旋等待
+        else if (U.compareAndSetInt(this, SIZECTL, sc, -1)) { // 将sizeCtl设置为-1
+                try {
+                    if ((tab = table) == null || tab.length == 0) {
+                        int n = (sc > 0) ? sc : DEFAULT_CAPACITY;
+                        @SuppressWarnings("unchecked")
+                        Node<K,V>[] nt = (Node<K,V>[])new Node<?,?>[n]; // 初始化
+                        table = tab = nt;
+                        // sizeCtl不是数组长度,因此初始化成功后,就不再等于数组长度,而是n-(n>>>2)=0.75n,表示下一次扩容的阈值:n-n/4
+                        sc = n - (n >>> 2);
+                    }
+                } finally {
+                    sizeCtl = sc; // 设置sizeCtl的值为sc
+                }
+            break;
+        }
+    }
+    return tab;
+}
+```
 
 
 
-#### put()实现分析
+* 如果某个线程成功把 sizeCtl 设为-1,就可以进行初始化,等初始化完成,再把sizeCtl设置回去;其他线程则自旋等待,直到数组不为null时退出
+* 因为初始化的工作量很小,所以此处选择的策略是让其他线程一直等待
 
 
 
-* 上面的for循环有4个大的分支: 
-* 第1个分支,是整个数组的初始化,前面已讲
-* 第2个分支,是所在的槽为空,说明该元素是该槽的第一个元素,直接新建一个头节点,然后返回
-* 第3个分支,说明该槽正在进行扩容,帮助其扩容
-* 第4个分支,就是把元素放入槽内.槽内可能是一个链表,也可能是一棵红黑树,通过头节点的类型可以判断是哪一种.第4个分支是包裹在synchronized (f)里面的,f对应的数组下标位置的头节点, 意味着每个数组元素有一把锁,并发度等于数组的长度
-* 上面的binCount表示链表的元素个数,当这个数目超过TREEIFY_THRESHOLD=8时,把链表转换成红黑树,也就是 treeifyBin(tab,i)方法.但在这个方法内部,不一定需要进行红黑树转换,可能只做扩容操作,所以接下来从扩容讲起
+#### putVal()
+
+
+
+```java
+final V putVal(K key, V value, boolean onlyIfAbsent) {
+    if (key == null || value == null) throw new NullPointerException();
+    int hash = spread(key.hashCode());
+    int binCount = 0;
+    for (Node<K,V>[] tab = table;;) {
+        Node<K,V> f; int n, i, fh; K fk; V fv;
+        // 分支1: 整个数组初始化
+        if (tab == null || (n = tab.length) == 0)
+            tab = initTable();
+        // 分支2: 第i个元素初始化
+        else if ((f = tabAt(tab, i = (n - 1) & hash)) == null) {
+            if (casTabAt(tab, i, null, new Node<K,V>(hash, key, value)))
+                break;
+        }
+        // 分支3: 扩容
+        else if ((fh = f.hash) == MOVED)
+            tab = helpTransfer(tab, f);
+        else if (onlyIfAbsent && fh == hash && ((fk = f.key) == key || (fk != null && key.equals(fk))) && (fv = f.val) != null)
+            return fv;
+        // 分支4:放入元素
+        else {
+            V oldVal = null;
+            // 加锁
+            synchronized (f) {
+                // 链表
+                if (tabAt(tab, i) == f) {
+                    if (fh >= 0) {
+                        // ......
+                    }
+                    // 红黑树
+                    else if (f instanceof TreeBin) {
+                        // ......
+                    }
+                    else if (f instanceof ReservationNode)
+                        throw new IllegalStateException("Recursive update");
+                }
+            }
+            // 如果是链表,上面的binCount会一直累加
+            if (binCount != 0) {
+                if (binCount >= TREEIFY_THRESHOLD)
+                    // 超出阈值,转换为红黑树
+                    treeifyBin(tab, i);
+                if (oldVal != null)
+                    return oldVal;
+                break;
+            }
+        }
+    }
+    // 总元素个数累加1
+    addCount(1L, binCount);
+    return null;
+}
+```
+
+
+
+* 分支1:整个数组的初始化
+* 分支2:是所在的槽为空,说明该元素是该槽的第一个元素,直接新建一个头节点,然后返回
+* 分支3:说明该槽正在进行扩容,帮助其扩容
+* 分支4:把元素放入槽内.槽内可能是一个链表,也可能是一棵红黑树,通过头节点的类型可以判断是哪一种.分支包裹在synchronized(f)里,f对应的数组下标位置的头节点,意味着每个数组元素有一把锁,并发度等于数组的长度
+* binCount表示链表的元素个数,当这个数目超过TREEIFY_THRESHOLD=8时,把链表转换成红黑树,也就是 treeifyBin(tab,i).但在这个方法内部,不一定需要进行红黑树转换,可能只做扩容操作
 
 
 
@@ -1275,130 +1395,179 @@ public final class Unsafe {
 
 
 
-* 扩容的实现是最复杂的,下面从treeifyBin(Node\<K,V\>\[\] tab, int index)讲起
-
-* ![](media/image65.png)
-
-* 在上面的代码中,MIN_TREEIFY_CAPACITY=64,意味着当数组的长度没有超过64的时候,数组的每个节点里都是链表,只会扩容,不会转换成红黑树。只有当数组长度大于或等于64时,才考虑把链表 转换成红黑树
-
-* 在 tryPresize(int size)内部调用了一个核心方法 transfer(Node＜K,V＞\[\] tab,Node＜K,V＞\[\] nextTab),先从这个方法的分析说起
-
-  ```
-  private final void transfer(Node\<K,V\>\[\] tab, Node\<K,V\>\[\] nextTab) {
-  
-  int n = tab.length, stride;
-  
-  if ((stride = (NCPU \> 1) ? (n \>\>\> 3) / NCPU : n) \< MIN_TRANSFER_STRIDE)
-  
-  stride = MIN_TRANSFER_STRIDE; // 计算步长
-  
-  if (nextTab == null) { // 初始化新的HashMap
-  
-    try {
-  
-    @SuppressWarnings("unchecked")
-  
-    Node\<K,V\>\[\] nt = (Node\<K,V\>\[\])new Node\<?,?\>\[n \<\< 1\]; // 扩容两倍
-  
-    nextTab = nt;
-  
-    } catch (Throwable ex) { // try to cope with OOME
-  
-    sizeCtl = Integer.MAX_VALUE;
-  
-    return;
+```java
+private final void treeifyBin(Node<K,V>[] tab, int index) {
+    Node<K,V> b; int n;
+    if (tab != null) {
+        if ((n = tab.length) < MIN_TREEIFY_CAPACITY)
+            // 数组长度小于阈值64,不做红黑树转换,直接扩容
+            tryPresize(n << 1);
+        else if ((b = tabAt(tab, index)) != null && b.hash >= 0) {
+            // 链表转换为红黑树
+            synchronized (b) {
+                if (tabAt(tab, index) == b) {
+                    TreeNode<K,V> hd = null, tl = null;
+                    // 遍历链表,初始化红黑树
+                    for (Node<K,V> e = b; e != null; e = e.next) {
+                        // ......
+                    }
+                    setTabAt(tab, index, new TreeBin<K,V>(hd));
+                }
+            }
+        }
     }
-    nextTable = nextTab;
-    // 初始的transferIndex为旧HashMap的数组长度
-    transferIndex = n; 
+}
+```
+
+
+
+* 在 tryPresize(int size)内部调用了一个核心方法 transfer(Node＜K,V＞\[\] tab,Node＜K,V＞\[\] nextTab)
+
+
+
+```java
+private final void transfer(Node<K,V>[] tab, Node<K,V>[] nextTab) {
+    int n = tab.length, stride;
+    // 计算步长
+    if ((stride = (NCPU > 1) ? (n >>> 3) / NCPU : n) < MIN_TRANSFER_STRIDE)
+        stride = MIN_TRANSFER_STRIDE;
+    // 初始化新的HashMap
+    if (nextTab == null) {
+        // .....
+        // 初始的transferIndex为旧HashMap的数组长度
+        transferIndex = n;
     }
-    int nextn = nextTab.length;
-    ForwardingNode\<K,V\> fwd = new ForwardingNode\<K,V\>(nextTab);
-    boolean advance = true;
-  boolean finishing = false; // to ensure sweep before committing nextTab
-  // 此处,i为遍历下标,bound为边界。
-  // 如果成功获取一个任务,则i=nextIndex-1
-   // bound=nextIndex-stride；
-  // 如果获取不到,则i=0,bound=0
-   for (int i = 0, bound = 0;;) {
-   Node\<K,V\> f; int fh;
-   // advance表示在从i=transferIndex-1遍历到bound位置的过程中,是否一直继续
-   while (advance) {
-   int nextIndex, nextBound;
-   {
-   Node\<K,V\> lastRun = f;
-  for (Node\<K,V\> p = f.next; p != null; p = p.next) { int b = p.hash & n;
-  if (b != runBit) { runBit = b;
-  // 表示lastRun之后的所有元素,hash值都是一样的
-  // 记录下这个最后的位置
-  lastRun = p;
-  }
-  }
-  if (runBit == 0) {
-  // 链表迁移的优化做法
-  ln = lastRun; hn = null;
-  }
-  else {
-  hn = lastRun; ln = null;
-  }
-  for (Node\<K,V\> p = f; p != lastRun; p = p.next) { int ph = p.hash; K pk = p.key; V pv = p.val; if ((ph & n) == 0)
-  ln = new Node\<K,V\>(ph, pk, pv, ln); else
-  hn = new Node\<K,V\>(ph, pk, pv, hn);
-  }
-  setTabAt(nextTab, i, ln); setTabAt(nextTab, i + n, hn); setTabAt(tab, i, fwd); advance = true;
-  }
-  // 红黑树,迁移做法和链表类似
-  else if (f instanceof TreeBin) { TreeBin\<K,V\> t = (TreeBin\<K,V\>)f; TreeNode\<K,V\> lo = null, loTail = null; TreeNode\<K,V\> hi = null, hiTail = null; int lc = 0, hc = 0;
-  for (Node\<K,V\> e = t.first; e != null; e = e.next)
-  int h = e.hash;
-  TreeNode\<K,V\> p = new TreeNode\<K,V\> (h, e.key, e.val, null, null);
-  if ((h & n) == 0) {
-  if ((p.prev = loTail) == null) lo = p;
-  else
-  loTail.next = p; loTail = p;
-  ++lc;
-  }
-  else {
-  if ((p.prev = hiTail) == null) hi = p;
-  else
-  hiTail.next = p; hiTail = p;
-  ++hc
-  }
-  ```
+    // ......
+    // 此处i为遍历下标,bound为边界.如果成功获取一个任务,则i=nextIndex-1,bound=nextIndex-stride;如果获取不到,则i=0,bound=0
+    for (int i = 0, bound = 0;;) {
+        Node<K,V> f; int fh;
+        // advance表示在从i=transferIndex-1遍历到bound位置的过程中,是否一直继续
+        while (advance) {
+            int nextIndex, nextBound;
+		// 以下是哪个分支中的advance都是false,表示如果三个分支都不执行,才可以一直while循环
+		// 目的在于当对transferIndex执行CAS操作不成功时,需要自旋以期获取一个stride的迁移任务
+                if (--i >= bound || finishing)
+                    // 对数组遍历,通过这里的--i进行.如果成功执行了--i,就不需要继续while循环了,因为advance只能进一步
+                    advance = false;
+            else if ((nextIndex = transferIndex) <= 0) {
+                // transferIndex <= 0,整个HashMap完成
+                i = -1;
+                advance = false;
+            }
+            // 对transferIndex执行CAS操作,即为当前线程分配1个stride.CAS操作成功,线程成功获取到一个stride的迁移任务;
+            // CAS操作不成功,线程没有抢到任务,会继续执行while循环,自旋
+            else if (U.compareAndSetInt(this, TRANSFERINDEX, nextIndex, nextBound = (nextIndex > stride ? nextIndex - stride : 0))) {
+                bound = nextBound;
+                i = nextIndex - 1;
+                advance = false;
+            }
+        }
+        // i越界,整个HashMap遍历完成
+        if (i < 0 || i >= n || i + n >= nextn) {
+            int sc;
+            // finishing表示整个HashMap扩容完成
+            if (finishing) {
+                // ......
+            }
+            // ......
+        }
+        // tab[i]迁移完毕,赋值一个ForwardingNode
+        else if ((f = tabAt(tab, i)) == null)
+            advance = casTabAt(tab, i, null, fwd);
+        // tab[i]的位置已经在迁移过程中
+        else if ((fh = f.hash) == MOVED)
+            advance = true;
+        else {
+            // 对tab[i]进行迁移操作，tab[i]可能是一个链表或者红黑树
+            synchronized (f) {
+                if (tabAt(tab, i) == f) {
+                    Node<K,V> ln, hn;
+                    // 链表
+                    if (fh >= 0) {
+                        int runBit = fh & n;
+                        Node<K,V> lastRun = f;
+                        for (Node<K,V> p = f.next; p != null; p = p.next) {
+                            int b = p.hash & n;
+                            if (b != runBit) {
+                                runBit = b;
+                                // 表示lastRun之后的所有元素,hash值都是一样的
+                                // 记录下这个最后的位置
+                                lastRun = p;
+                            }
+                        }
+                        if (runBit == 0) {
+                            // 链表迁移的优化做法
+                            ln = lastRun;
+                            hn = null;
+                        }
+                        else {
+                            hn = lastRun;
+                            ln = null;
+                        }
+                        // ......
+                    }
+                    // 红黑树,迁移做法和链表类似
+                    else if (f instanceof TreeBin) {
+                        //.......
+                    }
+                }
+            }
+        }
+    }
+}
+```
 
 
 
-* 该方法非常复杂,下面一步步分析: 
-* 扩容的基本原理如下图,首先建一个新的HashMap,其数组长度是旧数组长度的2倍,然后把 旧的元素逐个迁移过来。所以,上面的方法参数有2个,第1个参数tab是扩容之前的HashMap,第2个参数nextTab是扩容之后的HashMap。当nextTab=null的时候,方法最初会对nextTab进行初始化。这里有一个关键点要说明: 该方法会被多个线程调用,所以每个线 程只是扩容旧的HashMap部分,这就涉及如何划分任务的问题
+* 扩容的基本原理如上图,首先建一个新的HashMap,其数组长度是旧数组长度的2倍,然后把旧元素逐个迁移过来
+* 当nextTab=null时,方法最初会对nextTab进行初始化.该方法会被多个线程调用,所以每个线程只是扩容旧的HashMap部分
+* 上图为多个线程并行扩容-任务划分示意图:旧数组的长度是N,每个线程扩容一段,一段的长度用变量stride来表示,transferIndex表示了整个数组扩容的进度
+* stride的计算公式:在单核模式下直接等于n,因为在单核模式下没有办法多个线程并行扩容,只需要1个线程来扩容整个数组;在多核模式下为 `(n>>>3)/NCPU`,并且保证步长的最小值是 16,显然,需要的线程个数约为n/stride
 
-![](media/image66.jpeg)
 
-* 上图为多个线程并行扩容-任务划分示意图。旧数组的长度是N,每个线程扩容一段,一段的长 度用变量stride(步长)来表示,transferIndex表示了整个数组扩容的进度
-* stride的计算公式如上面的代码所示,即: 在单核模式下直接等于n,因为在单核模式下没有办 法多个线程并行扩容,只需要1个线程来扩容整个数组；在多核模式下为 (n＞＞＞ 3)/NCPU,并且保证步长的最小值是 16。显然,需要的线程个数约为n/stride
-* ![](D:/software/Typora/media/image67.png)
-* transferIndex是ConcurrentHashMap的一个成员变量,记录了扩容的进度。初始值为n,从大到 小扩容,每次减stride个位置,最终减至n＜=0,表示整个扩容完成。因此,从\[0,transferIndex-1\]的位置表示还没有分配到线程扩容的部分,从\[transfexIndex,n-1\]的位置表示已经分配给某个线程进行扩 容,当前正在扩容中,或者已经扩容成功
-* 因为transferIndex会被多个线程并发修改,每次减stride,所以需要通过CAS进行操作,如下面的代码 所示
 
-![](D:/software/Typora/media/image68.png)![](D:/software/Typora/media/image69.jpeg)
+![](img/009.png)
 
-* 在扩容未完成之前,有的数组下标对应的槽已经迁移到了新的HashMap里面,有的还在旧的HashMap里面,这个时候,所有调用 get(k,v)的线程还是会访问旧 HashMap,怎么处理呢?
-* 下图为扩容过程中的转发示意图: 当Node\[0\]已经迁移成功,而其他Node还在迁移过程中时, 如果有线程要读取Node\[0\]的数据,就会访问失败。为此,新建一个ForwardingNode,即转发节点,在这个节点里面记录的是新的 ConcurrentHashMap 的引用。这样,当线程访问到ForwardingNode之后,会去查询新的ConcurrentHashMap
-* 因为数组的长度 tab.length 是2的整数次方,每次扩容又是2倍。而 Hash 函数是hashCode%tab.length,等价于hashCode&(tab.length-1)。这意味着: 处于第i个位置的元素,在新的Hash表的数组中一定处于第i个或者第i+n个位置,如下图所示。举个简单的例 子: 假设数组长度是8,扩容之后是16: 
-* 若hashCode=5,5%8=0,扩容后,5%16=0,位置保持不变
-* 若hashCode=24,24%8=0,扩容后,24%16=8,后移8个位置； 若hashCode=25,25%8=1,扩容后,25%16=9,后移8个位置； 若hashCode=39,39%8=7,扩容后,39%8=7,位置保持不变
-* ![](D:/software/Typora/media/image70.jpeg)
+
+
+* transferIndex是ConcurrentHashMap的一个成员变量,记录了扩容的进度.初始值为n,从大到小扩容,每次减stride个位置,最终减至`n<=0`,表示整个扩容完成.因此,从\[0,transferIndex-1\]的位置表示还没有分配到线程扩容的部分,从\[transfexIndex,n-1\]的位置表示已经分配给某个线程进行扩容,当前正在扩容中,或者已经扩容成功
+* 因为transferIndex会被多个线程并发修改,每次减stride,所以需要通过CAS操作
+* 在扩容未完成之前,有的数组下标对应的槽已经迁移到了新的HashMap里面,有的还在旧的HashMap里面,这个时候,所有调用get()的线程还是会访问旧 HashMap
+* 当Node\[0\]已经迁移成功,如果有线程要读取Node\[0\]的数据,就会访问失败.为此,新建一个ForwardingNode,即转发节点,在这个节点里面记录的是新的 ConcurrentHashMap 的引用.这样,当线程访问到ForwardingNode之后,会去查询新的ConcurrentHashMap
+
+
+
+![](img/010.png)
+
+
+
+* 因为数组的长度是2的整数次方,每次扩容又是2倍,而 Hash() 是`hashCode%tab.length`,等价于`hashCode&(tab.length-1)`.这表示处于第i个位置的元素,在新的Hash表的数组中一定处于第i个或者第i+n个位置.假设数组长度是8,扩容之后是16: 
+
+  * 若hashCode=5,5%8=0,扩容后,5%16=0,位置保持不变
+  * 若hashCode=24,24%8=0,扩容后,24%16=8,后移8个位置
+  * 若hashCode=25,25%8=1,扩容后,25%16=9,后移8个位置
+  * 若hashCode=39,39%8=7,扩容后,39%8=7,位置保持不变
+
 * 正因为有这样的规律,所以如下有代码: 
-* ![](D:/software/Typora/media/image71.png)
-* 也就是把tab\[i\]位置的链表或红黑树重新组装成两部分,一部分链接到nextTab\[i\]的位置,一部分链 接到nextTab\[i+n\]的位置,如上图所示。然后把tab\[i\]的位置指向一个ForwardingNode节点
-* 同时,当tab\[i\]后面是链表时,使用类似于JDK 7中在扩容时的优化方法,从lastRun往后的所有节点,不需依次拷贝,而是直接链接到新的链表头部。从lastRun往前的所有节点,需要依次拷贝
-* 了解了核心的迁移函数transfer(tab,nextTab),再回头看tryPresize(int size)函数。这个函数的输入是整个Hash表的元素个数,在函数里面,根据需要对整个Hash表进行扩容。想要看明白这个 函数,需要透彻地理解sizeCtl变量,下面这段注释摘自源码
-* ![](D:/software/Typora/media/image72.png)
-* 当sizeCtl=-1时,表示整个HashMap正在初始化
-* 当sizeCtl=某个其他负数时,表示多个线程在对HashMap做并发扩容
-* 当sizeCtl=cap时,tab=null,表示未初始之前的初始容量(如上面的构造函数所示)
-* 扩容成功之后,sizeCtl存储的是下一次要扩容的阈值,即上面初始化代码中的n-(n＞＞＞2)=0.75n
-* 所以,sizeCtl变量在Hash表处于不同状态时,表达不同的含义。明白了这个道理,再来看上面的tryPresize(int size)函数
-* tryPresize(int size)是根据期望的元素个数对整个Hash表进行扩容,核心是调用transfer函数。在第一次扩容的时候,sizeCtl会被设置成一个很大的负数U.compareAndSwapInt(this,SIZECTL, sc,(rs ＜＜ RESIZE_STAMP_SHIFT)+2)；之后每一个线程扩容的时候,sizeCtl 就加 1,U.compareAndSwapInt(this,SIZECTL,sc,sc+1),待扩容完成之后,sizeCtl减1
+
+  ```java
+  setTabAt(nextTab, i, ln);
+  setTabAt(nextTab, i + n, hn);
+  setTabAt(tab, i, fwd);
+  ```
+
+* 也就是把tab\[i\]位置的链表或红黑树重新组装成两部分,一部分链接到nextTab\[i\]的位置,一部分链接到nextTab\[i+n\]的位置,然后把tab\[i\]的位置指向一个ForwardingNode节点
+
+* 同时,当tab\[i\]后面是链表时,使用类似于JDK 7中在扩容时的优化方法,从lastRun往后的所有节点,不需依次拷贝,而是直接链接到新的链表头部.从lastRun往前的所有节点,需要依次拷贝
+
+* 了解了transfer(tab,nextTab),再回头看tryPresize(int size),这个函数的输入是整个Hash表的元素个数,在函数里面,根据需要对整个Hash表进行扩容.想要看明白这个函数,需要透彻地理解sizeCtl变量
+
+  * 当sizeCtl=-1时,表示整个HashMap正在初始化
+  * 当sizeCtl=某个其他负数时,表示多个线程在对HashMap做并发扩容
+  * 当sizeCtl=cap时,tab=null,表示未初始之前的初始容量(如上面的构造函数所示)
+  * 扩容成功之后,sizeCtl存储的是下一次要扩容的阈值,即上面初始化代码中的`n-(n>>>2)=0.75n`
+
+* 第一次扩容时,sizeCtl被设置成一个很大的负数`U.compareAndSwapInt(this,SIZECTL, sc,(rs << RESIZE_STAMP_SHIFT)+2)`,之后每一个线程扩容的时候,sizeCtl 就加 1,U.compareAndSwapInt(this,SIZECTL,sc,sc+1),待扩容完成之后,sizeCtl减1
 
 
 
@@ -1426,19 +1595,27 @@ public final class Unsafe {
 
 * 前面讲的无锁队列、栈,都是只在队头、队尾进行CAS操作,通常不会有问题。如果在链表的中间进行插入或删除操作,按照通常的CAS做法,就会出现问题
 * 关于这个问题,Doug Lea的论文中有清晰的论述,此处引用如下: 
-* ![](D:/software/Typora/media/image73.png)
 * 操作1: 在节点10后面插入节点20。如下图所示,首先把节点20的next指针指向节点30,然后对节 点10的next指针执行CAS操作,使其指向节点20即可
+
+![](img/011.png)
+
 * 操作2: 删除节点10。如下图所示,只需把头节点的next指针,进行CAS操作到节点30即可
-* ![](D:/software/Typora/media/image74.jpeg)
+
+![](img/012.png)
+
 * 但是,如果两个线程同时操作,一个删除节点10,一个要在节点10后面插入节点20。并且这两个操作都各自是CAS的,此时就会出现问题.如下图所示,删除节点10,会同时把新插入的节点20也删除掉,这个问题超出了CAS的解决范围
-* ![](D:/software/Typora/media/image75.jpeg)
+
+![](img/013.png)
+
 * 为什么会出现这个问题呢?
 * 究其原因: 在删除节点10的时候,实际受到操作的是节点10的前驱,也就是头节点。节点10本身没 有任何变化。故而,再往节点10后插入节点20的线程,并不知道节点10已经被删除了
 * 针对这个问题,在论文中提出了如下的解决办法,如下图所示,把节点 10 的删除分为两2步: 
   * 第一步,把节点10的next指针,mark成删除,即软删除;
   * 第二步,找机会,物理删除
 * 做标记之后,当线程再往节点10后面插入节点20的时候,便可以先进行判断,节点10是否已经被删 除,从而避免在一个删除的节点10后面插入节点20。**这个解决方法有一个关键点: “把节点**10**的**next**指 针指向节点**20**(插入操作)”和“判断节点**10**本身是否已经删除(判断操作)”,必须是原子的,必须在**1 **个**CAS操作里面完成
-* ![](D:/software/Typora/media/image76.jpeg)
+
+![](img/014.png)
+
 * 具体的实现有两个办法: 
   * 办法一: AtomicMarkableReference保证每个 next 是 AtomicMarkableReference 类型。但这个办法不够高效,Doug Lea 在ConcurrentSkipListMap的实现中用了另一种办法
   * 办法2: Mark节点.我们的目的是标记节点10已经删除,也就是标记它的next字段。那么可以新造一个marker节点,使 节点10的next指针指向该Marker节点。这样,当向节点10的后面插入节点20的时候,就可以在插入的同时判断节点10的next指针是否指向了一个Marker节点,这两个操作可以在一个CAS操作里面完成
@@ -1480,54 +1657,6 @@ public final class Unsafe {
   if ((p = r.node) == null \|\| (k = p.key) == null \|\| p.val == null)
   RIGHT.compareAndSet(q, r, r.right); else if (cpr(cmp, key, k) \> 0)
   q = r;
-  else
-  }
-  break;
-  if ((d = q.down) != null) {
-  ++levels; q = d;
-  }
-  else {
-  b = q.node; break;
-  
-  }
-   }
-    if (b != null) {
-  Node\<K,V\> z = null; // new node, if inserted
-   for (;;) { // find insertion point
-   Node\<K,V\> n, p; K k; V v; int c;
-   if ((n = b.next) == null) {
-  if (b.key == null) // if empty, type check key now
-   cpr(cmp, key, key);
-   c = -1;
-  
-  }
-   else if ((k = n.key) == null)
-   break; // can't append; restart
-   else if ((v = n.val) == null) {
-  unlinkNode(b, n);
-  c = 1;
-  }
-  else if ((c = cpr(cmp, key, k)) \> 0)
-   b = n;
-   else if (c == 0 &&
-   (onlyIfAbsent \|\| VAL.compareAndSet(n, v, value)))
-   return v;
-   if (c \< 0 &&
-  NEXT.compareAndSet(b, n,
-   p = new Node\<K,V\>(key, value, n))) {
-  z = p;
-  break;
-   }
-   }
-   if (z != null) {
-  int lr = ThreadLocalRandom.nextSecondarySeed();
-   if ((lr & 0x3) == 0) { // add indices with 1/4 prob
-   int hr = ThreadLocalRandom.nextSecondarySeed();
-   long rnd = ((long)hr \<\< 32) \| ((long)lr & 0xffffffffL);
-  int skips = levels; // levels to descend before add
-  Index\<K,V\> x = null;
-  for (;;) { // create at most 62 indices
-   x = new Index\<K,V\>(z, x, null);
    if (rnd \>= 0L \|\| --skips \< 0)
   break;
   ```
@@ -1558,85 +1687,7 @@ public final class Unsafe {
 
 
 
-1.  private V doGet(Object key) {
-
-2.  Index\<K,V\> q;
-
-3.  VarHandle.acquireFence();
-
-4.  if (key == null)
-
-5.  throw new NullPointerException();
-
-6.  Comparator\<? super K\> cmp = comparator;
-
-7.  V result = null;
-
-8.  if ((q = head) != null) {
-
-9.  outer: for (Index\<K,V\> r, d;;) {
-
-10.  while ((r = q.right) != null) {
-
-11.  Node\<K,V\> p; K k; V v; int c;
-
-12.  if ((p = r.node) == null \|\| (k = p.key) == null \|\|
-
-13.  (v = p.val) == null)
-
-14.  RIGHT.compareAndSet(q, r, r.right);
-
-15.  else if ((c = cpr(cmp, key, k)) \> 0)
-
-16.  q = r;
-
-17.  else if (c == 0) {
-
-18.  result = v;
-
-19.  break outer;
-
- }
-
-21. else
-
-22. break;
-
- }
-
-24. if ((d = q.down) != null)
-
-25. q = d;
-
-26. else {
-
-27. Node\<K,V\> b, n;
-
-28. if ((b = q.node) != null) {
-
-29. while ((n = b.next) != null) {
-
-30. V v; int c;
-
-31. K k = n.key;
-
-32. if ((v = n.val) == null \|\| k == null \|\|
-
-33. (c = cpr(cmp, key, k)) \> 0)
-
-34. b = n;
-
-35. else {
-
- if (c == 0)
-
-37. result = v;
-
-38. break;
-
-}
-
- }
+1.  private V doGet(Object key) 
 
  }
 
@@ -1668,13 +1719,9 @@ return result;
 
 
 
-* Semaphore也就是信号量,提供了资源数量的并发访问控制,其使用代码很简单,如下所示: 
-* 案例: 大学生到自习室抢座,写作业: 
-* 如下图所示,假设有*n*个线程来获取Semaphore里面的10份资源(*n* \> 10),*n*个线程中只有10个线程能获取到,其他线程都会阻塞。直到有线程释放了资源,其他线程才能获取到
-* ![](D:/software/Typora/media/image84.jpeg)
+* Semaphore也就是信号量,提供了资源数量的并发访问控制
 * 当初始的资源个数为1的时候,Semaphore退化为排他锁。正因为如此,Semaphone的实现原理和 锁十分类似,是基于AQS,有公平和非公平之分。Semaphore相关类的继承体系如下图所示: 
-* ![](D:/software/Typora/media/image85.png)
-* 由于Semaphore和锁的实现原理基本相同,上面的代码不再展开解释。资源总数即state的初始 值,在acquire里对state变量进行CAS减操作,减到0之后,线程阻塞；在release里对state变量进行CAS加操作
+* 由于Semaphore和锁的实现原理基本相同。资源总数即state的初始值,在acquire里对state变量进行CAS减操作,减到0之后,线程阻塞；在release里对state变量进行CAS加操作
 
 
 
@@ -4263,16 +4310,9 @@ long diff = getDelay(NANOSECONDS) - other.getDelay(NANOSECONDS); 38 return (diff
 
 
 
-* ForkJoinPool就是JDK7提供的一种“分治算法”的多线程并行计算框架。Fork意为分叉,Join意为合并,一分一合,相互配合,形成分治算法。此外,也可以将ForkJoinPool看作一个单机版的Map/Reduce,多个线程并行计算
+* 一种分治算法的多线程并行计算框架,也可以将ForkJoinPool看作一个单机版的Map/Reduce,多个线程并行计算
 * 相比于ThreadPoolExecutor,ForkJoinPool可以更好地实现计算的负载均衡,提高资源利用率
-* 假设有5个任务,在ThreadPoolExecutor中有5个线程并行执行,其中一个任务的计算量很大,其余4个任务的计算量很小,这会导致1个线程很忙,其他4个线程则处于空闲状态
-* 利用ForkJoinPool,可以把大的任务拆分成很多小任务,然后这些小任务被所有的线程执行,从而 实现任务计算的负载均衡
-* 上面的代码用到了 RecursiveAction 和 RecursiveTask 两个类,它们都继承自抽象类ForkJoinTask,用到了其中关键的接口 fork()、join()。二者的区别是一个有返回值,一个没有返回值
-* ![](/image290.png)![](image291.png)
-
-![](D:/software/Typora/media/image292.png)
-
-![](media/image293.jpeg)在ForkJoinPool中,对应的接口如下: 
+* ForkJoinPool可以把大的任务拆分成很多小任务,然后这些小任务被所有的线程执行,从而实现任务计算的负载均衡
 
 
 

@@ -1583,9 +1583,8 @@ private final void transfer(Node<K,V>[] tab, Node<K,V>[] nextTab) {
 
 
 
-* ConcurrentSkipListMap是基于SkipList(跳查表)来实现的,而不是红黑树
-* Doug Lea的原话: 也就是目前计算机领域还未找到一种高效的、作用在树上的、无锁的、增加和删除节点的办法
-* SkipList可以无锁地实现节点的增加、删除,这要从无锁链表的实现说起
+* ConcurrentSkipListMap是基于SkipList(跳查表)来实现的,而不是红黑树,因为目前计算机领域还未找到一种高效的,作用在树上的,无锁的增加和删除节点的办法
+* SkipList可以无锁地实现节点的增加,删除,这要从无锁链表的实现说起
 
 
 
@@ -1593,32 +1592,45 @@ private final void transfer(Node<K,V>[] tab, Node<K,V>[] nextTab) {
 
 
 
-* 前面讲的无锁队列、栈,都是只在队头、队尾进行CAS操作,通常不会有问题。如果在链表的中间进行插入或删除操作,按照通常的CAS做法,就会出现问题
-* 关于这个问题,Doug Lea的论文中有清晰的论述,此处引用如下: 
-* 操作1: 在节点10后面插入节点20。如下图所示,首先把节点20的next指针指向节点30,然后对节 点10的next指针执行CAS操作,使其指向节点20即可
+* 无锁队列,栈,都是只在队头,队尾进行CAS操作,通常不会有问题.如果在链表中间进行插入或删除,按照通常的CAS做法,就会出现问题
+* 操作1: 在节点10后面插入节点20.首先把节点20的next指针指向节点30,然后对节点10的next指针执行CAS操作,使其指向节点20
+
+
 
 ![](img/011.png)
 
-* 操作2: 删除节点10。如下图所示,只需把头节点的next指针,进行CAS操作到节点30即可
+
+
+* 操作2: 删除节点10.只需把头节点的next指针,进行CAS操作到节点30即可
+
+
 
 ![](img/012.png)
 
-* 但是,如果两个线程同时操作,一个删除节点10,一个要在节点10后面插入节点20。并且这两个操作都各自是CAS的,此时就会出现问题.如下图所示,删除节点10,会同时把新插入的节点20也删除掉,这个问题超出了CAS的解决范围
+
+
+* 但是,如果两个线程同时操作,一个删除节点10,一个要在节点10后面插入节点20,并且这两个操作都各自是CAS的,此时就会出现问题.如下图所示,删除节点10,会同时把新插入的节点20也删除掉,这个问题超出了CAS的解决范围
+
+
 
 ![](img/013.png)
 
-* 为什么会出现这个问题呢?
-* 究其原因: 在删除节点10的时候,实际受到操作的是节点10的前驱,也就是头节点。节点10本身没 有任何变化。故而,再往节点10后插入节点20的线程,并不知道节点10已经被删除了
-* 针对这个问题,在论文中提出了如下的解决办法,如下图所示,把节点 10 的删除分为两2步: 
-  * 第一步,把节点10的next指针,mark成删除,即软删除;
+
+
+* 出现这个问题的原因: 在删除节点10的时候,实际操作的是节点10的头节点,节点10本身没有任何变化.故而,再往节点10后插入节点20的线程,并不知道节点10已经被删除了
+* 解决办法:把节点 10 的删除分为两2步
+  * 第一步,把节点10的next指针,mark成删除,即软删除
   * 第二步,找机会,物理删除
-* 做标记之后,当线程再往节点10后面插入节点20的时候,便可以先进行判断,节点10是否已经被删 除,从而避免在一个删除的节点10后面插入节点20。**这个解决方法有一个关键点: “把节点**10**的**next**指 针指向节点**20**(插入操作)”和“判断节点**10**本身是否已经删除(判断操作)”,必须是原子的,必须在**1 **个**CAS操作里面完成
+* 做标记之后,当线程再往节点10后面插入节点20的时候,便可以先进行判断,节点10是否已经被删除
+* 但是把节点10的next指针指向节点20(插入操作)和判断节点10本身是否已经删除(判断操作),必须是原子的,必须在1个CAS操作里面完成
+
+
 
 ![](img/014.png)
 
 * 具体的实现有两个办法: 
-  * 办法一: AtomicMarkableReference保证每个 next 是 AtomicMarkableReference 类型。但这个办法不够高效,Doug Lea 在ConcurrentSkipListMap的实现中用了另一种办法
-  * 办法2: Mark节点.我们的目的是标记节点10已经删除,也就是标记它的next字段。那么可以新造一个marker节点,使 节点10的next指针指向该Marker节点。这样,当向节点10的后面插入节点20的时候,就可以在插入的同时判断节点10的next指针是否指向了一个Marker节点,这两个操作可以在一个CAS操作里面完成
+  * 办法1: AtomicMarkableReference保证每个 next 是 AtomicMarkableReference 类型.但这个办法不够高效
+  * 办法2: Mark节点.可以新造一个marker节点,使节点10的next指针指向该Marker节点.这样,当向节点10的后面插入节点20的时候,就可以在插入的同时判断节点10的next指针是否指向了一个Marker节点,这两个操作可以在一个CAS操作里面完成
 
 
 
@@ -1626,80 +1638,81 @@ private final void transfer(Node<K,V>[] tab, Node<K,V>[] nextTab) {
 
 
 
-* 解决了无锁链表的插入或删除问题,也就解决了跳查表的一个关键问题。因为跳查表就是多层链表叠起来的
+* 解决了无锁链表的插入或删除问题,也就解决了跳查表的一个关键问题,因为跳查表就是多层链表叠起来的
 
-* 下面先看一下跳查表的数据结构(下面所用代码都引用自JDK 7,JDK 8中的代码略有差异,但不影响下面的原理分析)
+* 跳查表底层节点类型为Node,所有的`<K, V>`对都是由这个单向链表串起来的
 
-* ![](D:/software/Typora/media/image77.jpeg)
+  ```java
+  static final class Node<K,V> {
+      final K key;
+      volatile Object value;
+      volatile Node<K,V> next;
+      // ....
+  }
+  ```
 
-* 上图中的Node就是跳查表底层节点类型。所有的\<K, V\>对都是由这个单向链表串起来的。上面的Index层的节点: 
+* Index层节点
 
-* ![](D:/software/Typora/media/image78.jpeg)
-
-* 上图中的node属性不存储实际数据,指向Node节点
-
-* down属性: 每个Index节点,必须有一个指针,指向其下一个Level对应的节点
-
-* right属性: Index也组成单向链表。
+  ```java
+  static class Index<K,V> {
+      // 不存储实际数据,指向Node节点
+      final Node<K,V> node;
+      // 每个Index节点,必须有一个指针,指向其下一个Level对应的节点
+      final Index<K,V> down;
+      // Index也组成单向链表
+      volatile Index<K,V> right;
+      // ...
+  }
+  ```
 
 * 整个ConcurrentSkipListMap就只需要记录顶层的head节点即可: 
 
-* ![](D:/software/Typora/media/image79.jpeg)
 
-* 下面详细分析如何从跳查表上查找、插入和删除元素。
 
-* ![](D:/software/Typora/media/image80.jpeg)
-
-* put实现分析
-
-  ```
-  while ((r = q.right) != null) { Node\<K,V\> p; K k;
-  if ((p = r.node) == null \|\| (k = p.key) == null \|\| p.val == null)
-  RIGHT.compareAndSet(q, r, r.right); else if (cpr(cmp, key, k) \> 0)
-  q = r;
-   if (rnd \>= 0L \|\| --skips \< 0)
-  break;
-  ```
+![](img/015.png)
 
 
 
-* 在底层,节点按照从小到大的顺序排列,上面的index层间隔地串在一起,因为从小到大排列。查找 的时候,从顶层index开始,自左往右、自上往下,形成图示的遍历曲线。假设要查找的元素是32,遍 历过程如下: 
-* 先遍历第2层Index,发现在21的后面；
-* 从21下降到第1层Index,从21往后遍历,发现在21和35之间； 从21下降到底层,从21往后遍历,最终发现在29和35之间
+#### put()
+
+
+
+* 直接调用了`doPut()`
+* 在底层,节点按照从小到大的顺序排列,上面的index层间隔地串在一起,因为从小到大排列.查找的时候,从顶层index开始,自左往右,自上往下,形成图示的遍历曲线
+* 假设要查找的元素是32,遍 历过程如下: 
+  * 先遍历第2层Index,发现在21的后面
+  * 从21下降到第1层Index,从21往后遍历,发现在21和35之间
+  * 从21下降到底层,从21往后遍历,最终发现在29和35之间
 * 在整个的查找过程中,范围不断缩小,最终定位到底层的两个元素之间
-* ![](D:/software/Typora/media/image81.jpeg)
-* 关于上面的put(...)方法,有一个关键点需要说明: 在通过findPredecessor找到了待插入的元素在\[b,n\]之间之后,并不能马上插入。因为其他线程也在操作这个链表,b、n都有可能被删除,所以在插 入之前执行了一系列的检查逻辑,而这也正是无锁链表的复杂之处
 
 
 
-##### remove()分析
+![](img/016.png)
 
 
 
-* ![](D:/software/Typora/media/image82.png)
-* 上面的删除方法和插入方法的逻辑非常类似,因为无论是插入,还是删除,都要先找到元素的前 驱,也就是定位到元素所在的区间\[b,n\]。在定位之后,执行下面几个步骤: 
+* put()在通过findPredecessor找到了待插入的元素在\[b,n\]之间之后,并不能马上插入:因为其他线程也在操作这个链表,b、n都有可能被删除,所以在插入之前执行了一系列的检查逻辑,而这也正是无锁链表的复杂之处
+
+
+
+#### remove()
+
+
+
+* 直接调用了`doRemove()`
+* 删除方法和插入方法的逻辑非常类似,因为无论是插入还是删除,都要先找到元素的前驱,也就是定位到元素所在的区间[b,n].在定位之后,执行下面几个步骤: 
   * 如果发现b、n已经被删除了,则执行对应的删除清理逻辑
   * 否则,如果没有找到待删除的(k, v),返回null
   * 如果找到了待删除的元素,也就是节点n,则把n的value置为null,同时在n的后面加上Marker节点,同时检查是否需要降低Index的层次
-  * ![](D:/software/Typora/media/image83.png)
-
-##### get分析
 
 
 
-1.  private V doGet(Object key) 
+#### get()
 
- }
 
-break;
 
-} }
-
- }
-
-return result;
-
-* 无论是插入、删除,还是查找,都有相似的逻辑,都需要先定位到元素位置\[b,n\],然后判断b、n 是否已经被删除,如果是,则需要执行相应的删除清理逻辑。这也正是无锁链表复杂的地方
+* 直接调用了`doGet()`
+* 和插入,删除相似,都需要先定位到元素位置[b,n],然后判断b,n是否已经被删除,如果是,则需要执行相应的删除清理逻辑
 
 
 
@@ -1707,7 +1720,7 @@ return result;
 
 
 
-* 如下面代码所示,ConcurrentSkipListSet只是对ConcurrentSkipListMap的简单封装
+* ConcurrentSkipListSet只是对ConcurrentSkipListMap的简单封装,去除了重复元素
 
 
 
@@ -1927,20 +1940,32 @@ private final Object arenaExchange(Object item, boolean timed, long ns) {
 
 
 
-#### 层次Phaser
+#### 层级Phaser
 
 
 
 * 多个Phaser可以组成树状结构,可以通过在构造方法中传入父Phaser来实现
-* ![](D:/software/Typora/media/image91.png)
-* 先简单看一下Phaser内部关于树状结构的存储,如下所示: 
-* ![](D:/software/Typora/media/image92.png)
-* 可以发现,在Phaser的内部结构中,每个Phaser记录了自己的父节点,但并没有记录自己的子节点 列表。所以,每个 Phaser 知道自己的父节点是谁,但父节点并不知道自己有多少个子节点,对父节点的操作,是通过子节点来实现的
-* 树状的Phaser怎么使用呢?考虑如下代码,会组成下图的树状Phaser
-* ![](D:/software/Typora/media/image93.jpeg)
-* 本来root有两个参与者,然后为其加入了两个子Phaser(c1,c2),每个子Phaser会算作1个参与 者,root的参与者就变成2+2=4个。c1本来有3个参与者,为其加入了一个子Phaser c3,参与者数量变成3+1=4个。c3的参与者初始为0,后续可以通过调用register()方法加入
-* 对于树状Phaser上的每个节点来说,可以当作一个独立的Phaser来看待,其运作机制和一个单独的Phaser是一样的
-* 父Phaser并不用感知子Phaser的存在,当子Phaser中注册的参与者数量大于0时,会把自己向父节 点注册；当子Phaser中注册的参与者数量等于0时,会自动向父节点解除注册。父Phaser把子Phaser当 作一个正常参与的线程就即可
+
+* 在Phaser的内部结构中,每个Phaser记录了自己的父节点,但并没有记录自己的子节点.所以,对父节点的操作,是通过子节点来实现的
+
+  ```java
+  Phaser root = new Phaser(2);
+  Phaser c1 = new Phaser(root, 3);
+  Phaser c2 = new Phaser(root, 2);
+  Phaser c3 = new Phaser(c1, 0);
+  ```
+
+* 本来root有两个参与者,然后为其加入了两个子Phaser c1,c2,每个子Phaser会算作1个参与者,root的参与者就变成2+2=4个;c1本来有3个参与者,为其加入了一个子Phaser c3,参与者数量变成3+1=4个;c3的参与者初始为0,后续可以通过调用register()加入,结构如下
+
+
+
+![](img/017.png)
+
+
+
+* 树状Phaser上的每个节点都可以当作一个独立的Phaser,其运作机制和一个单独的Phaser一样
+* 父Phaser把子Phaser当作一个正常参与的线程就即可
+* 父Phaser并不用感知子Phaser的存在,当子Phaser中注册的参与者数量大于0时,会把自己向父节点注册;当子Phaser中注册的参与者数量等于0时,会自动向父节点解除注册
 
 
 
@@ -1948,33 +1973,66 @@ private final Object arenaExchange(Object item, boolean timed, long ns) {
 
 
 
-* ![](media/image94.png)
-* 大致了解了Phaser的用法和新特性之后,下面仔细剖析其实现原理。Phaser没有基于AQS来实现, 但具备AQS的核心特性: state变量、CAS操作、阻塞队列。先从state变量说起
-* 这个64位的state变量被拆成4部分,下图为state变量各部分: 
-* ![](D:/software/Typora/media/image95.jpeg)
-* 最高位0表示未同步完成,1表示同步完成,初始最高位为0。
-* ![](media/image96.jpeg)![](media/image97.png)![](media/image98.jpeg)![](media/image99.jpeg)![](media/image100.jpeg)![](media/image101.png)![](media/image102.jpeg)
-* Phaser提供了一系列的成员方法来从state中获取上图中的几个数字,如下所示: 
-* ![](D:/software/Typora/media/image103.png)
-* ![](D:/software/Typora/media/image104.png)
-* 下面再看一下state变量在构造方法中是如何被赋值的: 
-* ![](D:/software/Typora/media/image105.png)![](D:/software/Typora/media/image106.png)
-* ![](D:/software/Typora/media/image107.png)
-* 当parties=0时,state被赋予一个EMPTY常量,常量为1；
-* parties != 0时,把phase值左移32位；把parties左移16位；然后parties也作为最低的16位,3个值做或操作,赋值给state
+* Phaser没有基于AQS来实现, 但具备AQS的核心特性: state变量,CAS操作,阻塞队列
+* state为long类型,被拆成4部分:
 
 
 
-#### 阻塞与唤醒(Treiber Stack)
+![](img/018.png)
 
 
 
-* 基于上述的state变量,对其执行CAS操作,并进行相应的阻塞与唤醒。如下图所示,右边的主线程 会调用awaitAdvance()进行阻塞；左边的arrive()会对state进行CAS的累减操作,当未到达的线程数减到 0时,唤醒右边阻塞的主线程
-* ![](D:/software/Typora/media/image108.jpeg)
-* ![](media/image109.jpeg)![](media/image110.jpeg)
-* 在这里,阻塞使用的是一个称为Treiber Stack的数据结构,而不是AQS的双向链表。Treiber Stack是一个无锁的栈,它是一个单向链表,出栈、入栈都在链表头部,所以只需要一个head指针,而不需要tail指针,如下的实现: 
-* ![](media/image111.jpeg)
-* 为了减少并发冲突,这里定义了2个链表,也就是2个Treiber Stack。当phase为奇数轮的时候,阻塞线程放在oddQ里面；当phase为偶数轮的时候,阻塞线程放在evenQ里面。代码如下所示
+* 最高位0表示未同步完成,1表示同步完成,初始最高位为0
+
+* state在构造方法中赋值:
+
+  ```java
+  public Phaser(Phaser parent, int parties) {
+      if (parties >>> PARTIES_SHIFT != 0)
+          // 如果parties数超出了最大个数(2的16次方),抛异常
+          throw new IllegalArgumentException("Illegal number of parties");
+      // 初始化轮数为0
+      int phase = 0;
+      this.parent = parent;
+      if (parent != null) {
+          final Phaser root = parent.root;
+          // 父节点的根节点就是自己的根节点
+          this.root = root;
+          // 父节点的evenQ就是自己的evenQ
+          this.evenQ = root.evenQ;
+          // 父节点的oddQ就是自己的oddQ
+          this.oddQ = root.oddQ;
+          // 如果参与者不是0,则向父节点注册自己
+          if (parties != 0)
+              phase = parent.doRegister(1);
+      }
+      else {
+          // 如果父节点为null,则自己就是root节点
+          this.root = this;
+          // 创建奇数节点
+          this.evenQ = new AtomicReference<QNode>();
+          // 创建偶数节点
+          this.oddQ = new AtomicReference<QNode>();
+      }
+      this.state = (parties == 0) ? (long)EMPTY :
+      ((long)phase << PHASE_SHIFT) | // 位或操作,赋值state,最高位为0,表示同步未完成
+          ((long)parties << PARTIES_SHIFT) |
+          ((long)parties);
+  }
+  ```
+
+* 当parties=0时,state被赋予一个EMPTY常量,常量为1
+
+* 当parties != 0时,把phase值左移32位,把parties左移16位,然后parties也作为最低的16位,3个值做或操作,赋值给state
+
+
+
+#### 阻塞与唤醒
+
+
+
+* 基于state,对其执行CAS操作,并进行相应的阻塞与唤醒
+* `awaitAdvance()`进行阻塞,`arrive()`会对state进行CAS的累减操作,当未到达的线程数减到0时,唤醒右边阻塞的线程
 
 
 
@@ -1982,21 +2040,88 @@ private final Object arenaExchange(Object item, boolean timed, long ns) {
 
 
 
-* ![](media/image112.png)
-* ![](media/image113.jpeg)
-* ![](media/image114.png)
-* ![](media/image115.png)
-* 下面看arrive()方法是如何对state变量进行操作,又是如何唤醒线程的
-* arrive()和 arriveAndDeregister()内部调用的都是 doArrive(boolean)方法
-* 区别在于前者只是把“未达到线程数”减1；后者则把“未到达线程数”和“下一轮的总线程数”都减1。下 面看一下doArrive(boolean)方法的实现
-* 关于上面的方法,有以下几点说明: 
-  * 定义了2个常量如下
-  * 当 deregister=false 时,只最低的16位需要减 1,adj=ONE_ARRIVAL；当deregister=true时,低32位中的2个16位都需要减1,adj=ONE_ARRIVAL\|ONE_PARTY
-  * ![](media/image116.jpeg)
-  * 把未到达线程数减1。减了之后,如果还未到0,什么都不做,直接返回。如果到0,会做2件事 情: 第1,重置state,把state的未到达线程个数重置到总的注册的线程数中,同时phase加1；第2,唤醒队列中的线程
-* 下面看一下唤醒方法: 
-* ![](D:/software/Typora/media/image117.jpeg)
-* 遍历整个栈,只要栈当中节点的phase不等于当前Phaser的phase,说明该节点不是当前轮的,而 是前一轮的,应该被释放并唤醒
+```java
+private int doArrive(int adjust) {
+    final Phaser root = this.root;
+    for (;;) {
+        long s = (root == this) ? state : reconcileState();
+        int phase = (int)(s >>> PHASE_SHIFT);
+        if (phase < 0)
+            return phase;
+        int counts = (int)s;
+        // 获取未到达线程数
+        int unarrived = (counts == EMPTY) ? 0 : (counts & UNARRIVED_MASK);
+        // 如果未到达线程数小于等于0,抛异常
+        if (unarrived <= 0)
+            throw new IllegalStateException(badArrive(s));
+        // CAS操作,将state的值减去adjust
+        if (STATE.compareAndSet(this, s, s-=adjust)) {
+            // 如果未到达线程数为1
+            if (unarrived == 1) {
+                long n = s & PARTIES_MASK;
+                int nextUnarrived = (int)n >>> PARTIES_SHIFT;
+                if (root == this) {
+                    if (onAdvance(phase, nextUnarrived))
+                        n |= TERMINATION_BIT;
+                    else if (nextUnarrived == 0)
+                        n |= EMPTY;
+                    else
+                        n |= nextUnarrived;
+                    int nextPhase = (phase + 1) & MAX_PHASE;
+                    n |= (long)nextPhase << PHASE_SHIFT;
+                    STATE.compareAndSet(this, s, n);
+                    releaseWaiters(phase);
+                }
+                // 如果下一轮的未到达线程数为0
+                else if (nextUnarrived == 0) {
+                    phase = parent.doArrive(ONE_DEREGISTER);
+                    STATE.compareAndSet(this, s, s | EMPTY);
+                }
+                else
+                    // 否则调用父节点的doArrive方法,传递参数1,表示当前节点已完成
+                    phase = parent.doArrive(ONE_ARRIVAL);
+            }
+            return phase;
+        }
+    }
+}
+```
+
+
+
+* arrive()和 arriveAndDeregister()内部调用的都是 doArrive()
+* 区别在于前者只是把未达到线程数减1;后者则把未到达线程数和下一轮的总线程数都减1
+* doArrive中,当 deregister=false 时,只最低的16位需要减 1, adj=ONE_ARRIVAL;当deregister=true时,低32位中的2个16位都需要减1, adj=ONE_ARRIVAL\|ONE_PARTY
+* 把未到达线程数减1.减了之后,如果还未到0,什么都不做,直接返回;如果到0,会做2件事情: 
+  * 第1,重置state,把state的未到达线程个数重置到总的注册的线程数中,同时phase加1
+  * 第2,唤醒队列中的线程
+
+
+
+#### releaseWaiters()
+
+
+
+```java
+private void releaseWaiters(int phase) {
+    QNode q;
+    Thread t;
+    // 根据phase是奇数还是偶数来使用evenQ或oddQ
+    AtomicReference<QNode> head = (phase & 1) == 0 ? evenQ : oddQ;
+    while ((q = head.get()) != null &&
+           q.phase != (int)(root.state >>> PHASE_SHIFT)) {
+        if (head.compareAndSet(q, q.next) &&
+            (t = q.thread) != null) {
+            q.thread = null;
+            LockSupport.unpark(t);
+        }
+    }
+}
+```
+
+
+
+* 遍历整个栈,只要栈当中节点的phase不等于当前Phaser的phase,说明该节点不是当前轮的,而是前一轮的,应该被释放并唤醒
 
 
 
@@ -2004,108 +2129,26 @@ private final Object arenaExchange(Object item, boolean timed, long ns) {
 
 
 
-* ![](D:/software/Typora/media/image118.jpeg)
-* 下面的while循环中有4个分支: 
-  * 初始的时候,node==null,进入第1个分支进行自旋,自旋次数满足之后,会新建一个QNode节 点
-  * 之后执行第3、第4个分支,分别把该节点入栈并阻塞
-  * 这里调用了ForkJoinPool.managedBlock(ManagedBlocker blocker)方法,目的是把node对应的线程阻塞。ManagerdBlocker是ForkJoinPool里面的一个接口,定义如下: 
-  * QNode实现了该接口,实现原理还是park(),如下所示。之所以没有直接使用park()/unpark()来实现阻塞、唤醒,而是封装了ManagedBlocker这一层,主要是出于使用上的方便考虑。一方面是park()可 能被中断唤醒,另一方面是带超时时间的park(),把这二者都封装在一起。
-
-1.  static final class QNode implements ForkJoinPool.ManagedBlocker {
-
-2.  final Phaser phaser;
-
-3.  final int phase;
-
-4.  final boolean interruptible;
-
-5.  final boolean timed;
-
-6.  boolean wasInterrupted;
-
-7.  long nanos;
-
-8.  final long deadline;
-
-9.  volatile Thread thread; // nulled to cancel wait
-
-10.  QNode next;
-
-11.  QNode(Phaser phaser, int phase, boolean interruptible,
-
-12.  boolean timed, long nanos) {
-
-13.  this.phaser = phaser;
-
-14.  this.phase = phase;
-
-15.  this.interruptible = interruptible;
-
-16.  this.nanos = nanos;
-
-17.  this.timed = timed;
-
-18.  this.deadline = timed ? System.nanoTime() + nanos : 0L;
-
-19.  thread = Thread.currentThread(); 20 }
-
-&nbsp;
-
-21. public boolean isReleasable() {
-
-22. if (thread == null)
-
-23. return true;
-
-24. if (phaser.getPhase() != phase) {
-
-25. thread = null;
-
-26. return true;
-
- }
-
-28. if (Thread.interrupted())
-
-29. wasInterrupted = true;
-
-30. if (wasInterrupted && interruptible) {
-
-31. thread = null;
-
-32. return true;
-
+```java
+public int awaitAdvance(int phase) {
+    final Phaser root = this.root;
+    // 当只有一个Phaser,没有树状结构,root就是this
+    long s = (root == this) ? state : reconcileState();
+    int p = (int)(s >>> PHASE_SHIFT);
+    // phaser已经结束,无需阻塞,直接返回
+    if (phase < 0)
+        return phase;
+    if (p == phase)
+        // 阻塞在phase这一轮上
+        return root.internalAwaitAdvance(phase, null);
+    return p;
 }
-
-34. if (timed &&
-
-35. (nanos \<= 0L \|\| (nanos = deadline - System.nanoTime()) \<= 0L)) {
-
-36. thread = null;
-
-37. return true;
-
- }return false; 40 }
-
-41. public boolean block() {
-
-42. while (!isReleasable()) {
-
-43. if (timed)
-
-44. LockSupport.parkNanos(this, nanos);
-
-45. else
-
-46. LockSupport.park(this); 47 }
-
- return true; 49 }
-
-}
+```
 
 
 
-* 理解了arrive()和awaitAdvance(),arriveAndAwaitAdvance()就是二者的一个组合版本
+* `internalAwaitAdvance`()调用了ForkJoinPool.managedBlock(ManagedBlocker blocker),目的是把node对应的线程阻塞 
+* QNode实现了ManagedBlocker,实现原理还是park().不直接使用park()/unpark()来实现阻塞,唤醒,一方面是park()可能被中断唤醒,另一方面是带超时时间的park(),把这二者都封装在一起
 
 
 
@@ -2177,27 +2220,7 @@ private final Object arenaExchange(Object item, boolean timed, long ns) {
 
 
 
-* 如果一个类是自己编写的,则可以在编写的时候把成员变量定义为Atomic类型。但如果是一个已经 有的类,在不能更改其源代码的情况下,要想实现对其成员变量的原子操作,就需要AtomicIntegerFieldUpdater、AtomicLongFieldUpdater 和 AtomicReferenceFieldUpdater
-* 通过AtomicIntegerFieldUpdater理解它们的实现原理
-* AtomicIntegerFieldUpdater是一个抽象类
-* ![](media/image145.png)
-* 首先,其构造方法是protected,不能直接构造其对象,必须通过它提供的一个静态方法来创建,如 下所示: 
-* 方法 newUpdater 用于创建AtomicIntegerFieldUpdater类对象:
-* ![](D:/software/Typora/media/image146.jpeg)
-* newUpdater(...)静态方法传入的是要修改的类(不是对象)和对应的成员变量的名字,内部通过反 射拿到这个类的成员变量,然后包装成一个AtomicIntegerFieldUpdater对象。所以,这个对象表示的是 **类**的某个成员,而不是对象的成员变量
-* ![](media/image147.jpeg)![](media/image148.jpeg)
-* 若要修改某个对象的成员变量的值,再传入相应的对象,如下所示: 
-* accecssCheck方法的作用是检查该obj是不是tclass类型,如果不是,则拒绝修改,抛出异常。 从代码可以看到,其 CAS 原理和 AtomictInteger 是一样的,底层都调用了 Unsafe 的compareAndSetInt(...)方法
-
-
-
-#### 限制条件
-
-
-
-* 要想使用AtomicIntegerFieldUpdater修改成员变量,成员变量必须是volatile的int类型(不能是Integer包装类),该限制从其构造方法中可以看到
-* ![](D:/software/Typora/media/image149.jpeg)
-* 至于 AtomicLongFieldUpdater、AtomicReferenceFieldUpdater,也有类似的限制条件。其底层的CAS原理,也和AtomicLong、AtomicReference一样
+* 如果一个类是自己编写的,则可以在编写的时候把成员变量定义为Atomic类型.但如果是一个已经有的类,在不能更改其源代码的情况下,要想实现对其成员变量的原子操作,就需要AtomicIntegerFieldUpdater,AtomicLongFieldUpdater 和 AtomicReferenceFieldUpdater
 
 
 
@@ -2221,32 +2244,7 @@ private final Object arenaExchange(Object item, boolean timed, long ns) {
 
 
 
-* Concurrent包提供了AtomicIntegerArray、AtomicLongArray、AtomicReferenceArray三个数组元素的原子操作,这里并不是说对整个数组的操作是原子的,而是针对数组中一个元素的原子操作而言
-
-
-
-#### 使用方式
-
-
-
-* ![](media/image150.png)
-* 以AtomicIntegerArray为例,其使用方式如下: 
-* ![](media/image151.png)
-* 相比于AtomicInteger的getAndIncrement()方法,这里只是多了一个传入参数: 数组的下标**i**.其他方法也与此类似,相比于 AtomicInteger 的各种加减方法,也都是多一个下标 **i**,如下所示
-* ![](D:/software/Typora/media/image152.png)
-* ![](D:/software/Typora/media/image153.png)
-* ![](D:/software/Typora/media/image154.png)
-
-
-
-#### 实现原理
-
-
-
-* ![](media/image155.png)
-* ![](media/image156.jpeg)
-* 其底层的CAS方法直接调用VarHandle中native的getAndAdd方法。如下所示: 
-* 明白了AtomicIntegerArray的实现原理,另外两个数组的原子类实现原理与之类似
+* AtomicIntegerArray、AtomicLongArray、AtomicReferenceArray数组元素的原子操作,这里并不是说对整个数组的操作是原子的,而是针对数组中一个元素的原子操作而言
 
 
 

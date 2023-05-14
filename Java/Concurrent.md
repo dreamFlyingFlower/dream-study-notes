@@ -2,185 +2,6 @@
 
 
 
-# Striped64
-
-
-
-* java.util.concurrent.atomic.Striped64:抽象类
-
-
-
-```java
-// 累加单元数组,懒加载
-transient volatile Cell[] cells;
-// 基础值,如果没有竞争,则用cas累加这个域
-transient volatile long base;
-// 在cells创建或扩容时置为1,表示加锁
-transient volatile int cellsBusy;
-```
-
-
-
-## Cell
-
-
-
-* java.util.concurrent.atomic.Striped64.Cell:Striped64内部类,用来分段操作
-
-
-
-```java
-// Contended:该注解用来防止缓存行的伪共享行为
-@sun.misc.Contended static final class Cell {
-    volatile long value;
-    Cell(long x) { value = x; }
-    final boolean cas(long cmp, long val) {
-        // 用CAS方式进行累加,cmp表示旧值,val表示新值
-        return UNSAFE.compareAndSwapLong(this, valueOffset, cmp, val);
-    }
-
-    // Unsafe mechanics
-    private static final sun.misc.Unsafe UNSAFE;
-    private static final long valueOffset;
-    static {
-        try {
-            UNSAFE = sun.misc.Unsafe.getUnsafe();
-            Class<?> ak = Cell.class;
-            valueOffset = UNSAFE.objectFieldOffset(ak.getDeclaredField("value"));
-        } catch (Exception e) {
-            throw new Error(e);
-        }
-    }
-}
-```
-
-
-
-![](img/030.png)
-
-* 因为Cell是数组,在内存中是连续存储的,一个Cell为24字节(16字节的对象头和 8 字节的 value),因此一个缓存行可以存下 2 个 Cell,这样存的问题是:无论那个CPU缓存中的值修改成功,都会导致另外Core的缓存行失效,降低了效率
-
-
-
-![](img/031.png)
-
-
-
-* @sun.misc.Contended注解用来解决这个问题,使用此注解的对象或字段会在前后各增加 128 字节大小的padding,从而让 CPU 将对象预读至缓存时占用不同的缓存行,这样,不会造成其他CPU核心缓存行的失效
-
-
-
-## LongAdder
-
-
-
-* java.util.concurrent.atomic.LongAdder:线程安全类,主要做高并发下的数字运算,效率比AtomicLong高
-* `add()`:
-
-
-
-![](img/032.png)
-
-
-
-```java
-public void add(long x) {
-    // as 为累加单元数组,b 为基础值, x 为累加值
-    Cell[] as; long b, v; int m; Cell a;
-    // 1. as 有值, 表示已经发生过竞争, 进入 if
-    // 2. cas 给 base 累加时失败了, 表示 base 发生了竞争, 进入 if
-    if ((as = cells) != null || !casBase(b = base, b + x)) {
-        // uncontended 表示 cell 没有竞争
-        boolean uncontended = true;
-        if (
-            // as 还没有创建
-            as == null || (m = as.length - 1) < 0 ||
-            // 当前线程对应的 cell 还没有
-            (a = as[getProbe() & m]) == null ||
-            // cas 给当前线程的 cell 累加失败 uncontended=false ( a 为当前线程的 cell )
-            !(uncontended = a.cas(v = a.value, v + x)))
-            // 进入 cell 数组创建、cell 创建的流程
-            longAccumulate(x, null, uncontended);
-    }
-}
-```
-
-
-
-* `longAccumulate()`:
-
-
-
-![](img/033.png)
-
-
-
-![](img/034.png)
-
-
-
-![](img/035.png)
-
-
-
-```java
-final void longAccumulate(long x, LongBinaryOperator fn,
-                          boolean wasUncontended) {
-    int h;
-    // 当前线程还没有对应的 cell, 需要随机生成一个 h 值用来将当前线程绑定到 cell
-    if ((h = getProbe()) == 0) {
-        // 初始化 probe
-        ThreadLocalRandom.current();
-        // h 对应新的 probe 值, 用来对应 cell
-        h = getProbe();
-        wasUncontended = true;
-    }
-    // collide 为 true 表示需要扩容
-    boolean collide = false;
-    for (;;) {
-        Cell[] as; Cell a; int n; long v;
-        // 已经有了 cells
-        if ((as = cells) != null && (n = as.length) > 0) {
-            // 还没有 cell
-            if ((a = as[(n - 1) & h]) == null) {
-                // 为 cellsBusy 加锁, 创建 cell, cell 的初始累加值为 x,成功则 break, 否则继续 continue 循环
-                // ......省略代码
-            }
-            // 有竞争, 改变线程对应的 cell 来重试 cas
-            else if (!wasUncontended)
-                wasUncontended = true;
-            // cas 尝试累加, fn 配合 LongAccumulator 不为 null, 配合 LongAdder 为 null
-            else if (a.cas(v = a.value, ((fn == null) ? v + x : fn.applyAsLong(v, x))))
-                break;
-            // 如果 cells 长度已经超过了最大长度, 或者已经扩容, 改变线程对应的 cell 来重试 cas
-            else if (n >= NCPU || cells != as)
-                collide = false;
-            // 确保 collide 为 false 进入此分支, 就不会进入下面的 else if 进行扩容了
-            else if (!collide)
-                collide = true;
-            // 加锁
-            else if (cellsBusy == 0 && casCellsBusy()) {
-                // ......省略代码
-                // 加锁成功, 扩容
-                continue;
-            }
-            // 改变线程对应的 cell
-            h = advanceProbe(h);
-        }
-        // 还没有 cells, 尝试给 cellsBusy 加锁
-        else if (cellsBusy == 0 && cells == as && casCellsBusy()) {
-            // 加锁成功, 初始化 cells, 最开始长度为 2, 并填充一个 cell;成功则 break;
-            // ......省略代码
-        }
-        // 上两种情况失败, 尝试给 base 累加
-        else if (casBase(v = base, ((fn == null) ? v + x : fn.applyAsLong(v, x))))
-            break;
-    }
-}
-```
-
-
-
 # Unsafe
 
 
@@ -407,7 +228,7 @@ private static int ctlOf(int rs, int wc) {
 
 
 
-* 实例方法的锁加在对象实例上,静态方法的锁加在类字节码上
+* 可重入锁.实例方法的锁加在对象实例上,静态方法的锁加在类字节码上
 
 
 
@@ -2264,12 +2085,80 @@ public int awaitAdvance(int phase) {
 
 
 
-### Striped64与LongAdder
+### Striped64
 
 
 
-* 从JDK 8开始,针对Long型的原子操作,Java又提供了LongAdder、LongAccumulator；针对Double类型,Java提供了DoubleAdder、DoubleAccumulator。Striped64相关的类的继承层次如下图所示
-* ![](D:/software/Typora/media/image157.png)
+```java
+// 累加单元数组,懒加载
+transient volatile Cell[] cells;
+// 基础值,如果没有竞争,则用cas累加这个域
+transient volatile long base;
+// 在cells创建或扩容时置为1,表示加锁
+transient volatile int cellsBusy;
+```
+
+
+
+* Java8提供的针对64位数据类型提供的更快的原子操作
+* LongAdder,LongAccumulator,DoubleAdder,DoubleAccumulator都是Striped64的实现
+* 把一个Long拆成一个base变量外加多个Cell,每个Cell包装了一个Long型变量.当多个线程并发累加的时候,如果并发度低,就直接加到base变量上;如果并发度高,冲突大,平摊到这些Cell上.在最后取值的时候,再把base和这些Cell求sum
+
+
+
+#### Cell
+
+
+
+* java.util.concurrent.atomic.Striped64.Cell:Striped64内部类,用来分段操作
+
+
+
+```java
+// Contended:该注解用来防止缓存行的伪共享行为
+@sun.misc.Contended static final class Cell {
+    volatile long value;
+    Cell(long x) { value = x; }
+    final boolean cas(long cmp, long val) {
+        // 用CAS方式进行累加,cmp表示旧值,val表示新值
+        return UNSAFE.compareAndSwapLong(this, valueOffset, cmp, val);
+    }
+
+    // Unsafe mechanics
+    private static final sun.misc.Unsafe UNSAFE;
+    private static final long valueOffset;
+    static {
+        try {
+            UNSAFE = sun.misc.Unsafe.getUnsafe();
+            Class<?> ak = Cell.class;
+            valueOffset = UNSAFE.objectFieldOffset(ak.getDeclaredField("value"));
+        } catch (Exception e) {
+            throw new Error(e);
+        }
+    }
+}
+```
+
+
+
+![](img/019.png)
+
+
+
+* 因为Cell是数组,在内存中是连续存储的,一个Cell为24字节(16字节的对象头和 8 字节的 value),因此一个缓存行可以存下 2 个 Cell,这样存的问题是:无论那个CPU缓存中的值修改成功,都会导致另外Core的缓存行失效,降低了效率
+
+
+
+![](img/020.png)
+
+
+
+* @sun.misc.Contended注解用来解决这个问题,使用此注解的对象或字段会在前后各增加 128 字节大小的padding,从而让 CPU 将对象预读至缓存时占用不同的缓存行,这样,不会造成其他CPU核心缓存行的失效
+* 每个 CPU 都有自己的缓存,缓存与主存进行数据交换的基本单位叫Cache Line(缓存行).在64位x86架构中,缓存行是64字节,即当缓存失效,要刷新到主内存的时候,最少要刷新64字节
+* 主内存中有变量X,Y,Z,被CPU1和CPU2分别读入自己的缓存,放在了同一行Cache Line里面.当CPU1修改了*X*,它要失效整行Cache Line,也就是往总线上发消息,通知CPU2对应的Cache Line失效.由于Cache Line是数据交换的基本单位,无法只失效*X*,要失效就会失效整行的Cache Line,这会导致*Y*、*Z*变量的缓存也失效
+* 虽然只修改了*X*,本应该只失效*X*的缓存,但*Y*、*Z*也随之失效.*Y*、*Z*的数据没有修改,本应该很好地被 CPU1 和 CPU2 共享,却没做到,这就是伪共享问题
+* 要解决这个问题,需要用到缓存行填充:分别在*X*、*Y*、*Z*后面加上7个无用的Long,填充整个缓存行,让*X*、*Y*、*Z*处在三行不同的缓存行中 
+* 声明一个@sun.misc.Contended即可实现缓存行的填充.之所以这个地方要用缓存行填充,是为了不让Cell[]中相邻的元素落到同一个缓存行里
 
 
 
@@ -2277,205 +2166,119 @@ public int awaitAdvance(int phase) {
 
 
 
-* AtomicLong内部是一个volatile long型变量,由多个线程对这个变量进行CAS操作。多个线程同时对一个变量进行CAS操作,在高并发的场景下仍不够快,如果再要提高性能,该怎么做呢?
-* 把一个变量拆成多份,变为多个变量,有些类似于 ConcurrentHashMap 的分段锁的例子。如下图所示,把一个Long型拆成一个base变量外加多个Cell,每个Cell包装了一个Long型变量。当多个线程并 发累加的时候,如果并发度低,就直接加到base变量上；如果并发度高,冲突大,平摊到这些Cell上。 在最后取值的时候,再把base和这些Cell求sum运算
-* ![](D:/software/Typora/media/image158.jpeg)
-* 以LongAdder的sum()方法为例,如下所示
-* ![](D:/software/Typora/media/image159.png)
-* 由于无论是long,还是double,都是64位的。但因为没有double型的CAS操作,所以是通过把double型转化成long型来实现的。所以,上面的base和cell\[\]变量,是位于基类Striped64当中的。英文Striped意为“条带”,也就是分片
+* java.util.concurrent.atomic.LongAdder:线程安全类,主要做高并发下的数字运算,效率比AtomicLong高
+* `add()`:
+  * 当一个线程调用add(x)的时候,首先会尝试使用casBase把x加到base变量上.如果不成功,则再用c.cas()方法尝试把 x 加到 Cell 的某个元素上;如果还不成功,最后再调用longAccumulate()
+  * Cell\[\]数组的大小始终是2的整数次方,在运行中会不断扩容,每次扩容都是增长2倍,类似HashMap
+  * 对于一个线程来说,它并不在意到底是把x累加到base上面,还是累加到Cell\[\]上,只要累加成功就可以.因此,这里使用随机数来实现Cell的长度取模
+  * 如果两次尝试都不成功,则调用 longAccumulate(),该方法在 Striped64 里面LongAccumulator也会用到
 
 
 
-#### 最终一致性
+
+![](img/021.png)
 
 
 
-* 在sum求和方法中,并没有对cells\[\]数组加锁。也就是说,一边有线程对其执行求和操作,一边还 有线程修改数组里的值,也就是最终一致性,而不是强一致性。这也类似于ConcurrentHashMap 中的clear()方法,一边执行清空操作,一边还有线程放入数据,clear()方法调用完毕后再读取,hash map里面可能还有元素。因此,在LongAdder适合高并发的统计场景,而不适合要对某个 Long 型变量进行严格同步的场景
-
-
-
-#### 伪共享与缓存行填充
-
-
-
-* 在Cell[类的定义中,用了一个独特的注解@sun.misc.Contended](mailto:用了一个独特的注解@sun.misc.Contended),这是JDK 8之后才有的,背后涉及一个很重要的优化原理: 伪共享与缓存行填充
-* ![](D:/software/Typora/media/image160.png)
-* 每个 CPU 都有自己的缓存。缓存与主内存进行数据交换的基本单位叫Cache Line(缓存行)。在64位x86架构中,缓存行是64字节,也就是8个Long型的大小。这也意味着当缓存失效,要刷新到主内 存的时候,最少要刷新64字节
-* 如下图所示,主内存中有变量*X*、*Y*、*Z*(假设每个变量都是一个Long型),被CPU1和CPU2分别读入自己的缓存,放在了同一行Cache Line里面。当CPU1修改了*X*变量,它要失效整行Cache Line,也就是往总线上发消息,通知CPU 2对应的Cache Line失效。由于Cache Line是数据交换的基本单位,无法只失效*X*,要失效就会失效整行的Cache Line,这会导致*Y*、*Z*变量的缓存也失效
-* ![](D:/software/Typora/media/image161.png)
-* 虽然只修改了*X*变量,本应该只失效*X*变量的缓存,但*Y*、*Z*变量也随之失效。*Y*、*Z*变量的数据没有修改,本应该很好地被 CPU1 和 CPU2 共享,却没做到,这就是所谓的“伪共享问题”
-* 问题的原因是,*Y*、*Z*和*X*变量处在了同一行Cache Line里面。要解决这个问题,需要用到所谓的“缓存行填充”,分别在*X*、*Y*、*Z*后面加上7个无用的Long型,填充整个缓存行,让*X*、*Y*、*Z*处在三行不同的缓存行中,如下图所示: 
-* ![](D:/software/Typora/media/image162.png)
-* [声明一个@jdk.internal.vm.annotation.Contended即可实现缓存行的填充。之所以这个地方要用](mailto:声明一个@jdk.internal.vm.annotation.Contended即可实现缓存行的填充)缓存行填充,是为了不让Cell\[\]数组中相邻的元素落到同一个缓存行里
-
-
-
-#### LongAdder核心实现
-
-
-
-* ![](media/image163.png)
-* ![](media/image164.png)
-* 下面来看LongAdder最核心的累加方法add(long x),自增、自减操作都是通过调用该方法实现的
-* ![](D:/software/Typora/media/image165.png)
-* 当一个线程调用add(x)的时候,首先会尝试使用casBase把x加到base变量上。如果不成功,则再用c.cas()方法尝试把 x 加到 Cell 数组的某个元素上。如果还不成功,最后再调用longAccumulate()方法
-* 注意:Cell\[\]数组的大小始终是2的整数次方,在运行中会不断扩容,每次扩容都是增长2倍。上面代 码中的 cs\[getProbe() & m\] 其实就是对数组的大小取模。因为m=cs.length–1,getProbe()为该线程生成一个随机数,用该随机数对数组的长度取模。因为数组长度是2的整数次方,所以可以用&操作来优 化取模运算
-* 对于一个线程来说,它并不在意到底是把x累加到base上面,还是累加到Cell\[\]数组上面,只要累加 成功就可以。因此,这里使用随机数来实现Cell的长度取模
-* 如果两次尝试都不成功,则调用 longAccumulate(...)方法,该方法在 Striped64 里面LongAccumulator也会用到,如下所示
-
-1.  final void longAccumulate(long x, LongBinaryOperator fn,
-
-2.  boolean wasUncontended) {
-
-3.  int h;
-
-4.  if ((h = getProbe()) == 0) {
-
-5.  ThreadLocalRandom.current(); // force initialization
-
-6.  h = getProbe();
-
-7.  wasUncontended = true; 8 }
-
-9.  // true表示最后一个slot非空
-
-10.  boolean collide = false;
-
-11.  done: for (;;) {
-
-12.  Cell\[\] cs; Cell c; int n; long v;
-
-13.  // 如果cells不是null,且cells长度大于0
-
-14.  if ((cs = cells) != null && (n = cs.length) \> 0) {
-
-15.  // cells最大下标对随机数取模,得到新下标。
-
-16.  // 如果此新下标处的元素是null
-
- if ((c = cs\[(n - 1) & h\]) == null) {
-
-18. // 自旋锁标识,用于创建cells或扩容cells
-
-19. if (cellsBusy == 0) { // 尝试添加新的Cell
-
-20. Cell r = new Cell(x); // Optimistically create
-
-21. // 如果cellsBusy为0,则CAS操作cellsBusy为1,获取锁
-
-22. if (cellsBusy == 0 && casCellsBusy()) {
-
-23. try { // 获取锁之后,再次检查
-
-24. Cell\[\] rs; int m, j;
-
-25. if ((rs = cells) != null &&
-
- }
-
-(m = rs.length) \> 0 &&
-
-rs\[j = (m - 1) & h\] == null) {
-
-// 赋值成功,返回rs\[j\] = r; break done;
-
- }
-
-} finally {
-
-// 重置标志位,释放锁
-
-cellsBusy = 0;
-
+```java
+public void add(long x) {
+    // as 为累加单元数组,b 为基础值, x 为累加值
+    Cell[] as; long b, v; int m; Cell a;
+    // 1. as 有值, 表示已经发生过竞争, 进入 if
+    // 2. cas 给 base 累加时失败了, 表示 base 发生了竞争, 进入 if
+    if ((as = cells) != null || !casBase(b = base, b + x)) {
+        // uncontended 表示 cell 没有竞争
+        boolean uncontended = true;
+        if (
+            // as 还没有创建
+            as == null || (m = as.length - 1) < 0 ||
+            // 当前线程对应的 cell 还没有,进行取模
+            (a = as[getProbe() & m]) == null ||
+            // cas 给当前线程的 cell 累加失败 uncontended=false ( a 为当前线程的 cell )
+            !(uncontended = a.cas(v = a.value, v + x)))
+            // 进入 cell 数组创建、cell 创建的流程
+            longAccumulate(x, null, uncontended);
+    }
 }
+```
 
-continue; // 如果slot非空,则进入下一次循环
 
+
+* `longAccumulate()`:
+
+
+
+![](img/022.png)
+
+
+
+![](img/023.png)
+
+
+
+![](img/024.png)
+
+
+
+```java
+final void longAccumulate(long x, LongBinaryOperator fn, boolean wasUncontended) {
+    int h;
+    // 当前线程还没有对应的 cell, 需要随机生成一个 h 值用来将当前线程绑定到 cell
+    if ((h = getProbe()) == 0) {
+        // 初始化 probe
+        ThreadLocalRandom.current();
+        // h 对应新的 probe 值, 用来对应 cell
+        h = getProbe();
+        wasUncontended = true;
+    }
+    // collide 为 true 表示最后一个slot非空,需要扩容
+    boolean collide = false;
+    for (;;) {
+        Cell[] as; Cell a; int n; long v;
+        // 已经有了 cells
+        if ((as = cells) != null && (n = as.length) > 0) {
+            // cells最大下标对随机数取模,得到新下标.如果此处下标的元素为null
+            if ((a = as[(n - 1) & h]) == null) {
+                // 为 cellsBusy 加锁, 创建 cells 或扩容cells, cells的初始累加值为 x,成功则 break, 否则继续 continue 循环
+                // ......
+            }
+            // 有竞争, 改变线程对应的 cell 来重试 cas
+            else if (!wasUncontended)
+                wasUncontended = true;
+            // cas 尝试累加, fn 配合 LongAccumulator 不为 null, 配合 LongAdder 为 null
+            else if (a.cas(v = a.value, ((fn == null) ? v + x : fn.applyAsLong(v, x))))
+                break;
+            // 如果 cells 长度已经超过了最大长度, 或者已经扩容, 改变线程对应的 cell 来重试 cas
+            else if (n >= NCPU || cells != as)
+                collide = false;
+            // 确保 collide 为 false 进入此分支, 就不会进入下面的 else if 进行扩容了
+            else if (!collide)
+                collide = true;
+            // 加锁
+            else if (cellsBusy == 0 && casCellsBusy()) {
+                // ......
+                // 加锁成功, 扩容
+                continue;
+            }
+            // 改变线程对应的 cell
+            h = advanceProbe(h);
+        }
+        // 还没有 cells, 尝试给 cellsBusy 加锁,初始化cells
+        else if (cellsBusy == 0 && cells == as && casCellsBusy()) {
+            // 加锁成功, 初始化 cells, 最开始长度为 2, 并填充一个 cell;成功则 break;
+            // ......
+        }
+        // 上两种情况失败, 尝试给 base累加
+        // 判断fn是否为null,如果是null则执行加操作,否则执行fn提供的操作;如果操作失败,则重试for循环流程,成功就退出循环
+        else if (casBase(v = base, ((fn == null) ? v + x : fn.applyAsLong(v, x))))
+            break;
+    }
 }
+```
 
- }
 
-collide = false;
 
- }
-
-else if (!wasUncontended) // CAS操作失败wasUncontended = true; // rehash之后继续
-
-else if (c.cas(v = c.value,
-
-(fn == null) ? v + x : fn.applyAsLong(v, x)))
-
-break;
-
-else if (n \>= NCPU \|\| cells != cs)
-
-collide = false; // At max size or stale else if (!collide)
-
-collide = true;
-
-else if (cellsBusy == 0 && casCellsBusy()) { try {
-
-if (cells == cs) // 扩容,每次都是上次的两倍长度
-
-cells = Arrays.copyOf(cs, n \<\< 1);
-
-} finally {
-
-cellsBusy = 0;
-
-}
-
-collide = false;
-
-continue; // Retry with expanded table
-
-}
-
-h = advanceProbe(h);
-
-// 如果cells为null或者cells的长度为0,则需要初始化cells数组
-
-// 此时需要加锁,进行CAS操作
-
-else if (cellsBusy == 0 && cells == cs && casCellsBusy()) {
-
-try { // Initialize table
-
-if (cells == cs) {
-
-// 实例化Cell数组,实例化Cell,保存x值
-
-Cell\[\] rs = new Cell\[2\];
-
-// h为随机数,对Cells数组取模,赋值新的Cell对象。
-
-rs\[h & 1\] = new Cell(x);
-
-cells = rs;
-
-break done;
-
-}
-
-} finally {
-
-// 释放CAS锁
-
-cellsBusy = 0;
-
-}
-
- }
-
-79. // 如果CAS操作失败,最后回到对base的操作
-
-80. // 判断fn是否为null,如果是null则执行加操作,否则执行fn提供的操作
-
-81. // 如果操作失败,则重试for循环流程,成功就退出循环
-
-82. else if (casBase(v = base,
-
-83. (fn == null) ? v + x : fn.applyAsLong(v, x)))
+* 在求和方法中并没有对cells[]加锁,即一边有线程对其执行求和,一边还有线程修改数组,也就是最终一致性,而不是强一致性.因此,LongAdder适合高并发的统计场景,而不适合要对某个 Long 进行严格同步的场景
 
 
 
@@ -2483,27 +2286,24 @@ cellsBusy = 0;
 
 
 
-* ![](media/image166.png)
-* ![](media/image167.jpeg)
-* LongAccumulator的原理和LongAdder类似,只是**功能更强大**,下面为两者构造方法的对比: 
-* LongAdder只能进行累加操作,并且初始值默认为0；LongAccumulator可以自己定义一个二元操 作符,并且可以传入一个初始值
-* ![](D:/software/Typora/media/image168.jpeg)
-* 操作符的左值,就是base变量或者Cells\[\]中元素的当前值；右值,就是add()方法传入的参数x
-* 下面是LongAccumulator的accumulate(x)方法,与LongAdder的add(x)方法类似,最后都是调用 的Striped64的LongAccumulate()方法
-* 唯一的差别就是LongAdder的add(x)方法调用的是casBase(b, b+x),这里调用的是casBase(b, r), 其中,r=function.applyAsLong(b=base, x)
-* ![](D:/software/Typora/media/image169.png)
+* LongAdder只能进行累加操作,并且初始值默认为0;LongAccumulator可以自己定义一个二元操作符,并且可以传入一个初始值
 
 
 
-#### DoubleAdder与DoubleAccumulator
+#### DoubleAdder
 
 
 
-* ![](media/image170.png)
-* DoubleAdder 其实也是用 long 型实现的,因为没有 double 类型的 CAS 方法。下面是DoubleAdder的add(x)方法,和LongAdder的add(x)方法基本一样,只是多了long和double类型的相互转换
+* DoubleAdder 其实也是用 long 型实现的,因为没有 double 类型的 CAS 方法
 * 其中的关键Double.doubleToRawLongBits(Double.longBitsToDouble(b) + x),在读出来的时候, 它把 long 类型转换成 double 类型,然后进行累加,累加的结果再转换成 long 类型,通过CAS写回去
-* DoubleAccumulate也是Striped64的成员方法,和longAccumulate类似,也是多了long类型和double类型的互相转换
-* DoubleAccumulator和DoubleAdder的关系,与LongAccumulator和LongAdder的关系类似,只是多了一个二元操作符
+
+
+
+#### DoubleAccumulator
+
+
+
+* 同LongAccumulator
 
 
 
@@ -2519,124 +2319,8 @@ cellsBusy = 0;
 
 
 
-* 可重入锁是指当一个线程调用 object.lock()获取到锁,进入临界区后,再次调用object.lock(),仍然可以获取到该锁。显然,通常的锁都要设计成可重入的,否则就会发生死锁
-* synchronized关键字,就是可重入锁。如下所示: 
-* 在一个synchronized方法method1()里面调用另外一个synchronized方法method2()。如果synchronized关键字不可重入,那么在method2()处就会发生阻塞,这显然不可行
-
-
-
-#### 公平锁vs非公平锁
-
-
-
-* Sync是一个抽象类,它有两个子类FairSync与NonfairSync,分别对应公平锁和非公平锁。从下面 的ReentrantLock构造方法可以看出,会传入一个布尔类型的变量fair指定锁是公平的还是非公平的,默 认为非公平的
-* 什么叫公平锁和非公平锁呢?先举个现实生活中的例子,一个人去火车站售票窗口买票,发现现场 有人排队,于是他排在队伍末尾,遵循先到者优先服务的规则,这叫公平；如果他去了不排队,直接冲 到窗口买票,这叫作不公平
-* 对应到锁的例子,一个新的线程来了之后,看到有很多线程在排队,自己排到队伍末尾,这叫公 平；线程来了之后直接去抢锁,这叫作不公平。默认设置的是非公平锁,其实是为了提高效率,减少线 程切换
-
-
-
-#### 锁实现的基本原理
-
-
-
-* Sync的父类AbstractQueuedSynchronizer经常被称作队列同步器(**AQS**),这个类非常**重要**,该 类的父类是AbstractOwnableSynchronizer
-* 此处的锁具备synchronized功能,即可以阻塞一个线程。为了实现一把具有阻塞或唤醒功能的锁, 需要几个核心要素: 
-  * 需要一个state变量,标记该锁的状态。state变量至少有两个值: 0、1。对state变量的操作, 使用CAS保证线程安全
-  * 需要记录当前是哪个线程持有锁
-  * 需要底层支持对一个线程进行**阻塞**或**唤醒**操作
-  * 需要有一个**队列**维护所有阻塞的线程。这个队列也必须是线程安全的无锁队列,也需要使用CAS
-* 针对要素1和2,在上面两个类中有对应的体现: 
-* state取值不仅可以是0、1,还可以大于1,就是为了支持锁的可重入性。例如,同样一个线程,调 用5次lock,state会变成5；然后调用5次unlock,state减为0
-* 当state=0时,没有线程持有锁,exclusiveOwnerThread=null
-* 当state=1时,有一个线程持有锁,exclusiveOwnerThread=该线程； 当state \> 1时,说明该线程重入了该锁
-* 对于要素3,Unsafe类提供了阻塞或唤醒线程的一对操作原语,也就是park/unpark
-* 有一个LockSupport的工具类,对这一对原语做了简单封装:
-* 在当前线程中调用**park()**,该线程就会被阻塞；在另外一个线程中,调用unpark(Thread thread),传入一个被阻塞的线程,就可以唤醒阻塞在park()地方的线程
-* unpark(Thread thread),它实现了一个线程对另外一个线程的“精准唤醒”。notify也只是唤醒某一个线程,但无法指定具体唤醒哪个线程
-* 针对要素4,在AQS中利用双向链表和CAS实现了一个阻塞队列。如下所示: 
-* 阻塞队列是整个AQS核心中的核心。
-* 如下图所示,head指向双向链表头部,tail指向双向链表尾 部。入队就是把新的Node加到tail后面,然后对tail进行CAS操作；出队就是对head进行CAS操作,把head向后移一个位置
-* ![](D:/software/Typora/media/image172.png)
-* 初始的时候,head=tail=NULL；然后,在往队列中加入阻塞的线程时,会新建一个空的Node,让head和tail都指向这个空Node；之后,在后面加入被阻塞的线程对象。所以,当head=tail的时候,说 明队列为空
-
-
-
-#### 公平与非公平的lock()
-
-
-
-* ![](media/image173.png)![](media/image174.jpeg)
-* 下面分析基于AQS,ReentrantLock在公平性和非公平性上的实现差异
-* ![](D:/software/Typora/media/image175.png)
-* ![](D:/software/Typora/media/image176.jpeg)
-
-
-
-#### 阻塞队列与唤醒机制
-
-
-
-* ![](media/image177.jpeg)
-* 下面进入锁的最为关键的部分,即acquireQueued()方法内部一探究竟
-* 先说addWaiter(),就是为当前线程生成一个Node,然后把Node放入双向链表的尾部。要注 意的是,这只是把Thread对象放入了一个队列中而已,线程本身并未阻塞
-* ![](D:/software/Typora/media/image178.jpeg)
-* 创建节点,尝试将节点追加到队列尾部。获取tail节点,将tail节点的next设置为当前节点。 如果tail不存在,就初始化队列
-* 在addWaiter()方法把Thread对象加入阻塞队列之后的工作就要靠acquireQueued()方法完成
-* 线程一旦进入acquireQueued()就会被无限期阻塞,即使有其他线程调用interrupt()方法也不能将其唤 醒,除非有其他线程释放了锁,并且该线程拿到了锁,才会从accquireQueued()返回
-* 进入acquireQueued(),该线程被阻塞。在该方法返回的一刻,就是拿到锁的那一刻,也就是被唤 醒的那一刻,此时会删除队列的第一个元素(head指针前移1个节点)
-* ![](D:/software/Typora/media/image179.jpeg)
-* 首先,acquireQueued()方法有一个返回值,表示什么意思呢?虽然该方法不会中断响应,但它会 记录被阻塞期间有没有其他线程向它发送过中断信号。如果有,则该方法会返回true；否则,返回false
-* 基于这个返回值,才有了下面的代码: 
-* ![](D:/software/Typora/media/image180.jpeg)![](D:/software/Typora/media/image181.jpeg)
-* 当 acquireQueued()返回 true 时,会调用 selfInterrupt(),自己给自己发送中断信号,也就是自己把自己的中断标志位设为true.之所以要这么做,是因为自己在阻塞期间,收到其他线程中断信号没 有及时响应,现在要进行补偿。这样一来,如果该线程在lock代码块内部有调用sleep()之类的阻塞方 法,就可以抛出异常,响应该中断信号
-* ![](image182.jpeg)
-* 阻塞就发生在下面这个方法中: 
-* 线程调用 park()方法,自己把自己阻塞起来,直到被其他线程唤醒,该方法返回
-* park()方法返回有两种情况
-  * 其他线程调用了unpark(Thread t)
-  * 其他线程调用了t.interrupt()。这里要注意的是,lock()不能响应中断,但LockSupport.park() 会响应中断
-* 也正因为LockSupport.park()可能被中断唤醒,acquireQueued()方法才写了一个for死循环。唤 醒之后,如果发现自己排在队列头部,就去拿锁；如果拿不到锁,则再次自己阻塞自己。不断重复此过 程,直到拿到锁
-* 被唤醒之后,通过Thread.interrupted()来判断是否被中断唤醒。如果是情况1,会返回false；如果 是情况2,则返回true
-
-
-
-#### unlock()
-
-
-
-* ![](image183.png)
-* 说完了lock,下面分析unlock的实现。unlock不区分公平还是非公平
-* ![](D:/software/Typora/media/image184.jpeg)
-* 上图中,当前线程要释放锁,先调用tryRelease(arg)方法,如果返回true,则取出head,让head获 取锁。
-* ![](image185.jpeg)对于tryRelease方法: 
-* 首先计算当前线程释放锁后的state值。
-* 如果当前线程不是排他线程,则抛异常,因为只有获取锁的线程才可以进行释放锁的操作。 此时设置state,没有使用CAS,因为是单线程操作
-* 再看unparkSuccessor方法: 
-* ![](D:/software/Typora/media/image186.jpeg)
-* ![](D:/software/Typora/media/image187.jpeg)
-* release()里面做了两件事: tryRelease()方法释放锁；unparkSuccessor()方法唤醒队列中的后继者
-
-
-
-#### lockInterruptibly()
-
-
-
-* 上面的 lock 不能被中断,这里的 lockInterruptibly()可以被中断: 
-* ![](D:/software/Typora/media/image188.jpeg)![](D:/software/Typora/media/image189.jpeg)
-* 这里的 acquireInterruptibly(...)也是 AQS 的模板方法,里面的 tryAcquire(...)分别被 FairSync和NonfairSync实现
-* ![](image190.jpeg)
-* 主要看doAcquireInterruptibly(...)方法: 
-* 当parkAndCheckInterrupt()返回true的时候,说明有其他线程发送中断信号,直接抛出InterruptedException,跳出for循环,整个方法返回
-
-
-
-#### tryLock()
-
-
-
-* ![](D:/software/Typora/media/image191.jpeg)
-* tryLock()实现基于调用非公平锁的tryAcquire(...),对state进行CAS操作,如果操作成功就拿到锁； 如果操作不成功则直接返回false,也不阻塞
+* 可重入锁是指当一个线程调用 object.lock()获取到锁,进入临界区后,再次调用object.lock(),仍然可以获取到该锁
+* ReentrantLock是互斥锁
 
 
 
@@ -2644,163 +2328,53 @@ cellsBusy = 0;
 
 
 
-* 和互斥锁相比,读写锁(ReentrantReadWriteLock)就是读线程和读线程之间不互斥。 读读不互斥,读写互斥,写写互斥
+* 读写锁就是读线程和读线程之间不互斥,即读读不互斥,读写互斥,写写互斥
+* ReentrantReadWriteLock是读写锁
 
 
 
-#### 类继承层次
+#### ReadLock
 
 
 
-* ReadWriteLock是一个接口,内部由两个Lock接口组成
-* ![](D:/software/Typora/media/image192.png)
-* ReentrantReadWriteLock实现了该接口,使用方式如下: 
-* 也就是说,当使用 ReadWriteLock 的时候,并不是直接使用,而是获得其内部的读锁和写锁,然后分别调用lock/unlock
-
-
-
-#### 实现原理
-
-
-
-* 从表面来看,ReadLock和WriteLock是两把锁,实际上它只是同一把锁的两个视图而已。什么叫两 个视图呢?可以理解为是一把锁,线程分成两类: 读线程和写线程。读线程和写线程之间不互斥(可以 同时拿到这把锁),读线程之间不互斥,写线程之间互斥
-* 从下面的构造方法也可以看出,readerLock和writerLock实际共用同一个sync对象。sync对象同互 斥锁一样,分为非公平和公平两种策略,并继承自AQS
-* 同互斥锁一样,读写锁也是用state变量来表示锁状态的。只是state变量在这里的含义和互斥锁完全 不同。在内部类Sync中,对state变量进行了重新定义,如下所示: 
-* 也就是把 state 变量拆成两半,低16位,用来记录写锁。但同一时间既然只能有一个线程写,为什么还需要16位呢?这是因为一个写线程可能多次重入。例如,低16位的值等于5,表示一个写线程重入 了5次
-* 高16位,用来“读”锁。例如,高16位的值等于5,既可以表示5个读线程都拿到了该锁；也可以表示 一个读线程重入了5次
-* 为什么要把一个int类型变量拆成两半,而不是用两个int型变量分别表示读锁和写锁的状态呢?
-* 这是因为无法用一次CAS 同时操作两个int变量,所以用了一个int型的高16位和低16位分别表示读锁和写锁的状态
-* 当state=0时,说明既没有线程持有读锁,也没有线程持有写锁；当state != 0时,要么有线程持有读锁,要么有线程持有写锁,两者不能同时成立,因为读和写互斥。这时再进一步通过sharedCount(state)和exclusiveCount(state)判断到底是读线程还是写线程持有了该锁
-
-
-
-#### AQS的两对模板方法
-
-
-
-* 下面介绍在ReentrantReadWriteLock的两个内部类ReadLock和WriteLock中,是如何使用state变量的
-* acquire/release、acquireShared/releaseShared 是AQS里面的两对模板方法。互斥锁和读写锁的写锁都是基于acquire/release模板方法来实现的。读写锁的读锁是基于acquireShared/releaseShared 这对模板方法来实现的。这两对模板方法的代码如下: 
-* 将读/写、公平/非公平进行排列组合,就有4种组合。如下图所示,上面的两个方法都是在Sync中实 现的。Sync中的两个方法又是模板方法,在NonfairSync和FairSync中分别有实现。最终的对应关系如 下: 
-  * 读锁的公平实现: Sync.tryAccquireShared()+FairSync中的两个重写的子方法
-  * 读锁的非公平实现: Sync.tryAccquireShared()+NonfairSync中的两个重写的子方法
-  * 写锁的公平实现: Sync.tryAccquire()+FairSync中的两个重写的子方法
-  * 写锁的非公平实现: Sync.tryAccquire()+NonfairSync中的两个重写的子方法
-* ![](D:/software/Typora/media/image193.png)
-
-1.  static final class NonfairSync extends Sync {
-
-2.  private static final long serialVersionUID = -8159625535654395037L;
-
-3.  // 写线程抢锁的时候是否应该阻塞
-
-4.  final boolean writerShouldBlock() {
-
-5.  // 写线程在抢锁之前永远不被阻塞,非公平锁
-
-6.  return false;  }
-
-8.  // 读线程抢锁的时候是否应该阻塞
-
-9.  final boolean readerShouldBlock() {
-
-10.  // 读线程抢锁的时候,当队列中第一个元素是写线程的时候要阻塞
-
-11.  return apparentlyFirstQueuedIsExclusive(); 12 }
-
+```java
+final boolean tryReadLock() {
+    Thread current = Thread.currentThread();
+    for (;;) {
+        // 获取state值
+        int c = getState();
+        // 如果是写线程占用锁或者当前线程不是排他线程,则抢锁失败
+        if (exclusiveCount(c) != 0 && getExclusiveOwnerThread() != current)
+            return false;
+        // 获取读锁state值
+        int r = sharedCount(c);
+        // 如果获取锁的值达到极限,则抛异常
+        if (r == MAX_COUNT)
+            throw new Error("Maximum lock count exceeded");
+        // 使用CAS设置读线程锁state值
+        if (compareAndSetState(c, c + SHARED_UNIT)) {
+            // 如果r=0,则当前线程就是第一个读线程
+            if (r == 0) {
+                firstReader = current;
+                // 读线程个数为1
+                firstReaderHoldCount = 1;
+                // 如果写线程是当前线程
+            } else if (firstReader == current) {
+                // 如果第一个读线程就是当前线程,表示读线程重入读锁
+                firstReaderHoldCount++;
+            } else {
+                // 如果firstReader不是当前线程,则从ThreadLocal中获取当前线程的读锁个数,并设置当前线程持有的读锁个数
+                // ......
+            }
+            return true;
+        }
+    }
 }
-
-15. static final class FairSync extends Sync {
-
-16. private static final long serialVersionUID = -2274990926593161451L;
-
-17. // 写线程抢锁的时候是否应该阻塞
-
-18. final boolean writerShouldBlock() {
-
-19. // 写线程在抢锁之前,如果队列中有其他线程在排队,则阻塞。公平锁
-
-20. return hasQueuedPredecessors();  }
-
-22. // 读线程抢锁的时候是否应该阻塞
-
-23. final boolean readerShouldBlock() {
-
-24. // 读线程在抢锁之前,如果队列中有其他线程在排队,阻塞。公平锁
-
-25. return hasQueuedPredecessors();  }
-
-}
-
-
-
-* 对于公平,比较容易理解,不论是读锁,还是写锁,只要队列中有其他线程在排队(排队等读锁, 或者排队等写锁),就不能直接去抢锁,要排在队列尾部
-* 对于非公平,读锁和写锁的实现策略略有差异
-* 写线程能抢锁,前提是state=0,只有在没有其他线程持有读锁或写锁的情况下,它才有机会去抢 锁。或者state != 0,但那个持有写锁的线程是它自己,再次重入。写线程是非公平的,即writerShouldBlock()方法一直返回false
-* 对于读线程,假设当前线程被读线程持有,然后其他读线程还非公平地一直去抢,可能导致写线程 永远拿不到锁,所以对于读线程的非公平,要做一些“约束”。当发现队列的第1个元素是写线程的时候, 读线程也要阻塞,不能直接去抢。即偏向写线程
-
-
-
-#### WriteLock公平vs非公平
-
-
-
-* 写锁是排他锁,实现策略类似于互斥锁
-
-
-
-##### tryLock()
-
-
-
-* ![](D:/software/Typora/media/image194.jpeg)
-* ![](D:/software/Typora/media/image195.jpeg)
-* ![](image196.png)![](image197.jpeg)lock()
-* 方法: 
-* 在 互 斥 锁 部 分 讲 过 了 。 tryLock和lock方法不区分公平/非公平。
-
-
-
-##### unlock()
-
-
-
-* ![](D:/software/Typora/media/image198.png)
-* ![](D:/software/Typora/media/image199.jpeg)
-* unlock()方法不区分公平/非公平
-
-
-
-#### ReadLock公平vs非公平
+```
 
 
 
 * 读锁是共享锁,其实现策略和排他锁有很大的差异
-* ![](D:/software/Typora/media/image200.jpeg)
-
-
-
-##### tryLock()
-
-
-
-* ![](D:/software/Typora/media/image201.jpeg)![](D:/software/Typora/media/image202.jpeg)
-
-
-
-##### unlock()
-
-
-
-* ![](D:/software/Typora/media/image203.jpeg)
-* ![](D:/software/Typora/media/image204.jpeg)
-
-
-
-##### tryReleaseShared()
-
-
-
-* 因为读锁是共享锁,多个线程会同时持有读锁,所以对读锁的释放不能直接减1,而是需要通过一个for循环+CAS操作不断重试。这是tryReleaseShared和tryRelease的根本差异所在
 
 
 
@@ -2808,106 +2382,8 @@ cellsBusy = 0;
 
 
 
-#### Condition与Lock
-
-
-
-* Condition本身也是一个接口,其功能和wait/notify类似,如下所示: 
-* wait()/notify()必须和synchronized一起使用,Condition也必须和Lock一起使用。因此,在Lock的接口中,有一个与Condition相关的接口:
-
-
-
-#### 使用场景
-
-
-
-* 以ArrayBlockingQueue为例。如下所示为一个用数组实现的阻塞队列,执行put(...)操作的时候,队 列满了,生产者线程被阻塞；执行take()操作的时候,队列为空,消费者线程被阻塞
-
-> final ReentrantLock lock = this.lock; lock.lockInterruptibly();
->
-> try {
->
-> while (count == items.length)
->
-> // 非满条件阻塞,队列容量已满
->
-> notFull.await(); enqueue(e);
->
-> } finally {
->
-> lock.unlock();
->
-> }
->
-> }
->
-> private void enqueue(E e) {
->
-> // assert lock.isHeldByCurrentThread();
->
-> // assert lock.getHoldCount() == 1;
->
-> // assert items\[putIndex\] == null; final Object\[\] items = this.items; items\[putIndex\] = e;
->
-> if (++putIndex == items.length) putIndex = 0; count++;
->
-> // put数据结束,通知消费者非空条件
->
-> notEmpty.signal();
->
-> }
->
-> public E take() throws InterruptedException { final ReentrantLock lock = this.lock; lock.lockInterruptibly();
->
-> try {
->
-> while (count == 0)
->
-> // 阻塞于非空条件,队列元素个数为0,无法消费
->
-> notEmpty.await(); return dequeue();
->
-> } finally {
->
-> lock.unlock();
->
-> }
->
-> }
->
-> private E dequeue() {
->
-> // assert lock.isHeldByCurrentThread();
->
-> // assert lock.getHoldCount() == 1;
->
-> // assert items\[takeIndex\] != null; final Object\[\] items = this.items;
->
-> @SuppressWarnings("unchecked") E e = (E) items\[takeIndex\]; items\[takeIndex\] = null;
->
-> if (++takeIndex == items.length) takeIndex = 0; count--;
->
-> if (itrs != null) itrs.elementDequeued();
->
-> // 消费成功,通知非满条件,队列中有空间,可以生产元素了。
->
-> notFull.signal(); return e;
->
-> }
->
-> // ...
-
-
-
-#### 实现原理
-
-
-
-* 可以发现,Condition的使用很方便,避免了wait/notify的生产者通知生产者、消费者通知消费者的 问题。具体实现如下: 
-* 由于Condition必须和Lock一起使用,所以Condition的实现也是Lock的一部分。首先查看互斥锁和 读写锁中Condition的构造方法: 
-* 首先,读写锁中的 ReadLock 是不支持 Condition 的,读写锁的写锁和互斥锁都支持Condition。虽然它们各自调用的是自己的内部类Sync,但内部类Sync都继承自AQS。因此,上面的代码sync.newCondition最终都调用了AQS中的newCondition: 
-* 每一个Condition对象上面,都阻塞了多个线程。因此,在ConditionObject内部也有一个双向链表 组成的队列,如下所示: 
-* 下面来看一下在await()/notify()方法中,是如何使用这个队列的
+* Condition本身也是一个接口,其功能和wait/notify类似
+* wait()/notify()必须和synchronized一起使用,Condition也必须和Lock一起使用.因此,在Lock的接口中,有一个与Condition相关的方法
 
 
 
@@ -2915,11 +2391,40 @@ cellsBusy = 0;
 
 
 
-* 线程调用 await()的时候,肯定已经先拿到了锁。所以,在 addConditionWaiter()内部,对这个双向链表的操作不需要执行CAS操作,线程天生是安全的,代码如下: 
-* 在线程执行wait操作之前,必须先释放锁。也就是fullyRelease(node),否则会发生死锁。这 个和wait/notify与synchronized的配合机制一样
+```java
+public final void await() throws InterruptedException {
+    // 刚要执行await()操作,收到中断信号,抛异常
+    if (Thread.interrupted())
+        throw new InterruptedException();
+    // 加入Condition的等待队列
+    Node node = addConditionWaiter();
+    // 阻塞在Condition之前必须先释放锁,否则会死锁
+    int savedState = fullyRelease(node);
+    int interruptMode = 0;
+    while (!isOnSyncQueue(node)) {
+        // 阻塞当前线程
+        LockSupport.park(this);
+        if ((interruptMode = checkInterruptWhileWaiting(node)) != 0)
+            break;
+    }
+    // 重新获取锁
+    if (acquireQueued(node, savedState) && interruptMode != THROW_IE)
+        interruptMode = REINTERRUPT;
+    if (node.nextWaiter != null)
+        unlinkCancelledWaiters();
+    if (interruptMode != 0)
+        // 被中断唤醒，抛中断异常
+        reportInterruptAfterWait(interruptMode);
+}
+```
+
+
+
+* 线程调用 await()的时候,肯定已经先拿到了锁,所以,在 addConditionWaiter()内部,对这个双向链表的操作不需要执行CAS操作,线程天生是安全的
+* 在线程执行wait操作之前,必须先释放锁.也就是fullyRelease(node),否则会发生死锁
 * 线程从wait中被唤醒后,必须用acquireQueued(node, savedState)方法重新拿锁
-* checkInterruptWhileWaiting(node)代码在park(this)代码之后,是为了检测在park期间是否收到过中断信号。当线程从park中醒来时,有两种可能: 一种是其他线程调用了unpark,另 一种是收到中断信号。这里的await()方法是可以响应中断的,所以当发现自己是被中断唤醒 的,而不是被unpark唤醒的时,会直接退出while循环,await()方法也会返回
-* isOnSyncQueue(node)用于判断该Node是否在AQS的同步队列里面。初始的时候,Node只 在Condition的队列里,而不在AQS的队列里。但执行notity操作的时候,会放进AQS的同步队列
+* checkInterruptWhileWaiting(node)代码在park(this)代码之后,是为了检测在park期间是否收到过中断信号.当线程从park中醒来时,有两种可能: 一种是其他线程调用了unpark,另一种是收到中断信号.这里的await()方法是可以响应中断的,所以当发现自己是被中断唤醒的,而不是被unpark唤醒时,会直接退出while循环,await()方法也会返回
+* isOnSyncQueue(node)用于判断该Node是否在AQS的同步队列里面.初始的时候,Node只在Condition的队列里,而不在AQS的队列里,但执行notity操作的时候,会放进AQS的同步队列
 
 
 
@@ -2927,9 +2432,7 @@ cellsBusy = 0;
 
 
 
-* 与await()不同,awaitUninterruptibly()不会响应中断,其方法的定义中不会有中断异常抛出,下面 分析其实现和await()的区别
-* ![](D:/software/Typora/media/image205.jpeg)
-* 可以看出,整体代码和 await()类似,区别在于收到异常后,不会抛出异常,而是继续执行while循环
+* 与await()不同,awaitUninterruptibly()不会响应中断,其方法的定义中不会有中断异常抛出.在收到异常后,不会抛出异常,而是继续执行while循环
 
 
 
@@ -2937,9 +2440,40 @@ cellsBusy = 0;
 
 
 
+```java
+public final void signal() {
+    // 只有持有锁的线程,才有资格调用signal()方法
+    if (!isHeldExclusively())
+        throw new IllegalMonitorStateException();
+    Node first = firstWaiter;
+    if (first != null)
+        // 发起通知
+        doSignal(first);
+}
+// 唤醒队列中的第1个线程
+private void doSignal(Node first) {
+    do {
+        if ( (firstWaiter = first.nextWaiter) == null)
+            lastWaiter = null;
+        first.nextWaiter = null;
+    } while (!transferForSignal(first) && (first = firstWaiter) != null);
+}
+final boolean transferForSignal(Node node) {
+    if (!node.compareAndSetWaitStatus(Node.CONDITION, 0))
+        return false;
+    // 先把Node放入互斥锁的同步队列中,再调用unpark方法
+    Node p = enq(node);
+    int ws = p.waitStatus;
+    if (ws > 0 || !p.compareAndSetWaitStatus(ws, Node.SIGNAL))
+        LockSupport.unpark(node.thread);
+    return true;
+}
+```
+
+
+
 * 同 await()一样,在调用 notify()的时候,必须先拿到锁(否则就会抛出上面的异常),是因为前面执行await()的时候,把锁释放了
-* 然后,从队列中取出firstWaiter,唤醒它。在通过调用unpark唤醒它之前,先用enq(node)方法把 这个Node放入AQS的锁对应的阻塞队列中。也正因为如此,才有了await()方法里面的判断条件:
-* while( ! isOnSyncQueue(node))
+* 然后,从队列中取出firstWaiter,唤醒它.在通过调用unpark唤醒它之前,先用enq(node)方法把这个Node放入AQS的锁对应的阻塞队列中,也正因为如此,才有了await()方法里面的判断条件: `while( ! isOnSyncQueue(node))`
 * 这个判断条件满足,说明await线程不是被中断,而是被unpark唤醒的
 * notifyAll()与此类似
 
@@ -2950,7 +2484,7 @@ cellsBusy = 0;
 
 
 * 从ReentrantLock到StampedLock,并发度依次提高
-* 另一方面,因为ReentrantReadWriteLock采用的是悲观读的策略,当第一个读线程拿到锁之后, 第二个、第三个读线程还可以拿到锁,使得写线程一直拿不到锁,可能导致写线程饿死。虽然在其公 平或非公平的实现中,都尽量避免这种情形,但还有可能发生
+* 因为ReentrantReadWriteLock采用的是悲观读的策略,当第一个读线程拿到锁之后, 第二个、第三个读线程还可以拿到锁,使得写线程一直拿不到锁,可能导致写线程饿死.虽然在其公平或非公平的实现中,都尽量避免这种情形,但还有可能发生
 * StampedLock引入了乐观读策略,读的时候不加读锁,读出来发现数据被修改了,再升级为悲观读,相当于降低了读的地位,把抢锁的天平往写的一方倾斜了一下,避免写线程被饿死
 
 
@@ -2959,7 +2493,6 @@ cellsBusy = 0;
 
 
 
-* 在剖析其原理之前,下面先以官方的一个例子来看一下StampedLock如何使用。
 * 如上面代码所示,有一个Point类,多个线程调用move()方法,修改坐标；还有多个线程调用distanceFromOrigin()方法,求距离
 * 首先,执行move操作的时候,要加写锁。这个用法和ReadWriteLock的用法没有区别,写操作和写 操作也是互斥的
 * 关键在于读的时候,用了一个“乐观读”sl.tryOptimisticRead(),相当于在读之前给数据的状态做了 一个“快照”。然后,把数据拷贝到内存里面,在用之前,再比对一次版本号。如果版本号变了,则说明 在读的期间有其他线程修改了数据。读出来的数据废弃,重新获取读锁。关键代码就是下面这三行: 

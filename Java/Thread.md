@@ -39,7 +39,7 @@ private static int ctlOf(int rs, int wc) {
 
 
 
-## 线程池状态迁移
+## 线程池状态
 
 
 
@@ -47,284 +47,113 @@ private static int ctlOf(int rs, int wc) {
 
 
 
-
-
-
-
-* 线程池有两个关闭方法,shutdown()和shutdownNow(),这两个方法会让线程池切换到不同的状态.在队列为空,线程池也为空之后,进入TIDYING 状态;最后执行一个钩子方法terminated(),进入TERMINATED状态,线程池才真正关闭
-* 这里的状态迁移有一个非常关键的特征: 从小到大迁移,-1,0,1,2,3,只会从小的状态值往大的状态值迁移,不会逆向迁移
-
-
-
-### 正确关闭线程池的步骤
-
-
-
-* 关闭线程池的过程为: 在调用 shutdown()或者shutdownNow()之后,线程池并不会立即关闭,接下来需要调用 awaitTermination() 来等待线程池关闭。关闭线程池的正确步骤如下: 
-* ![](image217.jpeg)
-* awaitTermination(...)方法的内部实现很简单,如下所示。不断循环判断线程池是否到达了最终状态TERMINATED,如果是,就返回；如果不是,则通过termination条件变量阻塞一段时间,之后继续判断
-
-
-
-* ![](D:/software/Typora/media/image218.jpeg)
-* ![](D:/software/Typora/media/image219.jpeg)
-* 下面看一下在上面的代码里中断空闲线程和中断所有线程的区别
-* ![](image220.jpeg)![](image221.jpeg)
-* shutdown()方法中的interruptIdleWorkers()方法的实现: 
-* 关键区别点在tryLock(): 一个线程在执行一个任务之前,会先加锁,这意味着通过是否持有锁,可 以判断出线程是否处于空闲状态。tryLock()如果调用成功,说明线程处于空闲状态,向其发送中断信 号；否则不发送
-* tryLock()
-* ![](D:/software/Typora/media/image222.png)
-* tryAcquire()
-* ![](D:/software/Typora/media/image223.jpeg)
-* shutdownNow()调用了 interruptWorkers(); 方法: 
-* ![](D:/software/Typora/media/image224.jpeg)
-* interruptIfStarted() 方法的实现: 
-* ![](D:/software/Typora/media/image225.jpeg)
-* 在上面的代码中,shutdown() 和shutdownNow()都调用了tryTerminate()方法,如下所示: 
-* tryTerminate()不会强行终止线程池,只是做了一下检测: 当workerCount为0,workerQueue为空时,先把状态切换到TIDYING,然后调用钩子方法terminated()。当钩子方法执行完成时,把状态从TIDYING 改为 TERMINATED,接着调用termination.sinaglAll(),通知前面阻塞在awaitTermination的所有调用者线程
-* 所以,TIDYING和TREMINATED的区别是在二者之间执行了一个钩子方法terminated(),目前是一 个空实现
-
-
-
-## 任务的提交过程分析
-
-
-
-* 提交任务的方法如下: 
-
-> }
->
-> // 添加Worker,并将command设置为Worker线程的第一个任务开始执行。
->
-> if (addWorker(command, true)) return;
->
-> c = ctl.get();
->
->  }
->
-> // 如果当前的线程数大于或等于corePoolSize,则调用workQueue.offer放入队列
->
-> if (isRunning(c) && workQueue.offer(command)) { int recheck = ctl.get();
->
-> // 如果线程池正在停止,则将command任务从队列移除,并拒绝command任务请求。
->
-> if (! isRunning(recheck) && remove(command)) reject(command);
->
-> // 放入队列中后发现没有线程执行任务,开启新线程
->
-> else if (workerCountOf(recheck) == 0) addWorker(null, false);
->
-> }
->
-> // 线程数大于maxPoolSize,并且队列已满,调用拒绝策略
->
-> else if (!addWorker(command, false)) reject(command);
-
-27. // 该方法用于启动新线程。如果第二个参数为true,则使用corePoolSize作为上限,否则使用
-
-> maxPoolSize作为上限。
-
-28. private boolean addWorker(Runnable firstTask, boolean core) {
-
-29. retry:
-
-30. for (int c = ctl.get();;) {
-
-31. // 如果线程池状态值起码是SHUTDOWN和STOP,或则第一个任务不是null,或者工作队列为空
-
-32. // 则添加worker失败,返回false
-
-33. if (runStateAtLeast(c, SHUTDOWN)
-
-34. && (runStateAtLeast(c, STOP)
-
-35. \|\| firstTask != null
-
-36. \|\| workQueue.isEmpty()))
-
-37. return false; 38
-
-> 39 for (;;) {
-
-40. // 工作线程数达到上限,要么是corePoolSize要么是maximumPoolSize,启动线程失败
-
-41. if (workerCountOf(c)
-
-42. \>= ((core ? corePoolSize : maximumPoolSize) & COUNT_MASK))
-
-43. return false;
-
-44. // 增加worker数量成功,返回到retry语句
-
-45. if (compareAndIncrementWorkerCount(c))
-
-46. break retry;
-
-47. c = ctl.get(); // Re-read ctl
-
-48. // 如果线程池运行状态起码是SHUTDOWN,则重试retry标签语句,CAS
-
-49. if (runStateAtLeast(c, SHUTDOWN))
-
-50. continue retry;
-
-51. // else CAS failed due to workerCount change; retry inner loop 52 }
-
-> 53 }
-
-54. // worker数量加1成功后,接着运行: 
-
-55. boolean workerStarted = false;
-
-56. boolean workerAdded = false;
-
-57. Worker w = null;
-
-58. try {
-
-59. // 新建worker对象
-
-60. w = new Worker(firstTask);
-
-61. // 获取线程对象
-
-
-
-## 任务的执行过程分析
-
-
-
-* 在上面的任务提交过程中,可能会开启一个新的Worker,并把任务本身作为firstTask赋给该Worker。但对于一个Worker来说,不是只执行一个任务,而是源源不断地从队列中取任务执行,这是 一个不断循环的过程
-* 下面来看Woker的run()方法的实现过程
-
-4.  // 线程需要运行的第一个任务。可以是null,如果是null,则线程从队列获取任务
-
-5.  Runnable firstTask;
-
-6.  // 记录线程执行完成的任务数量,每个线程一个计数器
-
-7.  volatile long completedTasks; 8
-
-> 9 /\*\*
-
-10. \* 使用给定的第一个任务并利用线程工厂创建Worker实例
-
-11. \* @param firstTask 线程的第一个任务,如果没有,就设置为null,此时线程会从队列获取任务。
-
-> 12 \*/
-
-13. Worker(Runnable firstTask) {
-
-14. setState(-1); // 线程处于阻塞状态,调用runWorker的时候中断
-
-15. this.firstTask = firstTask;
-
-16. this.thread = getThreadFactory().newThread(this); 17 }
-
-> 18
-
-19. // 调用ThreadPoolExecutor的runWorker方法执行线程的运行
-
-20. public void run() {
-
-21. runWorker(this); 22 }
-
-> 23 }
->
-> 24
-
-25. final void runWorker(Worker w) {
-
-26. Thread wt = Thread.currentThread();
-
-27. Runnable task = w.firstTask;
-
-28. w.firstTask = null;
-
-29. // 中断Worker封装的线程
-
-30. w.unlock();
-
-31. boolean completedAbruptly = true;
-
-32. try {
-
-33. // 如果线程初始任务不是null,或者从队列获取的任务不是null,表示该线程应该执行任务。
-
-34. while (task != null \|\| (task = getTask()) != null) {
-
-35. // 获取线程锁
-
-36. w.lock();
-
-37. // 如果线程池停止了,确保线程被中断
-
-38. // 如果线程池正在运行,确保线程不被中断
-
-39. if ((runStateAtLeast(ctl.get(), STOP) \|\|
-
-40. (Thread.interrupted() &&
-
-41. runStateAtLeast(ctl.get(), STOP))) &&
-
-42. !wt.isInterrupted())
-
-43. // 获取到任务后,再次检查线程池状态,如果发现线程池已经停止,则给自己发中断信号
-
-44. wt.interrupt();
-
-45. try {
-
-46. // 任务执行之前的钩子方法,实现为空
-
-47. beforeExecute(wt, task);
-
-48. try {
-
-49. task.run();
-
-50. // 任务执行结束后的钩子方法,实现为空
-
-51. afterExecute(task, null);
-
-52. } catch (Throwable ex) {
-
-53. afterExecute(task, ex);
-
-54. throw ex;
-
-> 55 }
-
-56. } finally {
-
-57. // 任务执行完成,将task设置为null
-
-58. task = null;
-
-
-
-### shutdown()与任务执行过程综合分析
-
-
-
-* 把任务的执行过程和上面的线程池的关闭过程结合起来进行分析,当调用 shutdown()的时候,可能出现以下几种场景: 
-* 当调用shutdown()的时候,所有线程都处于空闲状态
-  * 这意味着任务队列一定是空的。此时,所有线程都会阻塞在 getTask()方法的地方。然后,所有线程都会收到interruptIdleWorkers()发来的中断信号,getTask()返回null,所有Worker都会退出while循环,之后执行processWorkerExit
-* 当调用shutdown()的时候,所有线程都处于忙碌状态
-  * 此时,队列可能是空的,也可能是非空的。interruptIdleWorkers()内部的tryLock调用失败, 什么都不会做,所有线程会继续执行自己当前的任务。之后所有线程会执行完队列中的任务, 直到队列为空,getTask()才会返回null。之后,就和场景1一样了,退出while循环
-* 当调用shutdown()的时候,部分线程忙碌,部分线程空闲
-  * 有部分线程空闲,说明队列一定是空的,这些线程肯定阻塞在 getTask()方法的地方。空闲的这些线程会和场景1一样处理,不空闲的线程会和场景2一样处理
-
-* 下面看一下getTask()方法的内部细节: 
-
-
-
-### shutdownNow()与任务执行过程综合分析
-
-
-
-* 和上面的 shutdown()类似,只是多了一个环节,即清空任务队列。如果一个线程正在执行某个业务代码,即使向它发送中断信号,也没有用,只能等它把代码执行完成。因此,中断空闲线程和中断所有 线程的区别并不是很大,除非线程当前刚好阻塞在某个地方
-* 当一个Worker最终退出的时候,会执行清理工作: 
+## 任务执行过程
+
+
+
+```java
+private final class Worker extends AbstractQueuedSynchronizer implements
+    Runnable {
+    final Thread thread;
+    // 线程需要运行的第一个任务,可以是null,如果是null,则线程从队列获取任务
+    Runnable firstTask;
+    // 记录线程执行完成的任务数量,每个线程一个计数器
+    volatile long completedTasks;
+
+    Worker(Runnable firstTask) {
+        setState(-1); // 线程处于阻塞状态,调用runWorker的时候中断
+        // ...
+    }
+    // ...
+}
+
+final void runWorker(Worker w) {
+    // ...
+    // 中断Worker封装的线程
+    w.unlock();
+    boolean completedAbruptly = true;
+    try {
+        // 如果线程初始任务不是null,或者从队列获取的任务不是null,表示该线程应该执行任务
+        while (task != null || (task = getTask()) != null) {
+            w.lock();
+            // 如果线程池停止了,确保线程被中断;如果线程池正在运行,确保线程不被中断
+            if ((runStateAtLeast(ctl.get(), STOP) || (Thread.interrupted() && runStateAtLeast(ctl.get(), STOP))) && !wt.isInterrupted())
+                // 获取到任务后,再次检查线程池状态,如果发现线程池已经停止,则给自己发中断信号
+                wt.interrupt();
+            try {
+                try {
+                    // 执行任务
+                    task.run();
+                } catch (Throwable ex) {
+                    afterExecute(task, ex);
+                    throw ex;
+                }
+            } finally {
+                task = null;
+                // 线程已完成的任务数加1
+                w.completedTasks++;
+            }
+        }
+        // 判断线程是否是正常退出
+        completedAbruptly = false;
+    } finally {
+        // Worker退出
+        processWorkerExit(w, completedAbruptly);
+    }
+}
+```
+
+
+
+### shutdown()调用情况
+
+
+
+* 当调用shutdown()的时候,所有线程都处于空闲状态:这意味着任务队列一定是空的.此时,所有线程都会阻塞在 getTask().然后,所有线程都会收到interruptIdleWorkers()发来的中断信号,getTask()返回null,所有Worker都会退出while循环,之后执行processWorkerExit
+* 当调用shutdown()时,所有线程都处于忙碌状态:此时,队列可能是空的,也可能是非空的.interruptIdleWorkers()内部的tryLock调用失败,什么都不会做,所有线程会继续执行自己当前的任务.之后所有线程会执行完队列中的任务,直到队列为空,getTask()才会返回null.之后,就和场景1一样了
+* 当调用shutdown()时,部分线程忙碌,部分线程空闲:有部分线程空闲,说明队列一定是空的,这些线程肯定阻塞在 getTask().空闲的这些线程会和场景1一样处理,不空闲的线程会和场景2一样处理
+
+
+
+### shutdownNow()调用情况
+
+
+
+* 和 shutdown()类似,只是多了清空任务队列步骤.如果一个线程正在执行某个业务代码,即使向它发送中断信号,也没有用,只能等它把代码执行完成.因此,中断空闲线程和中断所有线程的区别并不是很大,除非线程当前刚好阻塞在某个地方
+* 当一个Worker最终退出的时候,会执行清理工作
+
+
+
+```java
+private void processWorkerExit(Worker w, boolean completedAbruptly) {
+    // 如果线程正常退出,不会执行if的语句,这里一般是非正常退出,需要将worker数量减一
+    // ...
+    try {
+        completedTaskCount += w.completedTasks;
+        // 将自己的worker从集合移除
+        workers.remove(w);
+    } finally {
+        mainLock.unlock();
+    }
+    // 每个线程在结束的时候都会调用该方法,看是否可以停止线程池
+    tryTerminate();
+    int c = ctl.get();
+    // 如果在线程退出前,发现线程池还没有关闭
+    if (runStateLessThan(c, STOP)) {
+        if (!completedAbruptly) {
+            int min = allowCoreThreadTimeOut ? 0 : corePoolSize;
+            // 如果线程池中没有其他线程了,并且任务队列非空
+            if (min == 0 && ! workQueue.isEmpty())
+                min = 1;
+            // 如果工作线程数大于min,表示队列中的任务可以由其他线程执行,退出当前线程
+            if (workerCountOf(c) >= min)
+                return;
+        }
+        // 如果当前线程退出前发现线程池没有结束,任务队列不是空的,也没有其他线程来执行就再启动一个线程来处理
+        addWorker(null, false);
+    }
+}
+```
 
 
 

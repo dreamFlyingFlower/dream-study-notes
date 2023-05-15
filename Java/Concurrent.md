@@ -2,75 +2,6 @@
 
 
 
-# Unsafe
-
-
-
-* Unsafe 对象提供了非常底层的,操作内存、线程的方法,Unsafe 对象不能直接调用,只能通过反射获得
-
-
-
-# defensive copy
-
-
-
-* 保护性拷贝,通过创建副本对象来避免共享的手段,如String,底层是创建新的String对象,同时char[]数组也会重新复制一份
-* 在JDK8以后,String的底层是byte[],而不是char[]
-
-
-
-# Final
-
-
-
-* 在编译后的字节码中,final变量的赋值也会通过putfield指令来完成,同样在这条指令之后会加入写屏障,保证其他线程在读到该变量的时候不会出现为0(初始化未赋值)的情况
-* 获取final变量的值,是直接复制原值给其他变量或直接输出;若是非final变量,需要从堆中重新获取
-
-
-
-# ThreadPoolExecutor
-
-
-
-* ThreadPoolExecutor 使用 int 的高 3 位来表示线程池状态,低 29 位表示线程数量
-
-| 状态名     | 高3位 | 接收新任务 | 处理阻塞任务队列 | 说明                                    |
-| ---------- | ----- | ---------- | ---------------- | --------------------------------------- |
-| RUNNING    | 111   | Y          | Y                |                                         |
-| SHUTDOWN   | 000   | N          | Y                | 不会接收新任务,但会处理阻塞队列剩余任务 |
-| STOP       | 001   | N          | N                | 会中断正在执行的任务,并抛弃阻塞队列任务 |
-| TIDYING    | 010   | -          | -                | 任务全执行完毕,活动线程为 0 即将进入    |
-| TERMINATED | 011   | -          | -                | 终结状态                                |
-
-* 从数字上比较,TERMINATED > TIDYING > STOP > SHUTDOWN > RUNNING
-* 这些信息存储在一个原子变量 ctl 中,目的是将线程池状态与线程个数合二为一,这样就可以用一次 cas 原子操作进行赋值
-
-```java
-
-private void advanceRunState(int targetState) {
-    for (;;) {
-        int c = ctl.get();
-        if (runStateAtLeast(c, targetState) ||
-            // c 为旧值,ctlOf 返回结果为新值
-            ctl.compareAndSet(c, ctlOf(targetState, workerCountOf(c))))
-            break;
-    }
-}
-
-// rs 为高 3 位代表线程池状态, wc 为低 29 位代表线程个数,ctl 是合并它们
-private static int ctlOf(int rs, int wc) { 
-    return rs | wc;
-}
-```
-
-
-
-
-
-# 并发编程
-
-
-
 # 概述
 
 
@@ -669,7 +600,21 @@ public class Singleton {
 
 
 
+## defensive copy
+
+
+
+* 保护性拷贝,通过创建副本对象来避免共享的手段,如String,底层是创建新的String对象,同时char[]数组也会重新复制一份
+* 在JDK8以后,String的底层是byte[],而不是char[]
+
+
+
 ## final
+
+
+
+* 在编译后的字节码中,final变量的赋值也会通过putfield指令来完成,同样在这条指令之后会加入写屏障,保证其他线程在读到该变量的时候不会出现为0(初始化未赋值)的情况
+* 获取final变量的值,是直接复制原值给其他变量或直接输出;若是非final变量,需要从堆中重新获取
 
 
 
@@ -2400,20 +2345,14 @@ public final void await() throws InterruptedException {
     Node node = addConditionWaiter();
     // 阻塞在Condition之前必须先释放锁,否则会死锁
     int savedState = fullyRelease(node);
-    int interruptMode = 0;
-    while (!isOnSyncQueue(node)) {
-        // 阻塞当前线程
-        LockSupport.park(this);
-        if ((interruptMode = checkInterruptWhileWaiting(node)) != 0)
-            break;
-    }
+    // ...
     // 重新获取锁
     if (acquireQueued(node, savedState) && interruptMode != THROW_IE)
         interruptMode = REINTERRUPT;
     if (node.nextWaiter != null)
         unlinkCancelledWaiters();
     if (interruptMode != 0)
-        // 被中断唤醒，抛中断异常
+        // 被中断唤醒,抛中断异常
         reportInterruptAfterWait(interruptMode);
 }
 ```
@@ -2432,7 +2371,7 @@ public final void await() throws InterruptedException {
 
 
 
-* 与await()不同,awaitUninterruptibly()不会响应中断,其方法的定义中不会有中断异常抛出.在收到异常后,不会抛出异常,而是继续执行while循环
+* awaitUninterruptibly()不会响应中断,该方法在收到中断异常后,不会抛出异常,而是继续执行while循环
 
 
 
@@ -2452,11 +2391,6 @@ public final void signal() {
 }
 // 唤醒队列中的第1个线程
 private void doSignal(Node first) {
-    do {
-        if ( (firstWaiter = first.nextWaiter) == null)
-            lastWaiter = null;
-        first.nextWaiter = null;
-    } while (!transferForSignal(first) && (first = firstWaiter) != null);
 }
 final boolean transferForSignal(Node node) {
     if (!node.compareAndSetWaitStatus(Node.CONDITION, 0))
@@ -2473,8 +2407,7 @@ final boolean transferForSignal(Node node) {
 
 
 * 同 await()一样,在调用 notify()的时候,必须先拿到锁(否则就会抛出上面的异常),是因为前面执行await()的时候,把锁释放了
-* 然后,从队列中取出firstWaiter,唤醒它.在通过调用unpark唤醒它之前,先用enq(node)方法把这个Node放入AQS的锁对应的阻塞队列中,也正因为如此,才有了await()方法里面的判断条件: `while( ! isOnSyncQueue(node))`
-* 这个判断条件满足,说明await线程不是被中断,而是被unpark唤醒的
+* 然后,从队列中取出firstWaiter,唤醒它.在通过调用unpark唤醒它之前,先用enq(node)方法把这个Node放入AQS的锁对应的阻塞队列中,也正因为如此,才有了await()方法里面的判断条件: `while( ! isOnSyncQueue(node))`.这个判断条件满足,说明await线程不是被中断,而是被unpark唤醒的
 * notifyAll()与此类似
 
 
@@ -2483,127 +2416,75 @@ final boolean transferForSignal(Node node) {
 
 
 
-* 从ReentrantLock到StampedLock,并发度依次提高
-* 因为ReentrantReadWriteLock采用的是悲观读的策略,当第一个读线程拿到锁之后, 第二个、第三个读线程还可以拿到锁,使得写线程一直拿不到锁,可能导致写线程饿死.虽然在其公平或非公平的实现中,都尽量避免这种情形,但还有可能发生
-* StampedLock引入了乐观读策略,读的时候不加读锁,读出来发现数据被修改了,再升级为悲观读,相当于降低了读的地位,把抢锁的天平往写的一方倾斜了一下,避免写线程被饿死
+* 因为ReentrantReadWriteLock采用的是悲观读的策略,当第一个读线程拿到锁之后,第二个、第三个读线程还可以拿到锁,使得写线程一直拿不到锁,可能导致写线程饿死.虽然在其公平或非公平的实现中,都尽量避免这种情形,但还有可能发生
+* StampedLock引入了乐观读策略,读的时候不加读锁,读完发现数据被修改了,再手动升级为悲观读,相当于降低了读的地位,避免写线程被饿死
 
 
 
-#### 使用场景
+#### acquireWrite()
 
 
 
-* 如上面代码所示,有一个Point类,多个线程调用move()方法,修改坐标；还有多个线程调用distanceFromOrigin()方法,求距离
-* 首先,执行move操作的时候,要加写锁。这个用法和ReadWriteLock的用法没有区别,写操作和写 操作也是互斥的
-* 关键在于读的时候,用了一个“乐观读”sl.tryOptimisticRead(),相当于在读之前给数据的状态做了 一个“快照”。然后,把数据拷贝到内存里面,在用之前,再比对一次版本号。如果版本号变了,则说明 在读的期间有其他线程修改了数据。读出来的数据废弃,重新获取读锁。关键代码就是下面这三行: 
-* 要说明的是,这三行关键代码对顺序非常敏感,不能有重排序。因为 **state** 变量已经是**volatile**, 所以可以禁止重排序,但**stamp**并不是**volatile**的。为此,在**validate(stamp)**方法里面插入内存屏 障
-* 乐观读的实现原理
-  * 首先,StampedLock是一个读写锁,因此也会像读写锁那样,把一个state变量分成两半,分别表示 读锁和写锁的状态。同时,它还需要一个数据的version。但是,一次CAS没有办法操作两个变量,所以 这个state变量本身同时也表示了数据的version。下面先分析state变量
-  * 如下图: 用最低的8位表示读和写的状态,其中第8位表示写锁的状态,最低的7位表示读锁的状 态。因为写锁只有一个bit位,所以写锁是不可重入的
-  * ![](D:/software/Typora/media/image206.png)
-* 初始值不为0,而是把WBIT 向左移动了一位,也就是上面的ORIGIN 常量,构造方法如下所示。
-* ![](D:/software/Typora/media/image207.png)
-* 为什么state的初始值不设为0呢?看乐观锁的实现: 
-* 上面两个方法必须结合起来看: 当state&WBIT != 0的时候,说明有线程持有写锁,上面的tryOptimisticRead会永远返回0。这样,再调用validate(stamp),也就是validate(0)也会永远返回false。这正是我们想要的逻辑: 当有线程持有写锁的时候,validate永远返回false,无论写线程是否 释放了写锁。因为无论是否释放了(state回到初始值)写锁,state值都不为0,所以validate(0)永远 为false
-* 为什么上面的validate(...)方法不直接比较stamp=state,而要比较state&SBITS=state&SBITS 呢? 因为读锁和读锁是不互斥的
-* 所以,即使在“乐观读”的时候,state 值被修改了,但如果它改的是第7位,validate(...)还是会返回true
-* 另外要说明的一点是,上面使用了内存屏障VarHandle.acquireFence();,是因为在这行代码的下一 行里面的stamp、SBITS变量不是volatile的,由此可以禁止其和前面的currentX=X,currentY=Y进行重排序
-* 通过上面的分析,可以发现state的设计非常巧妙。只通过一个变量,既实现了读锁、写锁的状态记 录,还实现了数据的版本号的记录
-
-
-
-#### 悲观读**/**写:阻塞与自旋策略实现差异
-
-
-
-* 同ReadWriteLock一样,StampedLock也要进行悲观的读锁和写锁操作。不过,它不是基于AQS实 现的,而是内部重新实现了一个**阻塞队列**。如下所示
-* 这个阻塞队列和 AQS 里面的很像
-* 刚开始的时候,whead=wtail=NULL,然后初始化,建一个空节点,whead和wtail都指向这个空节 点,之后往里面加入一个个读线程或写线程节点
-* 但基于这个阻塞队列实现的锁的调度策略和AQS很不一样,也就是“自旋”
-* 在AQS里面,当一个线程CAS state失败之后,会立即加入阻塞队列,并且进入阻塞状态
-* 但在StampedLock中,CAS state失败之后,会不断自旋,自旋足够多的次数之后,如果还拿不到锁,才进入阻塞状态
-* 为此,根据CPU的核数,定义了自旋次数的常量值。如果是单核的CPU,肯定不能自旋,在多核情况下,才采用自旋策略
-* 下面以写锁的加锁,也就是StampedLock的writeLock()方法为例,来看一下自旋的实现
-* 如上面代码所示,当state&ABITS==0的时候,说明既没有线程持有读锁,也没有线程持有写锁,此 时当前线程才有资格通过CAS操作state。若操作不成功,则调用acquireWrite()方法进入阻塞队列,并 进行自旋,这个方法是整个加锁操作的核心,代码如下: 
-
->  }
->
-> if (WCOWAIT.weakCompareAndSet(h, c, c.cowait) && (w = c.thread) != null) LockSupport.unpark(w);
->
-> }
-
-66. if (whead == h) {
-
-67. if ((np = node.prev) != p) {
-
-68. if (np != null)
-
-69. (p = np).next = node; // stale 70 }
-
-71. else if ((ps = p.status) == 0)
-
-72. WSTATUS.compareAndSet(p, 0, WAITING);
-
-73. else if (ps == CANCELLED) {
-
-74. if ((pp = p.prev) != null) {
-
-75. node.prev = pp;
-
-76. pp.next = node;
-
- }
-
+```java
+private long acquireWrite(boolean interruptible, long deadline) {
+    WNode node = null, p;
+    for (int spins = -1;;) {
+        long m, s, ns;
+        if ((m = (s = state) & ABITS) == 0L) {
+            // 自旋时获取到锁,返回
+            if ((ns = tryWriteLock(s)) != 0L)
+                return ns;
+        }
+        // ...
+        // 如果尾部节点是null,初始化队列
+        else if ((p = wtail) == null) {
+            WNode hd = new WNode(WMODE, null);
+            // 头部和尾部指向一个节点
+            if (WHEAD.weakCompareAndSet(this, null, hd))
+                wtail = hd;
+        }
+       // ...
+        // 成功将节点node添加到队列尾部,才会退出for循环
+        else if (WTAIL.weakCompareAndSet(this, p, node)) {
+            p.next = node;
+            break;
+        }
+    }
+    boolean wasInterrupted = false;
+    for (int spins = -1;;) {
+        WNode h, np, pp; int ps;
+        if ((h = whead) == p) {
+            // ...
+        }
+        // 唤醒读取的线程
+        else if (h != null) {
+            // ...
+        }
+        if (whead == h) {
+            if ((np = node.prev) != p) {
+                // ...
+            }
+            else {
+                // ...
+                if (p.status < 0 && (p != h || (state & ABITS) != 0L) &&
+                    whead == h && node.prev == p) {
+                    if (time == 0L)
+                        // 阻塞,直到被唤醒
+                        LockSupport.park(this);
+                    else
+                        // 计时阻塞
+                        LockSupport.parkNanos(this, time);
+                }
+                node.thread = null;
+                if (Thread.interrupted()) {
+                    if (interruptible)
+                        // 如果被中断了,则取消等待
+                        return cancelWaiter(node, node, true);
+                    wasInterrupted = true;
+                }
+            }
+        }
+    }
 }
+```
 
-79. else {
-
-80. long time; // 0 argument to park means no timeout
-
-81. if (deadline == 0L)
-
-82. time = 0L;
-
-83. else if ((time = deadline - System.nanoTime()) \<= 0L)
-
-84. return cancelWaiter(node, node, false);
-
-85. Thread wt = Thread.currentThread();
-
-86. node.thread = wt;
-
-87. if (p.status \< 0 && (p != h \|\| (state & ABITS) != 0L) &&
-
-88. whead == h && node.prev == p) {
-
-89. if (time == 0L)
-
-90. // 阻塞,直到被唤醒
-
-91. LockSupport.park(this);
-
-92. else
-
-93. // 计时阻塞
-
-94. LockSupport.parkNanos(this, time); }
-
-96. node.thread = null;
-
-97. if (Thread.interrupted()) {
-
-98. if (interruptible)
-
-99. // 如果被中断了,则取消等待
-
-100. return cancelWaiter(node, node, true);
-
-
-
-* 整个acquireWrite()方法是两个大的for循环,内部实现了非常复杂的自旋策略。在第一个大的for 循环里面,目的就是把该Node加入队列的尾部,一边加入,一边通过CAS操作尝试获得锁。如果获得 了,整个方法就会返回；如果不能获得锁,会一直自旋,直到加入队列尾部
-* 在第二个大的for循环里,也就是该Node已经在队列尾部了。这个时候,如果发现自己刚好也在队 列头部,说明队列中除了空的Head节点,就是当前线程了。此时,再进行新一轮的自旋,直到达到MAX_HEAD_SPINS次数,然后进入阻塞。这里有一个关键点要说明: 当release(...)方法被调用之后,会唤醒队列头部的第1个元素,此时会执行第二个大的for循环里面的逻辑,也就是接着for循环里面park() 方法后面的代码往下执行
-* 另外一个不同于AQS的阻塞队列的地方是,在每个WNode里面有一个cowait指针,用于串联起所有 的读线程。例如,队列尾部阻塞的是一个读线程 1,现在又来了读线程 2、3,那么会通过cowait指针, 把1、2、3串联起来。1被唤醒之后,2、3也随之一起被唤醒,因为读和读之间不互斥
-* 明白加锁的自旋策略后,下面来看锁的释放操作。和读写锁的实现类似,也是做了两件事情: 一是 把state变量置回原位,二是唤醒阻塞队列中的第一个节点
-* ![](D:/software/Typora/media/image208.png)
-* ![](D:/software/Typora/media/image209.png)
-* ![](D:/software/Typora/media/image210.jpeg)

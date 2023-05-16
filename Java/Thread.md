@@ -161,167 +161,22 @@ private void processWorkerExit(Worker w, boolean completedAbruptly) {
 
 
 
-## 执行原理
+* withFixedDelay和atFixedRate的区别就体现在setNextRunTime里面:
+  * 如果是atFixedRate,period＞0,下一次开始执行时间等于上一次开始执行时间+period
+  * 如果是withFixedDelay,period ＜ 0,下一次开始执行时间等于triggerTime(-p),为now+(-period),now即上一次执行的结束时间
 
 
 
-* 延迟执行任务依靠的是DelayQueue。DelayQueue是 BlockingQueue的一种,其实现原理是二叉堆
-* 而周期性执行任务是执行完一个任务之后,再把该任务扔回到任务队列中,如此就可以对一个任务 反复执行
-* ![](image244.png)
-* 不过这里并没有使用DelayQueue,而是在ScheduledThreadPoolExecutor内部又实现了一个特定的DelayQueue
-* 其原理和DelayQueue一样,但针对任务的取消进行了优化。下面主要讲延迟执行和周期性执行的 实现过程
 
+# CompletableFuture
 
 
-## 延迟执行
 
-
-
-![](D:/software/Typora/media/image245.png)
-
-![](image246.jpeg)
-
-
-
-* 传进去的是一个Runnable,外加延迟时间delay。在内部通过decorateTask(...)方法把Runnable包 装成一个ScheduleFutureTask对象,而DelayedWorkQueue中存放的正是这种类型的对象,这种类型 的对象一定实现了Delayed接口
-
-![](D:/software/Typora/media/image247.jpeg)
-
-* 从上面的代码中可以看出,schedule()方法本身很简单,就是把提交的Runnable任务加上delay时 间,转换成ScheduledFutureTask对象,放入DelayedWorkerQueue中。任务的执行过程还是复用的ThreadPoolExecutor,延迟的控制是在DelayedWorkerQueue内部完成的
-
-
-
-## 周期性执行
-
-
-
-![](D:/software/Typora/media/image248.png)![](D:/software/Typora/media/image249.jpeg)
-
-
-
-* 和schedule()方法的框架基本一样,也是包装一个ScheduledFutureTask对象,只是在延迟时间参 数之外多了一个周期参数,然后放入DelayedWorkerQueue就结束了
-* 两个方法的区别在于一个传入的周期是一个负数,另一个传入的周期是一个正数,为什么要这样做 呢?
-* ![](media/image250.png)用于生成任务序列号的sequencer,创建ScheduledFutureTask的时候使用: 
-
-1.  private class ScheduledFutureTask\<V\>
-
-2.  extends FutureTask\<V\> implements RunnableScheduledFuture\<V\> {
-
-3.  private final long sequenceNumber;
-
-4.  private volatile long time;
-
-5.  private final long period; 
-
-7.  ScheduledFutureTask(Runnable r, V result, long triggerTime,
-
-8.  long period, long sequenceNumber) {
-
-9.  super(r, result);
-
-10.  this.time = triggerTime; // 延迟时间
-
-11.  this.period = period; // 周期
-
-12.  this.sequenceNumber = sequenceNumber; }
-
-15. // 实现Delayed接口
-
-16. public long getDelay(TimeUnit unit) {
-
-17. return unit.convert(time - System.nanoTime(), NANOSECONDS);  }
-
-20. // 实现Comparable接口
-
-21. public int compareTo(Delayed other) {
-
-22. if (other == this) // compare zero if same object
-
-23. return 0;
-
-24. if (other instanceof ScheduledFutureTask) {
-
-25. ScheduledFutureTask\<?\> x = (ScheduledFutureTask\<?\>)other;
-
-26. long diff = time - x.time;
-
-27. if (diff \< 0)
-
-28. return -1;
-
-29. else if (diff \> 0)
-
-30. return 1;
-
-31. // 延迟时间相等,进一步比较序列号
-
-32. else if (sequenceNumber \< x.sequenceNumber)
-
-33. return -1;
-
-34. else
-
-35. return 1;}
-
-long diff = getDelay(NANOSECONDS) - other.getDelay(NANOSECONDS); 38 return (diff \< 0) ? -1 : (diff \> 0) ? 1 : 0;
-
- }
-
-41. // 实现Runnable接口
-
-42. public void run() {
-
-43. if (!canRunInCurrentRunState(this))
-
-44. cancel(false);
-
-45. // 如果不是周期执行,则执行一次
-
-46. else if (!isPeriodic())
-
-47. super.run();
-
-
-
-* withFixedDelay和atFixedRate的区别就体现在setNextRunTime里面
-* 如果是atFixedRate,period＞0,下一次开始执行时间等于上一次开始执行时间+period； 如果是withFixedDelay,period ＜ 0,下一次开始执行时间等于triggerTime(-p),为now+(-period),now即上一次执行的结束时间
-
-
-
-## CompletionStage
-
-
-
-
-
-![](D:/software/Typora/media/image256.png)
-
-* CompletionStage接口定义的正是前面的各种链式方法、组合方法,如下所示。
-* 所有方法的返回值都是CompletionStage类型,也就是它自己。正因为如此,才能实现如下的 链式调用:future1.thenApply(...).thenApply(...).thenCompose(...).thenRun(...)
-* thenApply接收的是一个有输入参数、返回值的Function。这个Function的输入参数,必须 是?Super T 类型,也就是T或者T的父类型,而T必须是调用thenApplycompletableFuture对象的类型；返回值则必须是?Extends U类型,也就是U或者U的子类型,而U恰好是thenApply的返回值的CompletionStage对应的类型。
-* 其他方法,诸如thenCompose、thenCombine也是类似的原理
-
-
-
-## CompletableFuture原理
-
-
-
-### 构造ForkJoinPool
-
-
-
-* CompletableFuture中任务的执行依靠ForkJoinPool: 
-* 通过上面的代码可以看到,asyncPool是一个static类型,supplierAsync、asyncSupplyStage也都 是static方法。Static方法会返回一个CompletableFuture类型对象,之后就可以链式调用,CompletionStage里面的各个方法
-
-
-
-### 任务类型的适配
+## 任务类型的适配
 
 
 
 * ForkJoinPool接受的任务是ForkJoinTask 类型,而我们向CompletableFuture提交的任务是Runnable/Supplier/Consumer/Function 。因此,肯定需要一个适配机制,把这四种类型的任务转换成ForkJoinTask,然后提交给ForkJoinPool,如下图所示: 
-* ![](D:/software/Typora/media/image257.jpeg)
 * 为了完成这种转换,在CompletableFuture内部定义了一系列的内部类,下图是CompletableFuture的各种内部类的继承体系
 * 在 supplyAsync(...)方法内部,会把一个 Supplier 转换成一个 AsyncSupply,然后提交给ForkJoinPool执行
 * 在runAsync(...)方法内部,会把一个Runnable转换成一个AsyncRun,然后提交给ForkJoinPool执 行
@@ -335,7 +190,7 @@ long diff = getDelay(NANOSECONDS) - other.getDelay(NANOSECONDS); 38 return (diff
 
 
 
-### 任务的链式执行过程
+## 任务的链式执行
 
 
 
@@ -380,7 +235,7 @@ long diff = getDelay(NANOSECONDS) - other.getDelay(NANOSECONDS); 38 return (diff
 
 
 
-### thenApply与thenApplyAsync
+## thenApply与thenApplyAsync
 
 
 
@@ -399,7 +254,7 @@ long diff = getDelay(NANOSECONDS) - other.getDelay(NANOSECONDS); 38 return (diff
 
 
 
-### 任务的网状执行:有向无环图
+## 任务的网状执行:有向无环图
 
 
 
@@ -436,7 +291,7 @@ long diff = getDelay(NANOSECONDS) - other.getDelay(NANOSECONDS); 38 return (diff
 
 
 
-### allOf
+## allOf
 
 
 

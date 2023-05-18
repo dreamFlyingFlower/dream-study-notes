@@ -467,7 +467,7 @@ final void externalPush(ForkJoinTask<?> task) {
 
 
 
-## fork/join
+## join
 
 
 
@@ -475,11 +475,7 @@ final void externalPush(ForkJoinTask<?> task) {
 
 
 
-### join的嵌套
-
-
-
-#### 层层嵌套阻塞原理
+### 层层嵌套阻塞
 
 
 
@@ -487,359 +483,45 @@ final void externalPush(ForkJoinTask<?> task) {
 
 
 
-* 线程1在执行 ForkJoinTask1,在执行过程中调用了 forkJoinTask2.join(),所以要等ForkJoinTask2完成,线程1才能返回
-* 线程2在执行ForkJoinTask2,但由于调用了forkJoinTask3.join(),只有等ForkJoinTask3完成后,线程2才能返回
-* 线程3在执行ForkJoinTask3
-* 结果是: 线程3首先执行完,然后线程2才能执行完,最后线程1再执行完。所有的任务其实组成一 个有向无环图DAG。如果线程3调用了forkJoinTask1.join(),那么会形成环,造成死锁
-* 那么,这种层次依赖、层次通知的 DAG,在 ForkJoinTask 内部是如何实现的呢?站在ForkJoinTask的角度来看,每个ForkJoinTask,都可能有多个线程在等待它完成,有1个线程在执行它。 所以每个ForkJoinTask就是一个同步对象,线程在调用join()的时候,阻塞在这个同步对象上面,执行完 成之后,再通过这个同步对象通知所有等待的线程
-* 利用synchronized关键字和Java原生的wait()/notify()机制,实现了线程的等待-唤醒机制。调用join()的这些线程,内部其实是调用ForkJoinTask这个对象的wait()；执行该任务的Worker线程,在任务 执行完毕之后,顺便调用notifyAll()
-
-
-
 ![](img/032.png)
 
 
 
-#### ForkJoinTask状态解析
-
-
-
-* 要实现fork()/join()的这种线程间的同步,对应的ForkJoinTask一定是有各种状态的,这个状态变量 是实现fork/join的基础
-* 初始时,status=0。共有五种状态,可以分为两大类: 
-  * 未完成: status＞=0。
-  * 已完成: status＜0
-* 所以,通过判断是status＞=0,还是status＜0,就可知道任务是否完成,进而决定调用join()的线 程是否需要被阻塞
-
-
-
-#### join的详细实现
-
-
-
-* 下面看一下代码的详细实现
-
-![](D:/software/Typora/media/image318.jpeg)
-
-* getRawResult()是ForkJoinTask中的一个模板方法,分别被RecursiveAction和RecursiveTask实 现,前者没有返回值,所以返回null,后者返回一个类型为V的result变量
-* ![](D:/software/Typora/media/image319.png)![](D:/software/Typora/media/image320.png)
-* 阻塞主要发生在上面的doJoin()方法里面。在dojoin()里调用t.join()的线程会阻塞,然后等待任务t执 行完成,再唤醒该阻塞线程,doJoin()返回
-* 当doJoin()返回的时候,就是该任务执行完成的时候,doJoin()的返回值就是任务的完成状态,也就是上面的几种状态
-* 上面的返回值可读性比较差,变形之后: 
-* 先看一下externalAwaitDone(),即外部线程的阻塞过程,相对简单。
-* 内部Worker线程的阻塞,即上面的wt.pool.awaitJoin(w, this, 0L),相比外部线程的阻塞要做更多工作。它现不在ForkJoinTask里面,而是在ForkJoinWorkerThread里面。
-
-1.  final int awaitJoin(WorkQueue w, ForkJoinTask\<?\> task, long deadline) {
-
-2.  int s = 0;
-
-3.  int seed = ThreadLocalRandom.nextSecondarySeed();
-
-4.  if (w != null && task != null &&
-
-5.  (!(task instanceof CountedCompleter) \|\|
-
-6.  (s = w.helpCC((CountedCompleter\<?\>)task, 0, false)) \>= 0)) {
-
-7.  // 尝试执行该任务
-
-8.  w.tryRemoveAndExec(task);
-
-9.  int src = w.source, id = w.id;
-
-> 10 int r = (seed \>\>\> 16) \| 1, step = (seed & ~1) \| 2;
-
-11. s = task.status;
-
-12. while (s \>= 0) {
-
-13. WorkQueue\[\] ws;
-
-14. int n = (ws = workQueues) == null ? 0 : ws.length, m = n - 1;
-
-15. while (n \> 0) {
-
-16. WorkQueue q; int b;
-
-17. if ((q = ws\[r & m\]) != null && q.source == id &&
-
-18. q.top != (b = q.base)) {
-
-19. ForkJoinTask\<?\>\[\] a; int cap, k;
-
-20. int qid = q.id;
-
-21. if ((a = q.array) != null && (cap = a.length) \> 0) {
-
-22. ForkJoinTask\<?\> t = (ForkJoinTask\<?\>)
-
-23. QA.getAcquire(a, k = (cap - 1) & b);
-
-24. if (q.source == id && q.base == b++ &&
-
-25. t != null && QA.compareAndSet(a, k, t, null)) {
-
-26. q.base = b;
-
-27. w.source = qid;
-
-28. // 执行该任务
-
-29. t.doExec();
-
-30. w.source = src;
-
-> 31 }
->
-> 32 }
->
-> 33 break;
->
-> 34 }
-
-35. else {
-
-36. r += step;
-
-> 37 --n;
->
-> 38 }
->
-> 39 }
-
-40. // 如果任务的status \< 0,任务执行完成,则退出循环,返回s的值
-
-41. if ((s = task.status) \< 0)
-
-42. break;
-
-43. else if (n == 0) { // empty scan
-
-44. long ms, ns; int block;
-
-45. if (deadline == 0L)
-
-46. ms = 0L; // untimed
-
-47. else if ((ns = deadline - System.nanoTime()) \<= 0L)
-
-48. break; // timeout
-
-49. else if ((ms = TimeUnit.NANOSECONDS.toMillis(ns)) \<= 0L)
-
-50. ms = 1L; // avoid 0 for timed wait
-
-51. if ((block = tryCompensate(w)) != 0) {
-
-52. task.internalWait(ms);
-
-* 上面的方法有个关键点: for里面是死循环,并且只有一个返回点,即只有在task.status＜0,任务 完成之后才可能返回。否则会不断自旋；若自旋之后还不行,就会调用task.internalWait(ms);阻塞task.internalWait(ms);的代码如下
-* ![](D:/software/Typora/media/image321.png)
-
-
-
-#### join的唤醒
-
-
-
-* ![](image322.jpeg)
-* 调用t.join()之后,线程会被阻塞。接下来看另外一个线程在任务**t**执行完毕后如何唤醒阻塞的线程
-* ![](D:/software/Typora/media/image323.jpeg)
-* 任务的执行发生在doExec()方法里面,任务执行完成后,调用一个setDone()通知所有等待的线程。 这里也做了两件事: 
-  * 把status置为完成状态
-  * 如果s != 0,即 s = SIGNAL,说明有线程正在等待这个任务执行完成。调用Java原生的notifyAll()通知所有线程。如果s = 0,说明没有线程等待这个任务,不需要通知
-
-
-
-## ForkJoinPool的优雅关闭
-
-
-
-* 同ThreadPoolExecutor一样,ForkJoinPool的关闭也不可能是“瞬时的”,而是需要一个平滑的过渡过程
-
-
-
-### 工作线程的退出
-
-
-
-* 对于一个Worker线程来说,它会在一个for循环里面不断轮询队列中的任务,如果有任务,则执 行,处在活跃状态；如果没有任务,则进入空闲等待状态
-* 这个线程如何退出呢?
-
-> 1 /\*\*
->
-> 2 \* 工作线程的顶级循环,通过ForkJoinWorkerThread.run调用
->
-> 3 \*/
-
-4.  final void runWorker(WorkQueue w) {
-
-5.  int r = (w.id ^ ThreadLocalRandom.nextSecondarySeed()) \| FIFO; // rng
-
-6.  w.array = new ForkJoinTask\<?\>\[INITIAL_QUEUE_CAPACITY\]; // 初始化任务数组。
-
-> 7 for (;;) {
-
-8.  int phase;
-
-9.  if (scan(w, r)) { // scan until apparently empty 10 r ^= r \<\< 13; r ^= r \>\>\> 17; r ^= r \<\< 5; // move (xorshift)
-
-> 11 }
-
-12. else if ((phase = w.phase) \>= 0) { // enqueue, then rescan
-
-13. long np = (w.phase = (phase + SS_SEQ) \| UNSIGNALLED) & SP_MASK;
-
-14. long c, nc;
-
-15. do {
-
-16. w.stackPred = (int)(c = ctl);
-
-17. nc = ((c - RC_UNIT) & UC_MASK) \| np;
-
-18. } while (!CTL.weakCompareAndSet(this, c, nc)); 19 }
-
-&nbsp;
-
-20. else { // already queued
-
-21. int pred = w.stackPred;
-
-22. Thread.interrupted(); // clear before park
-
-23. w.source = DORMANT; // enable signal
-
-24. long c = ctl;
-
-25. int md = mode, rc = (md & SMASK) + (int)(c \>\> RC_SHIFT);
-
-> (int) (c = ctl) \< 0,即低32位的最高位为1,说明线程池已经进入了关闭状态。但线程池进入关闭状态,不代表所有的线程都会立马关闭。
-
-
-
-### shutdown()与shutdownNow()
-
-
-
-* 二者的代码基本相同,都是调用tryTerminate(boolean, boolean)方法,其中一个传入的是false, 另一个传入的是true。tryTerminate意为试图关闭ForkJoinPool,并不保证一定可以关闭成功: 
-
-9
-
-> 10 }
->
-> 11
->
-> MODE.compareAndSet(this, md, md \| SHUTDOWN);
-
-12. while (((md = mode) & STOP) == 0) { // try to initiate termination
-
-13. if (!now) { // check if quiescent & empty
-
-14. for (long oldSum = 0L;;) { // repeat until stable
-
-15. boolean running = false;
-
-16. long checkSum = ctl;
-
-17. WorkQueue\[\] ws = workQueues;
-
-18. if ((md & SMASK) + (int)(checkSum \>\> RC_SHIFT) \> 0)
-
-19. // 还有正在运行的线程
-
-20. running = true;
-
-21. else if (ws != null) {
-
-22. WorkQueue w;
-
-23. for (int i = 0; i \< ws.length; ++i) {
-
-24. if ((w = ws\[i\]) != null) {
-
-25. int s = w.source, p = w.phase;
-
-26. int d = w.id, b = w.base;
-
-27. if (b != w.top \|\|
-
-> 28 ((d & 1) == 1 && (s \>= 0 \|\| p \>= 0))) {
-
-29. running = true;
-
-30. // 还正在运行
-
-31. break;
-
-> 32 }
->
-> 33 checkSum += (((long)s \<\< 48) + ((long)p \<\< 32) + 34 ((long)b \<\< 16) + (long)d);
->
-> 35 }
->
-> 36 }
->
-> 37 }
-
-38. if (((md = mode) & STOP) != 0)
-
-39. break; // already triggered
-
-40. else if (running)
-
-41. return false;
-
-42. else if (workQueues == ws && oldSum == (oldSum = checkSum))
-
-43. break;
-
-> 44 }
->
-> 45 }
-
-46. if ((md & STOP) == 0)
-
-47. // 如果需要立即停止,同时md没有设置为STOP,则设置为STOP
-
-48. MODE.compareAndSet(this, md, md \| STOP); 49 }
-
-> 50
-
-51. // 如果mode还没有设置为TERMINATED,则进行循环
-
-52. while (((md = mode) & TERMINATED) == 0) { // help terminate others
-
-53. for (long oldSum = 0L;;) { // repeat until stable
-
-54. WorkQueue\[\] ws; WorkQueue w;
-
-55. long checkSum = ctl;
-
-56. if ((ws = workQueues) != null) {
-
-57. for (int i = 0; i \< ws.length; ++i) {
-
-58. if ((w = ws\[i\]) != null) {
-
-59. ForkJoinWorkerThread wt = w.owner;
-
-60. // 清空任务队列
-
-61. w.cancelAll();
-
-62. if (wt != null) {
-
-63. try {
-
-64. // 中断join或park的线程
-
-65. wt.interrupt();
-
-66. } catch (Throwable ignore) {
-
-
-
-* shutdown()只拒绝新提交的任务；shutdownNow()会取消现有的全局队列和局部队列中的 任务,同时唤醒所有空闲的线程,让这些线程自动退出
+* 线程1在执行 ForkJoinTask1,调用 forkJoinTask2.join(),要等ForkJoinTask2完成,线程1才能返回
+* 线程2在执行ForkJoinTask2,调用 forkJoinTask3.join(),要等ForkJoinTask3完成,线程2才能返回
+* 线程3在执行ForkJoinTask3
+* 线程3首先执行完,然后线程2才能执行完,最后线程1再执行完.如果线程3调用了forkJoinTask1.join(),那么会形成环,造成死锁
+* 每个ForkJoinTask都可能有多个线程在等待它完成,有1个线程在执行它,所以每个ForkJoinTask就是一个同步对象,线程在调用join()的时候,阻塞在这个同步对象上面,执行完成之后,再通过这个同步对象通知所有等待的线程
+* 利用synchronized和wait()/notify()机制,实现了线程的等待-唤醒机制;调用join()的这些线程,内部其实是调用ForkJoinTask这个对象的wait();执行该任务的Worker线程,在任务执行完毕之后,顺便调用notifyAll()
+
+
+
+### 核心实现
+
+
+
+```java
+public abstract class ForkJoinTask<V> implements Future<V>, Serializable {
+    // ...
+    private int doJoin() {
+        int s; Thread t; ForkJoinWorkerThread wt; ForkJoinPool.WorkQueue w;
+        // 如果status < 0表示任务已经完成,不用阻塞,直接返回
+        return (s = status) < 0 ? s :
+        // 否则判断线程是否是工作线程
+        ((t = Thread.currentThread()) instanceof ForkJoinWorkerThread) 
+        ?
+            // 将任务能够从局部队列弹出,并调用doExec()方法执行成功
+            (w = (wt = (ForkJoinWorkerThread)t).workQueue).tryUnpush(this) && (s = doExec()) < 0 
+            ?
+            s :
+        // 否则等待,线程阻塞
+        wt.pool.awaitJoin(w, this, 0L) :
+        // 如果线程不是工作线程,则外部等待任务完成,线程阻塞
+        externalAwaitDone();
+    }
+    // ...
+}
+```
 
 
 
@@ -852,34 +534,8 @@ final void externalPush(ForkJoinTask<?> task) {
 
 
 * 指的是以一个线程执行,该模式用于设置限制,以确保同一时间只能让一个线程执行处理
-* Single Threaded Execution有时也称为临界区(critical section)或临界域(critical region)。Single Threaded Execution名称侧重于执行处理的线程,临界区或临界域侧重于执行范围
-
-
-
-### 示例程序
-
-> 运行效果: 
-
-![](D:/software/Typora/media/image324.png)
-
-> 上述代码之所以递增异常,是因为showNumber方法是一个临界区,其中对数字加一,但又不能保 证原子性,在多线程执行的时候,就会出现问题。
->
-> 线程安全的NumberResource类: 
-
-
-
-### 总结
-
-
-
-* SharedResource(共享资源)
-* Single Threaded Execution模式中出现了一个发挥SharedResource(共享资源)作用的类。在示例程序中,由NumberResource类扮演SharedResource角色
-* SharedResource角色是可以被多个线程访问的类,包含很多方法,但这些方法主要分为如下两 类: 
-* safeMethod:  多 个 线 程 同 时 调 用 也 不 会 发 生 问 题 的 方 法 。 unsafeMethod: 多个线程同时访问会发生问题,因此必须加以保护的方法
-* safeMethod,无需考虑
-* 对于unsafeMethod,在被多个线程同时执行时,实例状态有可能发生分歧。这时就需要保护该方 法,使其不被多个线程同时访问
-* Single Threaded Execution模式会保护unsafeMethod,使其同时只能由一个线程访问。java则是通过unsafeMethod声明为synchronized方法来进行保护
-* 我们将只允许单个线程执行的程序范围称为临界区
+* Single Threaded Execution有时也称为临界区(critical section)或临界域(critical region),Single Threaded Execution侧重于执行处理的线程,临界区或临界域侧重于执行范围
+* 比如使用锁或单线程的线程池
 
 
 
@@ -895,15 +551,12 @@ final void externalPush(ForkJoinTask<?> task) {
 
 
 
-* 多线程时:在单线程程序中使用synchronized关键字并不会破坏程序的安全性,但是调用synchronized方法要 比调用一般方法花费时间,稍微降低程序性能
-* 多个线程访问时:当SharedResource角色的实例有可能被多个线程同时访问时,就需要使用Single Threaded Execution模式.
-  * 即便是多线程程序,如果所有线程都是完全独立操作的,也无需使用Single Threaded Execution模式。这种状态称为线程互不干涉
-  * 在某些处理多个线程的框架中,有时线程的独立性是由框架控制的。此时,框架的使用者就无需考 虑是否使用Single Threaded Execution模式
+* 多线程时:在单线程程序中使用synchronized并不会破坏程序的安全性,但是调用synchronized方法要比调用一般方法花费时间,稍微降低程序性能
+* 多个线程访问时:当共享资源有可能被多个线程同时访问时
+  * 即便是多线程程序,如果所有线程都是完全独立操作的,也无需使用Single Threaded Execution模式,这种状态称为线程互不干涉
+  * 在某些处理多个线程的框架中,有时线程的独立性是由框架控制的.此时,框架的使用者就无需考虑是否使用Single Threaded Execution
 * 状态有可能变化时
-  * 之所以需要使用Single Threaded Execution模式,是因为SharedResource角色的状态会发生变化
-  * 如果在创建实例后,实例的状态再也不发生变化,就无需使用Single Threaded Execution模式
 * 需要确保安全性时
-  * 只有在需要确保安全性时,才需要使用Single Threaded Execution模式。Java的集合类大多数都是非线程安全的。这是为了在不需要考虑安全性的时候提高程序运行速度。用户在使用类时,需要考虑自己要用的类是否时线程安全的
 
 
 
@@ -913,7 +566,10 @@ final void externalPush(ForkJoinTask<?> task) {
 
 * 使用Single Threaded Execution模式时,存在发生死锁的危险
 * 在Single Threaded Execution模式中,满足下列条件时,会发生死锁: 
-* 存在多个SharedResource角色线程在持有某个SharedResource角色锁的同时,还想获取其他SharedResource角色的锁 获取SharedResource角色的锁的顺序不固定(SharedResource角色是对称的)
+  * 存在多个共享资源角色
+  * 线程在持有某个共享资源角色锁的同时,还想获取其他共享资源角色的锁
+  * 获取共享资源角色的锁的顺序不固定(共享资源角色是对称的)
+
 
 
 
@@ -922,43 +578,25 @@ final void externalPush(ForkJoinTask<?> task) {
 
 
 * 一般情况下,Single Threaded Execution模式会降低程序性能: 
-* 获取锁花费时间
-  * 进入synchronized方法时,线程需要获取对象的锁,该处理会花费时间
-  * 如果SharedResource角色的数量减少了,那么要获取的锁的数量也会相应地减少,从而就能够抑 制性能的下降了
-* 线程冲突引起的等待
-  * 当线程执行临界区内的处理时,其他想要进入临界区的线程会阻塞。这种状况称为线程冲突。发生 冲突时,程序的整体性能会随着线程等待时间的增加而下降
+  * 获取锁花费时间
+  * 线程冲突引起的等待
 
 
 
-## Immutable模式
+
+## Immutable
 
 
 
-* Immutable就是不变的、不发生改变。Immutable模式中存在着确保实例状态不发生改变的类。在 访问这些实例时不需要执行耗时的互斥处理。如果能用好该模式,就可以提高程序性能
+* Immutable就是不变的,不发生改变.Immutable模式中存在着确保实例状态不发生改变的类,在访问这些实例时不需要执行耗时的互斥处理
 
 
 
 ### 类图
 
+
+
 ![](D:/software/Typora/media/image327.png)
-
-
-
-* 在Single Threaded Execution模式,将修改或引用实例状态的地方设置为临界区,该区只能由一个线程执行。对于本案例的User类,实例的状态绝对不会发生改变,即使多个线程同时对该实例执行处 理,实例也不会出错,因为实例的状态不变。如此也无需使用synchronized关键字来保护实例
-
-
-
-### Immutable模式中的角色
-
-
-
-1.  Immutable
-
-> Immutable角色是一个类,该角色中的字段值不可修改,也不存在修改字段内容的方法。无需对
->
-> Immutable角色应用Single Threaded Execution模式。无需使用synchronized关键字。就是本案例的User类。
->
-> ![](D:/software/Typora/media/image328.png)
 
 
 
@@ -967,12 +605,9 @@ final void externalPush(ForkJoinTask<?> task) {
 
 
 * 创建实例后,状态不再发生改变
-  * 必须是实例创建后,状态不再发生变化的。实例的状态由字段的值决定。即使字段是final的且不存 在setter,也有可能不是不可变的。因为字段引用的实例有可能发生变化。
 * 实例是共享的,且被频繁访问时
-  * Immutable模式的优点是不需要使用synchronized关键字进行保护。意味着在不失去安全性和生存 性的前提下提高性能。当实例被多个线程共享,且有可能被频繁访问时,Immutable模式优点明显。
-* StringBuffer类表示字符串的可变类,String类表示字符串的不可变类。String实例表示的字符串不 可以修改,执行操作的方法都不是synchronized修饰的,引用速度更快。
-* 如果需要频繁修改字符串内容,则使用StringBuffer；如果不需要修改字符串内容,只是引用内 容,则使用String
-* **JDK中的不可变模式**java.lang.String java.math.BigInteger java.math.Decimal java.util.regex.Pattern java.lang.Boolean,java.lang.Byte java.lang.Character java.lang.Double java.lang.Float java.lang.Integer java.lang.Long java.lang.Short java.lang.Void
+* 如果需要频繁修改字符串内容,则使用StringBuffer;如果不需要修改字符串内容,只是引用内容,则使用String
+* JDK中的不可变模式:`String,BigInteger,Decimal,Pattern,Boolean,Byte,Character,Double,Float,Integer,Long,Short,Void`
 
 
 
@@ -980,27 +615,8 @@ final void externalPush(ForkJoinTask<?> task) {
 
 
 
-* Guarded表示被守护、被保卫、被保护。Suspension表示暂停。如果执行现在的处理会造成问题, 就让执行处理的线程进行等待——这就是Guarded Suspension模式
-* Guarded Suspension模式通过让线程等待来保证实例的安全型。Guarded Suspension也称为guarded wait、spin lock等名称
-
-
-
-### 示例程序:
-
-
-
-![](D:/software/Typora/media/image329.png)
-
-* 应用保护条件进行保护: 
-* ![](D:/software/Typora/media/image330.png)
-* 上图中,getRequest方法执行的逻辑是从queue中取出一个Request实例,即 queue.remove() , 但是要获取Request实例,必须满足条件:  queue.peek() != null 。该条件就是GuardedSuspension模式的守护条件(guard condition)
-* 当线程执行到while语句时: 
-* 若守护条件成立,线程不进入while语句块,直接执行queue.remove()方法,线程不会等待。 若守护条件不成立,线程进入while语句块,执行wait,开始等待
-* ![](D:/software/Typora/media/image331.png)
-* 若守护条件不成立,则线程等待。等待什么?等待notifyAll()唤醒该线程
-* 守护条件阻止了线程继续向前执行,除非实例状态发生改变,守护条件成立,被另一个线程唤醒。 该类中的synchronized关键字保护的是queue字段,getRequest方法的synchronized保护该方法只能由一个线程执行
-* 线程执行this.wait之后,进入this的等待队列,并释放持有的this锁
-* notify、notifyAll或interrupt会让线程退出等待队列,实际继续执行之前还必须再次获取this的锁线程才可以继续执行
+* Guarded表示被守护,被保卫,被保护;Suspension表示暂停.如果执行现在的处理会造成问题,就让执行处理的线程进行等待
+* Guarded Suspension模式通过让线程等待来保证实例的安全型,也称为guarded wait,spin lock等
 
 
 
@@ -1008,26 +624,19 @@ final void externalPush(ForkJoinTask<?> task) {
 
 
 
-* Guarded Suspension模式中的角色
-* GuardedObject(被保护的对象) GuardedObject角色是一个持有被保护(guardedMethod)的方法的类。当线程执行guardedMethod方法时,若守护条件成立,立即执行；当守护条件不成立,等待。守护条件随着GuardedObject角色的状态不同而变
-* 除了guardedMethod之外,GuardedObject角色也可以持有其他改变实例状态(stateChangingMethod)的方法
+![]()
+
+
+
+### 角色
+
+
+
+* GuardedObject:被保护的对象,是一个持有被保护(guardedMethod)的方法的类.当线程执行guardedMethod方法时,若守护条件成立,立即执行;当守护条件不成立,等待
+  * 守护条件随着GuardedObject角色的状态不同而变
+  * 除了guardedMethod之外,GuardedObject角色也可以持有其他改变实例状态(stateChangingMethod)的方法
 * java中,guardedMethod通过while语句和wait方法来实现,stateChangingMethod通过notify/notifyAll方法实现
-* 在本案例中,RequestQueue为GuardedObject,getRequest方法为guardedMethod,putRequest为stateChangingMethod
 * 可以将Guarded Suspension理解为多线程版本的if
-
-
-
-### LinkedBlockingQueue
-
-
-
-* 可以使用LinkedBlockingQueue替代RequestQueue
-
-
-
-#### 类图
-
-![](D:/software/Typora/media/image332.png)
 
 
 
@@ -1035,37 +644,15 @@ final void externalPush(ForkJoinTask<?> task) {
 
 
 
-* 所谓Balk,就是停止并返回的意思
-* Balking模式与Guarded Suspension模式一样,也存在守护条件。在Balking模式中,如果守护条件不成立,则立即中断处理。而Guarded Suspension模式一直等待直到可以运行
+* Balk就是停止并返回的意思.Balking模式与Guarded Suspension模式一样,也存在守护条件.在Balking模式中,如果守护条件不成立,则立即中断处理;而Guarded Suspension模式一直等待直到可以运行
 
 
 
-### 示例程序
+### 角色
 
 
 
-* 两个线程,一个是修改线程,修改之后,等待随机时长,保存文件内容。另一个是保存线程,固定时长进行文件内容的保存。
-* 如果文件需要保存,则执行保存动作
-* 如果文件不需要保存,则不执行保存动作
-
-
-
-### 执行效果
-
-![](D:/software/Typora/media/image333.png)
-
-
-
-### Balking模式中的角色
-
-
-
-* GuardedObject(受保护对象)
-* GuardedObject角色是一个拥有被保护的方法(guardedMethod)的类。当线程执行guardedMethod时,若保护条件成立,则执行实际的处理,若不成立,则不执行实际的处理,直接返回
-* 护条件的成立与否随着GuardedObject角色状态的改变而变动
-* 除了guardedMethod之外,GuardedObject角色还有可能有其他改变状态的方法(stateChangingMethod)
-* 在此案例中,Data类对应于GuardedObject,save方法对应guardedMethod,change方法对应stateChangingMethod方法
-* 保护条件是changed字段为true
+* GuardedObject:受保护对象.是一个拥有被保护的方法(guardedMethod)的类.当线程执行guardedMethod时,若保护条件成立,则执行实际的处理,若不成立,则不执行实际的处理,直接返回
 
 
 
@@ -1082,47 +669,27 @@ final void externalPush(ForkJoinTask<?> task) {
 
 
 * 不需要执行时
-* 在此示例程序中,content字段的内容如果没有修改,就将save方法balk。之所以要balk,是因为content已经写文件了,无需再写了。如果并不需要执行,就可以使用Balking模式。此时可以提高程序 性能
 * 不需要等待守护条件成立时
-* Balking模式的特点就是不等待。若条件成立,就执行,若不成立,就不执行,立即进入下一个操 作。
 * 守护条件仅在第一次成立时
-* 当“守护条件仅在第一次成立”时,可以使用Balking模式
-* 比如各种类的初始化操作,检查一次是否初始化了,如果初始化了,就不用执行了。如果没有初始 化,则进行初始化
 
 
 
-### balk结果的表示
+### 结果的表示
 
 
 
-* 忽略balk:最简单的方式就是不通知调用端“发生了balk”。示例程序采用的就是这种方式
-* 通过返回值表示balk:通过boolean值表示balk。若返回true,表示未发生balk,需要执行并执行了处理。若false,则表 示发生了balk,处理已执行,不再需要执行
-  * 有时也会使用null来表示“发生了balk”
+* 忽略balk:最简单的方式就是不通知调用端发生了balk
+* 通过返回值表示balk:通过boolean或null表示balk
 * 通过异常表示balk
-  * 有时也通过异常表示“发生了balk”。即,当balk时,程序并不从方法return,而是抛异常
 
 
 
-### Balking和GuardedSuspension
+### java并发中的超时
 
 
 
-* 介于“直接balk并返回”和“等待到守护条件成立为止“这两种极端之间的还有一种”在守护条件成立之 前等待一段时间“。在守护条件成立之前等待一段时间,如果到时条件还未成立,则直接balk
-* 这种操作称为计时守护(guarded timed)或超时(timeout)
-
-
-
-### java.util.concurrent中的超时
-
-
-
-* 通过异常通知超时
-  * 当发生超时抛出异常时,不适合使用返回值表示超时,需要使用java.util.concurrent.TimeoutException异常
-  * 如: java.util.concurrent.Future的get方法；java.util.concurrent.Exchanger的exchange方法； java.util.concurrent.Cyclicarrier的await方法;java.util.concurrent.CountDownLatch的await方法
-* 通过返回值通知超时
-  * 当执行多次try时,则不使用异常,而使用返回值表示超时。如: java.util.concurrent.BlockingQueue接口,当offer方法的返回值为false,或poll方法的返回值为null,表示发生了超时
-  * java.util.concurrent.Semaphore类,当tryAcquire方法的返回值为false时,表示发生了超时
-  * java.util.concurrent.locks.Lock接口,当tryLock方法的返回值为false时,表示发生了超时
+* 通过异常通知超时:当发生超时抛出异常时,不适合使用返回值表示超时,需要使用java.util.concurrent.TimeoutException异常
+* 通过返回值通知超时:当执行多次try时,则不使用异常,而使用返回值表示超时
 
 
 
@@ -1130,21 +697,7 @@ final void externalPush(ForkJoinTask<?> task) {
 
 
 
-### 示例程序
-
-
-
-* 执行效果:
-
-![](D:/software/Typora/media/image335.png)
-
-* 关于put()
-  * put方法会抛出InterruptedException异常。如果抛出,可以理解为该操作已取消
-  * put方法使用了Guarded Suspension模式。tail和count的更新采取buffer环的形式。notifyAll方法唤醒正在等待馒头的线程来吃
-* 关于take()
-  * take方法会抛出InterruptedException异常,表示该操作已取消
-  * take方法采用了Guarded Suspension模式
-  * head和count的更新采用了buffer环的形式。notifyAll唤醒等待的厨子线程开始蒸馒头
+* 生产者-消费者模式
 
 
 
@@ -1156,21 +709,14 @@ final void externalPush(ForkJoinTask<?> task) {
 
 
 
-* Data
-  * Data角色由Producer角色生成,供Consumer角色使用。在本案例中,String类的馒头对应于Data角色
-* Producer
-  * Producer角色生成Data角色,并将其传递给Channel角色。本案例中,CookerThread对应于Producer角色
-* Consumer
-  * Consumer角色从Channel角色获取Data角色并使用。本案例中,EaterThread对应于Consumer角色
-* Channel角色
-  * Channel角色管理从Producer角色获取的Data角色,还负责响应Consumer角色的请求,传递Data角色。为了安全,Channel角色会对Producer角色和Consumer角色进行互斥处理
-* 当producer角色将Data角色传递给Channel角色时,如果Channel角色状态不能接收Data角色,则Producer角色将一直等待,直到Channel可以接收Data角色为止
-* 当Consumer角色从Channel角色获取Data角色时,如果Channel角色状态没有可以传递的Data角 色,则Consumer角色将一直等待,直到Channel角色状态转变为可以传递Data角色为止
-* 当存在多个Producer角色和Consumer角色时,Channel角色需要对它们做互斥处理
-* ![](/image336.png)
+* Data:由Producer生成,供Consumer使用
+* Producer:生成Data,并将其传递给Channel
+* Consumer:从Channel获取Data角色并使用
+* Channel:管理从Producer获取的Data,还负责响应Consumer的请求,传递Data.为了安全,Channel会对Producer和Consumer进行互斥处理
+* 当Producer将Data传递给Channel时,如果Channel状态不能接收Data,则Producer将一直等待,直到Channel可以接收Data为止
+* 当Consumer从Channel获取Data时,如果Channel状态没有可以传递的Data,则Consumer将一直等待,直到Channel状态转变为可以传递Data为止
+* 当存在多个Producer和Consumer时,Channel需要对它们做互斥处理
 * 类图: 
-* 守护安全性的Channel角色(可复用)
-* 在生产者消费者模型中,承担安全守护责任的是Channel角色。Channel角色执行线程间的互斥处 理,确保Producer角色正确地将Data角色传递给Consumer角色
 
 
 
@@ -1178,11 +724,11 @@ final void externalPush(ForkJoinTask<?> task) {
 
 
 
-* Consumer角色想要获取Data角色,通常是因为想使用这些Data角色来执行某些处理。如果Producer角色直接调用Consumer的方法,执行处理的就不是Consumer的线程,而是Producer角色的 线程了。这样一来,异步处理变同步处理,会发生不同Data间的延迟,降低程序的性能
+* Consumer想要获取Data,通常是因为想使用这些Data来执行某些处理.如果Producer直接调用Consumer的方法,执行处理的就不是Consumer的线程,而是Producer的线程了.这样异步处理变同步处理,会发生不同Data间的延迟,降低程序的性能
 
 
 
-### 传递Data角色的顺序
+### 传递Data的顺序
 
 
 
@@ -1196,7 +742,7 @@ final void externalPush(ForkJoinTask<?> task) {
 
 
 
-* 线程的协调要考虑”放在中间的东西“ 线程的互斥要考虑”应该保护的东西“为了让线程协调运行,必须执行互斥处理,以防止共享的内容被破坏。线程的互斥处理时为了线程 的协调运行而执行的
+* 线程的协调要考虑放在中间的东西;线程的互斥要考虑应该保护的东西;为了让线程协调运行,必须执行互斥处理,以防止共享的内容被破坏
 
 
 
@@ -1229,20 +775,13 @@ final void externalPush(ForkJoinTask<?> task) {
 
 
 
-### 示例程序
+
+
+### 守护条件
 
 
 
-#### 入口程序
-
-
-
-* **数据对象**
-* **读写锁**
-* **写线程**
-* **读取线程**
-* **守护条件**
-* readLock方法和writeLock方法都是用了Guarded Suspension模式。Guarded Suspension模式的重点是守护条件。
+* readLock方法和writeLock方法都是用了Guarded Suspension模式,Guarded Suspension模式的重点是守护条件
 
 
 

@@ -176,136 +176,7 @@ private void processWorkerExit(Worker w, boolean completedAbruptly) {
 
 
 
-* ForkJoinPool接受的任务是ForkJoinTask 类型,而我们向CompletableFuture提交的任务是Runnable/Supplier/Consumer/Function 。因此,肯定需要一个适配机制,把这四种类型的任务转换成ForkJoinTask,然后提交给ForkJoinPool,如下图所示: 
-* 为了完成这种转换,在CompletableFuture内部定义了一系列的内部类,下图是CompletableFuture的各种内部类的继承体系
-* 在 supplyAsync(...)方法内部,会把一个 Supplier 转换成一个 AsyncSupply,然后提交给ForkJoinPool执行
-* 在runAsync(...)方法内部,会把一个Runnable转换成一个AsyncRun,然后提交给ForkJoinPool执 行
-* 在 thenRun/thenAccept/thenApply 内部,会分别把 Runnable/Consumer/Function 转换成UniRun/UniAccept/UniApply对象,然后提交给ForkJoinPool执行
-* 除此之外,还有两种 CompletableFuture 组合的情况,分为“与”和“或”,所以有对应的Bi和Or类型的Completion类型
-* ![](D:/software/Typora/media/image258.png)
-* 下面的代码分别为 UniRun、UniApply、UniAccept 的定义,可以看到,其内部分别封装了Runnable、Function、Consumer
-* ![](D:/software/Typora/media/image259.png)![](D:/software/Typora/media/image260.png)
-* ![](D:/software/Typora/media/image261.png)
-* ![](D:/software/Typora/media/image262.png)
-
-
-
-## 任务的链式执行
-
-
-
-* 下面以CompletableFuture.supplyAsync(...).thenApply(...).thenRun()链式代码为例,分析整个执行过程
-* 第1步: CompletableFuture future1=CompletableFuture.supplyAsync()
-
-![](D:/software/Typora/media/image263.png)
-
-![](D:/software/Typora/media/image264.jpeg)
-
-![](D:/software/Typora/media/image265.jpeg)
-
-* 在上面的代码中,关键是构造了一个AsyncSupply对象,该对象有三个关键点: 
-  * 它继承自ForkJoinTask,所以能够提交ForkJoinPool来执行
-  * 它封装了Supplier f,即它所执行任务的具体内容
-  * 该任务的返回值,即CompletableFuture d,也被封装在里面
-* ForkJoinPool执行一个ForkJoinTask类型的任务,即AsyncSupply。该任务的输入就是Supply,输 出结果存放在CompletableFuture中
-* ![](D:/software/Typora/media/image266.jpeg)
-* 第2步: CompletableFuture future2=future1.thenApply(...)
-* 第1步的返回值,也就是上面代码中的 CompletableFuture d,紧接着调用其成员方法thenApply: 
-* ![](D:/software/Typora/media/image267.jpeg)![](D:/software/Typora/media/image268.jpeg)
-* 必须等第1步的任务执行完毕,第2步的任务才可以执行。因此,这里提交的任务不可能 立即执行,在此处构建了一个UniApply对象,也就是一个ForkJoinTask类型的任务,这个任务放入了第1个任务的栈当中
-* ![](D:/software/Typora/media/image269.jpeg)
-* 每一个CompletableFuture对象内部都有一个栈,存储着是后续依赖它的任务,如下面代码所示。 这个栈也就是Treiber Stack,这里的stack存储的就是栈顶指针
-* ![](D:/software/Typora/media/image270.png)
-* 上面的UniApply对象类似于第1步里面的AsyncSupply,它的构造方法传入了4个参数: 
-  * 第1个参数是执行它的ForkJoinPool
-  * 第2个参数是输出一个CompletableFuture对象。这个参数,也是thenApply方法的返回值, 用来链式执行下一个任务
-  * 第3个参数是其依赖的前置任务,也就是第1步里面提交的任务
-  * 第4个参数是输入(也就是一个Function对象)
-* ![](D:/software/Typora/media/image271.png)
-* UniApply对象被放入了第1步的CompletableFuture的栈中,在第1步的任务执行完成之后,就会从 栈中弹出并执行。如下代码: 
-* ![](D:/software/Typora/media/image272.jpeg)
-* ForkJoinPool执行上面的AsyncSupply对象的run()方法,实质就是执行Supplier的get()方法。执行 结果被塞入了 CompletableFuture d 当中,也就是赋值给了 CompletableFuture 内部的Object result 变量
-* ![](image273.jpeg)
-* 调用d.postComplete(),也正是在这个方法里面,把第2步压入的UniApply对象弹出来执行,代码 如下所示
-* 第3步: CompletableFuture future3=future2.thenRun()
-* 第3步和第2步的过程类似,构建了一个 UniRun 对象,这个对象被压入第2步的CompletableFuture所在的栈中。第2步的任务,当执行完成时,从自己的栈中弹出UniRun对象并执 行
-* 综上所述: 通过supplyAsync/thenApply/thenRun,分别提交了3个任务,每1个任务都有1个返回值对象,也就是1个CompletableFuture。这3个任务通过2个CompletableFuture完成串联。后1个任务,被放入了前1个任务的CompletableFuture里面,前1个任务在执行完成时,会从自己的栈中,弹出下1个任务执 行。如此向后传递,完成任务的链式执行
-
-![](D:/software/Typora/media/image274.png)
-
-
-
-## thenApply与thenApplyAsync
-
-
-
-* 在上面的代码中,我们分析了thenApply,还有一个与之对应的方法是thenApplyAsync。这两个方 法调用的是同一个方法,只不过传入的参数不同
-* ![](D:/software/Typora/media/image275.jpeg)![](D:/software/Typora/media/image276.jpeg)
-* ![](D:/software/Typora/media/image277.jpeg)
-* 对于上一个任务已经得出结果的情况: 
-* ![](D:/software/Typora/media/image278.jpeg)
-* 如果e != null表示是thenApplyAsync,需要调用ForkJoinPool的execute方法,该方法: 
-* ![](D:/software/Typora/media/image279.jpeg)
-* ![](D:/software/Typora/media/image280.jpeg)
-* 通过上面的代码可以看到: 
-* 如果前置任务没有完成,即a.result=null,thenApply和thenApplyAsync都会将当前任务的下一个任务入栈；然后再出栈执行；
-* 只有在当前任务已经完成的情况下,thenApply才会立即执行,不会入栈,再出栈,不会交给ForkJoinPool；thenApplyAsync还是将下一个任务封装为ForkJoinTask,入栈,之后出栈再执 行
-* 同理,thenRun与thenRunAsync、thenAccept与thenAcceptAsync的区别与此类似
-
-
-
-## 任务的网状执行:有向无环图
-
-
-
-* 如果任务只是链式执行,便不需要在每个CompletableFuture里面设1个栈了,用1个指针使所有任 务组成链表即可
-* 但实际上,任务不只是链式执行,而是网状执行,组成 1 张图。如下图所示,所有任务组成一个有向无环图: 
-* 任务一执行完成之后,任务二、任务三可以并行,在代码层面可以写为: future1.thenApply(任务 二),future1.thenApply(任务三)
-* 任务四在任务二执行完成时可开始执行
-* 任务五要等待任务二、任务三都执行完成,才能开始,这里是AND关系； 任务六在任务三执行完成时可以开始执行
-* 对于任务七,只要任务四、任务五、任务六中任意一个任务结束,就可以开始执行
-* 总而言之,任务之间是多对多的关系: 1个任务有*n*个依赖它的后继任务；1个任务也有*n*个它依赖的 前驱任务
-* ![](D:/software/Typora/media/image281.jpeg)
-* 这样一个有向无环图,用什么样的数据结构表达呢?AND和OR的关系又如何表达呢? 有几个关键点: 
-
-1.  在每个任务的返回值里面,存储了依赖它的接下来要执行的任务。所以在上图中,任务一的CompletableFuture的栈中存储了任务二、任务三；任务二的CompletableFuutre中存储了任务四、任务五；任务三的CompletableFuture中存储了任务五、任务六。即每个任务的CompletableFuture对象的栈里面,其实存储了该节点的出边对应的任务集合
-
-2.  任务二、任务三的CompletableFuture里面,都存储了任务五,那么任务五是不是会被触发两 次,执行两次呢?
-    1.  任务五的确会被触发二次,但它会判断任务二、任务三的结果是不是都完成,如果只完成其中 一个,它就不会执行
-
-
-3.  任务七存在于任务四、任务五、任务六的CompletableFuture的栈里面,因此会被触发三次。 但它只会执行一次,只要其中1个任务执行完成,就可以执行任务七了
-
-4.  ![](image282.png)
-
-5.  正因为有AND和OR两种不同的关系,因此对应BiApply和OrApply两个对象,这两个对象的构 造方法几乎一样,只是在内部执行的时候,一个是AND的逻辑,一个是OR的逻辑
-
-6.  ![](D:/software/Typora/media/image283.png)
-
-7.  ![](D:/software/Typora/media/image284.jpeg)
-
-8.  BiApply和OrApply都是二元操作符,也就是说,只能传入二个被依赖的任务。但上面的任务 七同时依赖于任务四、任务五、任务六,这怎么处理呢?
-    1.  任何一个多元操作,都能被转换为多个二元操作的叠加。如上图所示,假如任务一AND任务二AND任务三 **==\>** 任务四,那么它可以被转换为右边的形式。新建了一个AND任务,这个AND 任务和任务三再作为参数,构造任务四。OR的关系,与此类似
-    2.  此时,thenCombine的内部实现原理也就可以解释了。thenCombine用于任务一、任务二执行完 成,再执行任务三
-
-
-
-
-## allOf
-
-
-
-* ![](media/image285.png)下面以allOf方法为例,看一下有向无环计算图的内部运作过程: 
-* ![](D:/software/Typora/media/image286.png)
-* 上面的方法是一个递归方法,输入是一个CompletableFuture对象的列表,输出是一个具有AND关 系的复合CompletableFuture对象
-* 最关键的代码如上面加注释部分所示,因为d要等a,b都执行完成之后才能执行,因此d会被分别压 入a,b所在的栈中
-* ![](D:/software/Typora/media/image287.jpeg)
-* ![](D:/software/Typora/media/image288.jpeg)
-* 下图为allOf内部的运作过程。假设allof的参数传入了future1、future2、future3、future4,则对应四个原始任务
-* 生成BiRelay1、BiRelay2任务,分别压入future1/future2、future3/future4的栈中。无论future1 或future2完成,都会触发BiRelay1；无论future3或future4完成,都会触发BiRelay2；
-* 生成BiRelay3任务,压入future5/future6的栈中,无论future5或future6完成,都会触发BiRelay3 任务。
-* ![](D:/software/Typora/media/image289.jpeg)
-* BiRelay只是一个中转任务,它本身没有任务代码,只是参照输入的两个future是否完成。如果完 成,就从自己的栈中弹出依赖它的BiRelay任务,然后执行
+![](img/026.png)
 
 
 
@@ -313,7 +184,6 @@ private void processWorkerExit(Worker w, boolean completedAbruptly) {
 
 
 
-* 一种分治算法的多线程并行计算框架,也可以将ForkJoinPool看作一个单机版的Map/Reduce,多个线程并行计算
 * 相比于ThreadPoolExecutor,ForkJoinPool可以更好地实现计算的负载均衡,提高资源利用率
 * ForkJoinPool可以把大的任务拆分成很多小任务,然后这些小任务被所有的线程执行,从而实现任务计算的负载均衡
 
@@ -324,90 +194,10 @@ private void processWorkerExit(Worker w, boolean completedAbruptly) {
 
 
 * 与ThreadPoolExector不同的是,除一个全局的任务队列之外,每个线程还有一个自己的局部队列
-* ![](D:/software/Typora/media/image294.jpeg)
-* 核心数据结构如下所示: 
-* 下面看一下这些核心数据结构的构造过程。
-* ![](D:/software/Typora/media/image295.jpeg)
 
-1.  public ForkJoinPool(int parallelism,
 
-2.  ForkJoinWorkerThreadFactory factory,
 
-3.  UncaughtExceptionHandler handler,
-
-4.  boolean asyncMode,
-
-5.  int corePoolSize,
-
-6.  int maximumPoolSize,
-
-7.  int minimumRunnable,
-
-8.  Predicate\<? super ForkJoinPool\> saturate,
-
-9.  long keepAliveTime,
-
-10.  TimeUnit unit) {
-
-11.  // check, encode, pack parameters
-
-12.  if (parallelism \<= 0 \|\| parallelism \> MAX_CAP \|\|
-
-13.  maximumPoolSize \< parallelism \|\| keepAliveTime \<= 0L)
-
-14.  throw new IllegalArgumentException();
-
-15.  if (factory == null)
-
-16.  throw new NullPointerException();
-
-17.  long ms = Math.max(unit.toMillis(keepAliveTime), TIMEOUT_SLOP); 
-
-19. int corep = Math.min(Math.max(corePoolSize, parallelism), MAX_CAP);
-
-20. long c = ((((long)(-corep) \<\< TC_SHIFT) & TC_MASK) \|
-
-21. (((long)(-parallelism) \<\< RC_SHIFT) & RC_MASK));
-
-22. int m = parallelism \| (asyncMode ? FIFO : 0);
-
-23. int maxSpares = Math.min(maximumPoolSize, MAX_CAP) - parallelism;
-
-24. int minAvail = Math.min(Math.max(minimumRunnable, 0), MAX_CAP);
-
-25. int b = ((minAvail - parallelism) & SMASK) \| (maxSpares \<\< SWIDTH); 26 //
-
-> 27 int n = (parallelism \> 1) ? parallelism - 1 : 1; // at least 2 slots 28 n \|= n \>\>\> 1; n \|= n \>\>\> 2; n \|= n \>\>\> 4; n \|= n \>\>\> 8; n \|= n \>\>\> 16;
->
-> 29 n = (n + 1) \<\< 1; // power of two, including space for submission queues 30
-
-31. // 工作线程名称前缀
-
-32. this.workerNamePrefix = "ForkJoinPool-" + nextPoolId() + "-worker-";
-
-33. // 初始化工作线程数组为n,2的幂次方
-
-34. this.workQueues = new WorkQueue\[n\];
-
-35. // worker线程工厂,有默认值
-
-36. this.factory = factory;
-
-37. this.ueh = handler;
-
-38. this.saturate = saturate;
-
-39. this.keepAlive = ms;
-
-40. this.bounds = b;
-
-41. this.mode = m;
-
-42. // ForkJoinPool的状态
-
-43. this.ctl = c;
-
-44. checkPermission(); 45 }
+![](img/027.png)
 
 
 
@@ -415,36 +205,24 @@ private void processWorkerExit(Worker w, boolean completedAbruptly) {
 
 
 
-* 关于上面的全局队列,有一个关键点需要说明: 它并非使用BlockingQueue,而是基于一个普通的 数组得以实现
-* 这个队列又名工作窃取队列,为 ForkJoinPool 的工作窃取算法提供服务
-* 所谓工作窃取算法,是指一个Worker线程在执行完毕自己队列中的任务之后,可以窃取其他线程队 列中的任务来执行,从而实现负载均衡,以防有的线程很空闲,有的线程很忙。这个过程要用到工作窃 取队列
-
-![](D:/software/Typora/media/image296.png)
-
-* 这个队列只有如下几个操作: 
-
-1.  Worker线程自己,在队列头部,通过对top指针执行加、减操作,实现入队或出队,这是单线 程的。
-
-2.  其他Worker线程,在队列尾部,通过对base进行累加,实现出队操作,也就是窃取,这是多 线程的,需要通过CAS操作
-
-3.  这个队列,在*Dynamic Circular Work-Stealing Deque*这篇论文中被称为dynamic-cyclic-array。之所以这样命名,是因为有两个关键点: 
-    1.  整个队列是环形的,也就是一个数组实现的RingBuffer。并且base会一直累加,不会减小； top会累加、减小。最后,base、top的值都会大于整个数组的长度,只是计算数组下标的时候,会取top&(queue.length-1),base&(queue.length-1)。因为queue.length是2的整数次方,这里也就是对queue.length进行取模操作。当top-base=queue.length-1 的时候,队列为满,此时需要扩容； 当top=base的时候,队列为空,Worker线程即将进入阻塞状态
-    2.  当队列满了之后会扩容,所以被称为是动态的。但这就涉及一个棘手的问题: 多个线程同时在 读写这个队列,如何实现在不加锁的情况下一边读写、一边扩容呢?
-
-4.  通过分析工作窃取队列的特性,我们会发现: 在 base 一端,是多线程访问的,但它们只会使base 变大,也就是使队列中的元素变少。所以队列为满,一定发生在top一端,对top进行累加的时候,这一 端却是单线程的！队列的扩容恰好利用了这个单线程的特性！即在扩容过程中,不可能有其他线程对top 进行修改,只有线程对base进行修改
-
-5.  下图为工作窃取队列扩容示意图。扩容之后,数组长度变成之前的二倍,但top、base的值是不变 的！通过top、base对新的数组长度取模,仍然可以定位到元素在新数组中的位置。
+* 在ForkJoinPool中的全局队列,并非使用BlockingQueue,而是基于一个普通的数组得以实现,这个队列又名工作窃取队列
+* 所谓工作窃取算法,是指一个Worker线程在执行完毕自己队列中的任务之后,可以窃取其他线程队列中的任务来执行,从而实现负载均衡,以防有的线程很空闲,有的线程很忙
 
 
-![](D:/software/Typora/media/image297.png)
 
-> 下面结合WorkQueue扩容的代码进一步分析。
->
-> ![](D:/software/Typora/media/image298.png)
+![](img/028.png)
 
-![](D:/software/Typora/media/image299.png)
 
-> ![](D:/software/Typora/media/image300.png)
+
+* Worker线程自己,在队列头部,通过对top指针执行加,减操作,实现入队或出队,这是单线程的
+* 其他Worker线程,在队列尾部,通过对base进行累加,实现出队操作,也就是窃取,这是多线程的,需要通过CAS操作
+* 这个队列同样被称为`dynamic-cyclic-array`: 
+  * 整个队列是环形的,也就是一个数组实现的RingBuffer.并且base会一直累加,不会减小;top会累加,减小.最后,base、top的值都会大于整个数组的长度,只是计算数组下标的时候,会取`top&(queue.length-1)`,`base&(queue.length-1)`.
+  * 当top-base==queue.length-1 时,队列为满,此时需要扩容;当top==base时,队列为空,Worker线程即将进入阻塞状态
+
+* 在base一端,是多线程访问的,但它们只会使base变大,也就是使队列中的元素变少,所以队列为满,一定发生在top一端.对top进行累加的时候,这一端却是单线程的,队列的扩容恰好利用了这个单线程的特性,即在扩容过程中,不可能有其他线程对top 进行修改,只有线程对base进行修改,这样就保证了动态扩容的安全性
+* 扩容之后,数组长度变成之前的2倍,但top、base的值是不变的,通过top,base对新的数组长度取模,仍然可以定位到元素在新数组中的位置
+
 
 
 
@@ -456,45 +234,61 @@ private void processWorkerExit(Worker w, boolean completedAbruptly) {
 
 
 
-* 类似于ThreadPoolExecutor,在ForkJoinPool中也有一个ctl变量负责表达ForkJoinPool的整个生命 周期和相关的各种状态。不过ctl变量更加复杂,是一个long型变量,代码如下所示
+```java
+public class ForkJoinPool extends AbstractExecutorService {
+    // 线程池状态变量
+    volatile long ctl;
+    private static final long SP_MASK    = 0xffffffffL;
+    private static final long UC_MASK    = ~SP_MASK;
+    private static final int  AC_SHIFT   = 48;
+    private static final long AC_UNIT    = 0x0001L << AC_SHIFT;
+    private static final long AC_MASK    = 0xffffL << AC_SHIFT;
+    private static final int  TC_SHIFT   = 32;
+    private static final long TC_UNIT    = 0x0001L << TC_SHIFT;
+    private static final long TC_MASK    = 0xffffL << TC_SHIFT;
+    private static final long ADD_WORKER = 0x0001L << (TC_SHIFT + 15);
 
-![](D:/software/Typora/media/image301.png)
+    private static final int  RSLOCK     = 1;
+    private static final int  RSIGNAL    = 1 << 1;
+    private static final int  STARTED    = 1 << 2;
+    private static final int  STOP       = 1 << 29;
+    private static final int  TERMINATED = 1 << 30;
+    private static final int  SHUTDOWN   = 1 << 31;
+    // ...
+}
+```
+
+
+
+![](img/029.png)
+
+
 
 * ctl变量的64个比特位被分成五部分: 
-  * AC: 最高的16个比特位,表示Active线程数-parallelism,parallelism是上面的构造方法传进 去的参数
+  * AC: 最高的16个比特位,表示Active线程数-parallelism,parallelism是上面的构造方法传进去的参数
   * TC: 次高的16个比特位,表示Total线程数-parallelism
   * ST: 1个比特位,如果是1,表示整个ForkJoinPool正在关闭
-  * EC: 15个比特位,表示阻塞栈的栈顶线程的wait count(关于什么是wait count,接下来解释)
+  * EC: 15个比特位,表示阻塞栈的栈顶线程的wait count
   * ID: 16个比特位,表示阻塞栈的栈顶线程对应的id
-* ![](D:/software/Typora/media/image302.jpeg)
 
 
 
-### 阻塞栈TreiberStack
+### TreiberStack
 
 
 
-* 什么叫阻塞栈呢?
-* 要实现多个线程的阻塞、唤醒,除了park/unpark这一对操作原语,还需要一个**无锁链表**实现的阻 塞队列,把所有阻塞的线程串在一起
-* 在ForkJoinPool中,没有使用阻塞队列,而是使用了阻塞栈。把所有空闲的Worker线程放在一个栈 里面,这个栈同样通过链表来实现,名为Treiber Stack。前面讲解Phaser的实现原理的时候,也用过这个数据结构
+* 在ForkJoinPool中,没有使用阻塞队列,而是使用了阻塞栈把所有空闲的Worker线程放在一个栈里面,这个栈同样通过链表来实现,名为Treiber Stack
 * 下图为所有阻塞的Worker线程组成的Treiber Stack
 
-![](D:/software/Typora/media/image303.jpeg)
 
-* 首先,WorkQueue有一个id变量,记录了自己在WorkQueue\[\]数组中的下标位置,id变量就相当于 每个WorkQueue或ForkJoinWorkerThread对象的地址；
-* ![](D:/software/Typora/media/image304.jpeg)
-* 其次,ForkJoinWorkerThread还有一个stackPred变量,记录了前一个阻塞线程的id,这个stackPred变量就相当于链表的next指针,把所有的阻塞线程串联在一起,组成一个Treiber Stack
-* 最后,ctl变量的最低16位,记录了栈的栈顶线程的id；中间的15位,记录了栈顶线程被阻塞的次 数,也称为wait count
+
+![](img/030.png)
 
 
 
-### ctl的初始值
-
-
-
-* 构造方法中,有如下的代码: 
-* ![](D:/software/Typora/media/image301.png)
-* 因为在初始的时候,ForkJoinPool 中的线程个数为 0,所以 AC=0-parallelism,TC=0- parallelism。这意味着只有高32位的AC、TC 两个部分填充了值,低32位都是0填充
+* 首先,WorkQueue有一个id变量,记录了自己在`WorkQueue[]`的下标,id就相当于每个WorkQueue或ForkJoinWorkerThread对象的地址
+* 其次,ForkJoinWorkerThread还有一个stackPred变量,记录了前一个阻塞线程的id,这个stackPred就相当于链表的next指针,把所有的阻塞线程串联在一起,组成一个Treiber Stack
+* 最后,ctl变量的最低16位,记录了栈的栈顶线程的id;中间的15位,记录了栈顶线程被阻塞的次数,也称为wait count
 
 
 
@@ -502,20 +296,15 @@ private void processWorkerExit(Worker w, boolean completedAbruptly) {
 
 
 
-* 在ThreadPoolExecutor中,有corePoolSize和maxmiumPoolSize 两个参数联合控制总的线程数, 而在ForkJoinPool中只传入了一个parallelism参数,且这个参数并不是实际的线程数。那么, ForkJoinPool在实际的运行过程中,线程数究竟是由哪些因素决定的呢?
-* 要回答这个问题,先得明白ForkJoinPool中的线程都可能有哪几种状态?可能的状态有三种: 
+* ForkJoinPool中的线程状态: 
   * 空闲状态(放在Treiber Stack里面)
   * 活跃状态(正在执行某个ForkJoinTask,未阻塞)
-  * 阻塞状态(正在执行某个ForkJoinTask,但阻塞了,于是调用join,等待另外一个任务的结果 返回)
-* ctl变量很好地反映出了三种状态: 高32位: u=(int) (ctl \>\>\> 32),然后u又拆分成tc、ac 两个16位； 低32位: c=(int) ctl
-  * c＞0,说明Treiber Stack不为空,有空闲线程；c=0,说明没有空闲线程；
-  * ac＞0,说明有活跃线程；ac＜=0,说明没有空闲线程,并且还未超出parallelism；
+  * 阻塞状态(正在执行某个ForkJoinTask,但阻塞了,于是调用join,等待另外一个任务的结果返回)
+* ctl变量很好地反映出了三种状态: 高32位: u=(int) (ctl \>\>\> 32),然后u又拆分成tc、ac 两个16位; 低32位: c=(int) ctl
+  * c＞0,说明Treiber Stack不为空,有空闲线程；c=0,说明没有空闲线程
+  * ac＞0,说明有活跃线程;ac＜=0,说明没有空闲线程,并且还未超出parallelism
   * tc＞0,说明总线程数 ＞parallelism
-* ![](image305.jpeg)
-* 在提交任务的时候: ![](D:/software/Typora/media/image306.png)
-* ![](D:/software/Typora/media/image307.jpeg)![](D:/software/Typora/media/image308.jpeg)
-* ![](media/image309.jpeg)
-* 在通知工作线程的时候,需要判断ctl的状态,如果没有闲置的线程,则开启新线程: 
+* 在通知工作线程的时候,需要判断ctl的状态,如果没有闲置的线程,则开启新线程
 
 
 
@@ -524,7 +313,6 @@ private void processWorkerExit(Worker w, boolean completedAbruptly) {
 
 
 * ForkerJoinPool 没有使用 BlockingQueue,也就不利用其阻塞/唤醒机制,而是利用了park/unpark原语,并自行实现了Treiber Stack
-* 下面进行详细分析ForkerJoinPool,在阻塞和唤醒的时候,分别是如何入栈的
 
 
 
@@ -532,62 +320,85 @@ private void processWorkerExit(Worker w, boolean completedAbruptly) {
 
 
 
-* ![](image310.jpeg)
 * 当一个线程窃取不到任何任务,也就是处于空闲状态时就会阻塞入栈
 
-> }
->
-> do {
->
-> w.stackPred = (int)(c = ctl);
->
-> // ForkJoinPool中status表示运行中的线程的,数字减一,因为入队列了。nc = ((c - RC_UNIT) & UC_MASK) \| np;
->
-> // CAS操作,自旋,直到操作成功
->
-> } while (!CTL.weakCompareAndSet(this, c, nc));
 
-27. else { // already queued
 
-28. int pred = w.stackPred;
+```java
+final void runWorker(WorkQueue w) {
+    // ...
+    for (;;) {
+        int phase;
+        // 扫描是否有需要执行的一个或多个顶级任务
+        // 其中包含了窃取的任务执行,以及线程局部队列中任务的执行
+        // 如果发现了就执行,返回true
+        // 如果获取不到任务,就需要将该线程入队列,阻塞
+        if (scan(w, r)) {
+            r ^= r << 13; r ^= r >>> 17; r ^= r << 5;
+        }
+        // 如果是已经入队列阻塞的,因为phase大于0表示加锁
+        else if ((phase = w.phase) >= 0) {
+            // ...
+        } else {
+            // ...
+            // 如果ForkJoinPool停止,则break,跳出循环
+            if (md < 0){
 
-29. Thread.interrupted(); // clear before park
+            }
+            // ....
+            // phase为1,表示加锁,phase为负数表示入队列
+            else if (w.phase < 0)
+                // 如果phase小于0,表示阻塞,排队中
+                LockSupport.park(this);
+            w.source = 0;
+        }
+    }
+}
+```
 
-30. w.source = DORMANT; // enable signal
 
-31. long c = ctl;
 
-32. int md = mode, rc = (md & SMASK) + (int)(c \>\> RC_SHIFT);
-
-33. // 如果ForkJoinPool停止,则break,跳出循环
-
-34. if (md \< 0)
-
-35. break;
-
-36. // 优雅关闭
-
-37. else if (rc \<= 0 && (md & SHUTDOWN) != 0 &&
-
-38. tryTerminate(false, false))
-
-39. break;
-
-40. else if (rc \<= 0 && pred != 0 && phase == (int)c) {
-
-41. long nc = (UC_MASK & (c - TC_UNIT)) \| (SP_MASK & pred);
-
-42. long d = keepAlive + System.currentTimeMillis();
-
-43. // 线程阻塞,计时等待
-
-44. LockSupport.parkUntil(this, d);
-
- //
-
-46. if (ctl == c && // drop on timeout if all idle
-
-47. d - System.currentTimeMillis() \<= TIMEOUT_SLOP &&
+```java
+// 从一个队列中扫描一个或多个顶级任务,如果有,就执行;对于非空队列,执行任务,返回true
+private boolean scan(WorkQueue w, int r) {
+    WorkQueue[] ws; int n;
+    // 如果workQueues不是null,并且workQueue的长度大于0,并且w非空,w是线程的workQueue
+    if ((ws = workQueues) != null && (n = ws.length) > 0 && w != null) {
+        // m是ws长度减一,获取ws顶部workQueue
+        for (int m = n - 1, j = r & m;;) {
+            WorkQueue q; int b;
+            // 随机获取workQueue,如果该workQueue的顶指针和底指针不相等,表示有需要执行的任务
+            if ((q = ws[j]) != null && q.top != (b = q.base)) {
+                int qid = q.id;
+                ForkJoinTask<?>[] a; int cap, k; ForkJoinTask<?> t;
+                if ((a = q.array) != null && (cap = a.length) > 0) {
+                    // 获取队列顶部任务
+                    t = (ForkJoinTask<?>)QA.getAcquire(a, k = (cap - 1) & b);
+                    // 如果q的base值没有被别的线程修改过,t不是null,并且将t从数组中移除成功,即可在当前工作线程执行该任务
+                    if (q.base == b++ && t != null &&
+                        QA.compareAndSet(a, k, t, null)) {
+                        // base+1
+                        q.base = b;
+                        w.source = qid;
+                        // 如果还有任务需要执行,通知其他闲置的线程执行
+                        if (q.top - b > 0)
+                            signalWork();
+                        // 让workQueue中的工作线程来执行不管是窃取来的,还是本地的任务,还是从queue中获取的其他任务
+                        // 公平起见,添加一个随机的边界;剩下的让别的线程来执行
+                        w.topLevelExec(t, q, r & ((n << TOP_BOUND_SHIFT) - 1));
+                    }
+                }
+                return true;
+            }
+            else if (--n > 0)
+                j = (j + 1) & m;
+            else
+                break;
+        }
+    }
+    return false;
+}
+```
 
 
 
@@ -595,30 +406,7 @@ private void processWorkerExit(Worker w, boolean completedAbruptly) {
 
 
 
-* 在新的任务到来之后,空闲的线程被唤醒,其核心逻辑在signalWork方法里面
-
-
-
-## 任务的提交过程分析
-
-
-
-* 在明白了工作窃取队列、ctl变量的各种状态、Worker的各种状态,以及线程阻塞—唤醒机制之后, 接下来综合这些知识,详细分析任务的提交和执行过程
-* ![](image311.png)
-* 关于任务的提交,ForkJoinPool最外层的接口如下所示。
-* 如何区分一个任务是内部任务,还是外部任务呢? 可以通过调用该方法的线程类型判断。
-* 如果线程类型是ForkJoinWorkerThread,说明是线程池内部的某个线程在调用该方法,则把该任务 放入该线程的局部队列；
-* 否则,是外部线程在调用该方法,则将该任务加入全局队列
-
-
-
-### 内部提交任务push
-
-
-
-* ![](image312.jpeg)
-* 内部提交任务,即上面的q.push(task),会放入该线程的工作窃取队列中,代码如下所示。
-* 由于工作窃取队列的特性,操作是单线程的,所以此处不需要执行CAS操作
+* 在新的任务到来之后,空闲的线程被唤醒,其核心逻辑在signalWork()里
 
 
 
@@ -626,200 +414,64 @@ private void processWorkerExit(Worker w, boolean completedAbruptly) {
 
  
 
-> if ((md & SHUTDOWN) != 0 \|\| ws == null \|\| (n = ws.length) \<= 0) throw new RejectedExecutionException();
->
-> // 如果随机数计算的workQueues索引处的元素为null,则添加队列
->
-> // 即提交任务的时候,是随机向workQueue中添加workQueue,负载均衡的考虑。
->
-> else if ((q = ws\[(n - 1) & r & SQMASK\]) == null) { // add queue
->
-> // 计算新workQueue对象的id值
->
-> int qid = (r \| QUIET) & ~(FIFO \| OWNED);
->
-> // worker线程名称前缀
->
-> Object lock = workerNamePrefix;
->
-> // 创建任务数组
->
-> ForkJoinTask\<?\>\[\] qa =
->
-> new ForkJoinTask\<?\>\[INITIAL_QUEUE_CAPACITY\];
->
-> // 创建WorkQueue,将当前线程作为
->
-> q = new WorkQueue(this, null);
->
-> // 将任务数组赋值给workQueue q.array = qa;
->
-> // 设置workQueue的id值
->
-> q.id = qid;
->
-> // 由于是通过客户端线程添加的workQueue,没有前置workQueue
->
-> // 内部提交任务有源workQueue,表示子任务
->
-> q.source = QUIET;
->
-> if (lock != null) { // unless disabled, lock pool to install synchronized (lock) {
->
-> WorkQueue\[\] vs; int i, vn;
->
-> // 如果workQueues数组不是null,其中有元素,
->
-> // 并且qid对应的workQueues中的元素为null,则赋值
->
-> // 因为有可能其他线程将qid对应的workQueues处的元素设置了,
->
-> // 所以需要加锁,并判断元素是否为null
->
-> if ((vs = workQueues) != null && (vn = vs.length) \> 0 && vs\[i = qid & (vn - 1) & SQMASK\] == null)
->
-> //
->
-> vs\[i\] = q;
->
-> }
->
-> }
->
-> }
->
-> // CAS操作,使用随机数
->
-> else if (!q.tryLockPhase()) // move if busy r = ThreadLocalRandom.advanceProbe(r);
->
-> else {
->
-> // 如果任务添加成功,通知线程池调度,执行。
->
-> if (q.lockedPush(task)) signalWork();
->
-> return;
->
-> }
->
-> }
->
-> 
-
-* lockedPush(task)方法的实现: 
-* ![](D:/software/Typora/media/image313.jpeg)
-* 外部多个线程会调用该方法,所以要加锁,入队列和扩容的逻辑和线程内部的队列基本相同。最 后,调用signalWork(),通知一个空闲线程来取
-
-
-
-## 工作窃取算法: 任务执行过程
-
-
-
-* 全局队列有任务,局部队列也有任务,每一个Worker线程都会不间断地扫描这些队列,窃取任务来 执行。下面从Worker线程的run方法开始分析: 
-* ![](D:/software/Typora/media/image314.jpeg)
-* run()方法调用的是所在ForkJoinPool的runWorker方法,如下所示
-
-1.  final void runWorker(WorkQueue w) {
-
-2.  int r = (w.id ^ ThreadLocalRandom.nextSecondarySeed()) \| FIFO; // rng
-
-3.  w.array = new ForkJoinTask\<?\>\[INITIAL_QUEUE_CAPACITY\]; // initialize 4 for (;;) {
-
-5.  int phase;
-
-6.  if (scan(w, r)) { // scan until apparently empty 7 r ^= r \<\< 13; r ^= r \>\>\> 17; r ^= r \<\< 5; // move (xorshift)
-
-> 8 }
->
-> 9 else if ((phase = w.phase) \>= 0) { // enqueue, then rescan
-
-10. long np = (w.phase = (phase + SS_SEQ) \| UNSIGNALLED) & SP_MASK;
-
-11. long c, nc;
-
-12. do {
-
-13. w.stackPred = (int)(c = ctl);
-
-14. nc = ((c - RC_UNIT) & UC_MASK) \| np;
-
-15. } while (!CTL.weakCompareAndSet(this, c, nc));  }
-
-17. else { // already queued
-
-18. int pred = w.stackPred;
-
-19. Thread.interrupted(); // clear before park
-
-20. w.source = DORMANT; // enable signal
-
-21. long c = ctl;
-
-22. int md = mode, rc = (md & SMASK) + (int)(c \>\> RC_SHIFT);
-
-23. if (md \< 0) // terminating
-
-24. break;
-
-25. else if (rc \<= 0 && (md & SHUTDOWN) != 0 &&
-
-26. tryTerminate(false, false))
-
-27. break; // quiescent shutdown
-
-28. else if (rc \<= 0 && pred != 0 && phase == (int)c) {
-
-29. long nc = (UC_MASK & (c - TC_UNIT)) \| (SP_MASK & pred);
-
-30. long d = keepAlive + System.currentTimeMillis();
-
-31. LockSupport.parkUntil(this, d);
-
-32. if (ctl == c && // drop on timeout if all idle
-
-33. d - System.currentTimeMillis() \<= TIMEOUT_SLOP &&
-
-34. CTL.compareAndSet(this, c, nc)) {
-
-35. w.phase = QUIET;
-
-36. break; }
-
- }
-
-39. else if (w.phase \< 0)
-
-40. LockSupport.park(this); // OK if spuriously woken
-
-41. w.source = 0; // disable signal 42 } }
-
+```java
+final void externalPush(ForkJoinTask<?> task) {
+    // ...
+    for (;;) {
+        WorkQueue q;
+        int md = mode, n;
+        WorkQueue[] ws = workQueues;
+        // 如果ForkJoinPool关闭,或者任务队列是null,或者ws的长度小于等于0,拒收任务
+        if ((md & SHUTDOWN) != 0 || ws == null || (n = ws.length) <= 0)
+            throw new RejectedExecutionException();
+        // 如果随机数计算的workQueues索引处的元素为null,则添加队列
+        // 即提交任务的时候,是随机向workQueue中添加workQueue,负载均衡的考虑
+        else if ((q = ws[(n - 1) & r & SQMASK]) == null) {
+            // 计算新workQueue对象的id值
+            int qid = (r | QUIET) & ~(FIFO | OWNED);
+            Object lock = workerNamePrefix;
+            ForkJoinTask<?>[] qa =
+                new ForkJoinTask<?>[INITIAL_QUEUE_CAPACITY];
+            q = new WorkQueue(this, null);
+            // 将任务数组赋值给workQueue
+            q.array = qa;
+            q.id = qid;
+            // 由于是通过客户端线程添加的workQueue,没有前置workQueue;内部提交任务有源workQueue,表示子任务
+            q.source = QUIET;
+            if (lock != null) {
+                synchronized (lock) {
+                    WorkQueue[] vs; int i, vn;
+                    // 如果workQueues数组不是null,其中有元素,并且qid对应的workQueues中的元素为null,则赋值
+                    // 因为有可能其他线程将qid对应的workQueues处的元素设置了,所以需要加锁,并判断元素是否为null
+                    if ((vs = workQueues) != null && (vn = vs.length) > 0 &&
+                        vs[i = qid & (vn - 1) & SQMASK] == null)
+                        vs[i] = q;
+                }
+            }
+        }
+        else if (!q.tryLockPhase()) // move if busy
+            r = ThreadLocalRandom.advanceProbe(r);
+        else {
+            // 如果任务添加成功,通知线程池调度,执行
+            if (q.lockedPush(task))
+                signalWork();
+            return;
+        }
+    }
 }
-
-* 下面详细看扫描过程scan(w, a)
-
-
-
-## ForkJoinTask的fork/join
+```
 
 
 
-* 如果局部队列、全局中的任务全部是相互独立的,就很简单了。但问题是,对于分治算法来说,分 解出来的一个个任务并不是独立的,而是相互依赖,一个任务的完成要依赖另一个前置任务的完成
-* 这种依赖关系是通过ForkJoinTask中的join()来体现的。且看前面的代码: 
-* 线程在执行当前ForkJoinTask的时候,产生了left、right 两个子Task
-* fork是指把这两个子Task放入队列里面
-* join则是要等待2个子Task完成
-* 而子Task在执行过程中,会再次产生两个子Task。如此层层嵌套,类似于递归调用,直到最底层的Task计算完成,再一级级返回
+* 外部多个线程会调用该方法,所以要加锁,入队列和扩容的逻辑和线程内部的队列基本相同.最后,调用signalWork(),通知一个空闲线程来取
 
 
 
-### fork
+## fork/join
 
 
 
-![](image315.jpeg)
-
-fork()的代码很简单,就是把自己放入当前线程所在的局部队列中。如果是外部线程调用fork方法,则直接将任务添加到共享队列中
+* 线程在执行当前ForkJoinTask的时候,产生了left、right 两个子Task:fork是指把这两个子Task放入队列里面;join则是要等待2个子Task完成.而子Task在执行过程中,会再次产生两个子Task.如此层层嵌套,类似于递归调用,直到最底层的Task计算完成,再一级级返回
 
 
 
@@ -831,17 +483,20 @@ fork()的代码很简单,就是把自己放入当前线程所在的局部队列�
 
 
 
-* join会导致线程的层层嵌套阻塞,如图所示: 
+![](img/031.png)
 
-![](D:/software/Typora/media/image316.jpeg)
+
 
 * 线程1在执行 ForkJoinTask1,在执行过程中调用了 forkJoinTask2.join(),所以要等ForkJoinTask2完成,线程1才能返回
-* 线程2在执行ForkJoinTask2,但由于调用了forkJoinTask3.join(),只有等ForkJoinTask3完成后,线 程2才能返回
+* 线程2在执行ForkJoinTask2,但由于调用了forkJoinTask3.join(),只有等ForkJoinTask3完成后,线程2才能返回
 * 线程3在执行ForkJoinTask3
 * 结果是: 线程3首先执行完,然后线程2才能执行完,最后线程1再执行完。所有的任务其实组成一 个有向无环图DAG。如果线程3调用了forkJoinTask1.join(),那么会形成环,造成死锁
 * 那么,这种层次依赖、层次通知的 DAG,在 ForkJoinTask 内部是如何实现的呢?站在ForkJoinTask的角度来看,每个ForkJoinTask,都可能有多个线程在等待它完成,有1个线程在执行它。 所以每个ForkJoinTask就是一个同步对象,线程在调用join()的时候,阻塞在这个同步对象上面,执行完 成之后,再通过这个同步对象通知所有等待的线程
 * 利用synchronized关键字和Java原生的wait()/notify()机制,实现了线程的等待-唤醒机制。调用join()的这些线程,内部其实是调用ForkJoinTask这个对象的wait()；执行该任务的Worker线程,在任务 执行完毕之后,顺便调用notifyAll()
-* ![](D:/software/Typora/media/image317.jpeg)
+
+
+
+![](img/032.png)
 
 
 

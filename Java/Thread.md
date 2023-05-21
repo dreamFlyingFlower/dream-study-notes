@@ -684,7 +684,7 @@ public abstract class ForkJoinTask<V> implements Future<V>, Serializable {
 
 
 
-### java并发中的超时
+### 并发中的超时
 
 
 
@@ -716,49 +716,10 @@ public abstract class ForkJoinTask<V> implements Future<V>, Serializable {
 * 当Producer将Data传递给Channel时,如果Channel状态不能接收Data,则Producer将一直等待,直到Channel可以接收Data为止
 * 当Consumer从Channel获取Data时,如果Channel状态没有可以传递的Data,则Consumer将一直等待,直到Channel状态转变为可以传递Data为止
 * 当存在多个Producer和Consumer时,Channel需要对它们做互斥处理
-* 类图: 
 
 
 
-### 不要直接传递
-
-
-
-* Consumer想要获取Data,通常是因为想使用这些Data来执行某些处理.如果Producer直接调用Consumer的方法,执行处理的就不是Consumer的线程,而是Producer的线程了.这样异步处理变同步处理,会发生不同Data间的延迟,降低程序的性能
-
-
-
-### 传递Data的顺序
-
-
-
-* 队列——先生产先消费
-* 栈——先生产后消费
-* 优先队列——”优先“的先消费
-
-
-
-### Channel意义
-
-
-
-* 线程的协调要考虑放在中间的东西;线程的互斥要考虑应该保护的东西;为了让线程协调运行,必须执行互斥处理,以防止共享的内容被破坏
-
-
-
-### JUC包和Producer-Consumer
-
-
-
-* JUC中提供了BlockingQueue接口及其实现类,相当于Producer-Consumer模式中的Channel角色
-
-![](D:/software/Typora/media/image337.png)
-
-* BlockingQueue接口——阻塞队列ArrayBlockingQueue——基于数组的BlockingQueue
-* LinkedBlockingQueue——基于链表的BlockingQueue
-* PriorityBlockingQueue——带有优先级的BlockingQueue
-* DelayQueue——一定时间之后才可以take的BlockingQueue SynchronousQueue——直接传递的BlockingQueue
-* ConcurrentLinkedQueue——元素个数没有最大限制的线程安全队列
+### 类图
 
 
 
@@ -766,14 +727,8 @@ public abstract class ForkJoinTask<V> implements Future<V>, Serializable {
 
 
 
-* 当线程读取实例的状态时,实例的状态不会发生变化。实例的状态仅在线程执行写入操作时才会发 生变化。
-* 从实例状态变化来看,读取和写入有本质的区别
-* 在本模式中,读取操作和写入操作分开考虑。在执行读取操作之前,线程必须获取用于读取的锁。 在执行写入操作之前,线程必须获取用于写入的锁
-* 可以多个线程同时读取,读取时不可写入
-* 当线程正在写入时,其他线程不可以读取或写入
-* 一般来说,执行互斥会降低程序性能。如果把写入的互斥和读取的互斥分开考虑,则可以提高性 能
-
-
+* 在本模式中,读取和写入分开考虑:在执行读取操作之前,线程必须获取用于读取的锁;在执行写入操作之前,线程必须获取用于写入的锁
+* 可以多个线程同时读取,读取时不可写入;当线程正在写入时,其他线程不可以读取或写入
 
 
 
@@ -781,7 +736,7 @@ public abstract class ForkJoinTask<V> implements Future<V>, Serializable {
 
 
 
-* readLock方法和writeLock方法都是用了Guarded Suspension模式,Guarded Suspension模式的重点是守护条件
+* readLock()和writeLock()都是用了Guarded Suspension模式,Guarded Suspension模式的重点是守护条件
 
 
 
@@ -789,10 +744,9 @@ public abstract class ForkJoinTask<V> implements Future<V>, Serializable {
 
 
 
-* 读取线程首先调用readLock方法。当线程从该方法返回,就可以执行实际的读取操作。
-* 当线程开始执行实际的读取操作时,只需要判断是否存在正在写入的线程,以及是否存在正在等待 的写入线程。
-* 不考虑读取线程
-* 如果存在正在写入的线程或者存在正在等待的写线程,则等待
+* 读取线程首先调用readLock(),当线程从该方法返回,就可以执行实际的读取操作
+* 当线程开始执行实际的读取操作时,只需要判断是否存在正在写入的线程,以及是否存在正在等待写入的线程
+* 不考虑读取线程;如果存在正在写入的线程或者存在正在等待的写线程,则等待
 
 
 
@@ -800,7 +754,8 @@ public abstract class ForkJoinTask<V> implements Future<V>, Serializable {
 
 
 
-* 在线程开始写入之前,调用writeLock方法。当线程从该方法返回后,就可以执行实际的写入操作。 开始执行写入的条件: 如果有线程正在执行读取操作,出现读写冲突；或者如果有线程正在执行写入的操作,引起写冲突,当前线程等待
+* 在线程开始写入之前,调用writeLock(),当线程从该方法返回后,就可以执行实际的写入操作
+* 开始执行写入的条件: 如果有线程正在执行读取操作,出现读写冲突;或者如果有线程正在执行写入的操作,引起写冲突,当前线程等待
 
 
 
@@ -808,37 +763,10 @@ public abstract class ForkJoinTask<V> implements Future<V>, Serializable {
 
 
 
-#### Reader
-
-
-
-* 该角色对共享资源角色执行读取操作
-
-
-
-#### Writer
-
-
-
-* 该角色对共享资源角色执行写操作
-
-
-
-#### SharedResource
-
-
-
-* 共享资源角色表示Reader角色和Writer角色共享的资源。共享资源角色提供不修改内部状态的操作(读取)和修改内部状态的操作(写)
-* 当前案例中对应于Data类
-
-
-
-#### ReadWriteLock
-
-
-
-* 读写锁角色提供了共享资源角色实现读操作和写操作时需要的锁,即当前案例中的readLock和readUnlock,以及writeLock和writeUnlock。对应于当前案例中ReadWriteLock类
-* ![](image338.png)![](D:/software/Typora/media/image341.png)
+* Reader:对共享资源执行读取操作
+* Writer:对共享资源执行写操作
+* SharedResource:共享资源,表示Reader和Writer共享的资源.共享资源提供不修改内部状态的操作(读取)和修改内部状态的操作(写)
+* ReadWriteLock:读写锁,提供了共享资源实现读写操作时需要的锁
 
 
 
@@ -846,12 +774,9 @@ public abstract class ForkJoinTask<V> implements Future<V>, Serializable {
 
 
 
-* 利用读取操作的线程之间不会冲突的特性来提高程序性能
-  * Read-Write Lock模式利用了读操作的线程之间不会冲突的特性。由于读取操作不会修改共享资源的状态,所以彼此之间无需加锁。因此,多个Reader角色同时执行读取操作,从而提高 程序性能
+* 利用读读操作的线程之间不会冲突的特性来提高程序性能,因为读操作不会修改共享资源的状态,所以彼此之间无需加锁
 * 适合读取操作负载较大的情况
-  * 如果单纯使用Single Threaded Execution模式,则read也只能运行一个线程。如果read负载很重,可以使用Read-Write Lock模式
-* 适合少写多读
-  * Read-Write Lock模式优点是Reader之间不会冲突。如果写入很频繁,Writer会频繁停止Reader的处理,也就无法体现出Read-Write Lock模式的优势了
+* 适合少写多读.Read-Write Lock模式优点是读读之间不会冲突,如果写入很频繁,写会频繁停止读的处理,影响性能
 
 
 
@@ -859,22 +784,9 @@ public abstract class ForkJoinTask<V> implements Future<V>, Serializable {
 
 
 
-* synchronized可以用于获取实例的锁。java中同一个对象锁不能由两个以上的线程同时获取。用于读取的锁和用于写入的锁与使用synchronized获取的锁是不一样的。开发人员可以通过修改ReadWriteLock类来改变锁的运行
-* ReadWriteLock类提供了用于读取的锁和用于写入的锁两个逻辑锁,但是实现这两个逻辑锁的物理 锁只有一个,就是ReadWriteLock实例持有的锁
-
-
-
-### JUC包和Read-Write Lock
-
-
-
-* java.util.concurrent.locks包提供了已实现Read-Write Lock模式的ReadWriteLock接口和ReentrantReadWriteLock类
-* java.util.concurrent.locks.ReadWriteLock接口的功能和当前案例中的ReadWriteLock类类似。不 同之处在于该接口用于读取的锁和用于写入的锁是通过其他对象来实现的
-* java.util.concurrent.locks.ReentrantReadWriteLock类实现了ReadWriteLock接口。其特征如下:  
-* 公平性:当创建ReentrantReadWriteLock类的实例时,可以选择锁的获取顺序是否要设置为fair的。如果创建的实例是公平的,那么等待时间久的线程将可以优先获取锁
-* 可重入性:ReentrantReadWriteLock类的锁是可重入的。Reader角色的线程可以获取用于写入的锁,Writer角色的线程可以获取用于读取的锁
-* 锁降级:ReentrantReadWriteLock类可以按如下顺序将用于写入的锁降级为用于读取的锁:
-* 用于读取的锁不能升级为用于写入的锁。快捷方法ReentrantReadWriteLock类提供了获取等待中的线程个数的方法 getQueueLength ,以及检查是否获取了用于写入锁的方法 isWriteLocked 等方法
+* synchronized可以用于获取实例的锁,Java中同一个对象锁不能由两个以上的线程同时获取
+* 用于读的锁和用于写的锁与使用synchronized获取的锁是不一样的,开发人员可以通过修改ReadWriteLock类来改变锁的运行
+* ReadWriteLock类提供了用于读取的锁和用于写入的锁两个逻辑锁,但是实现这两个逻辑锁的物理锁只有一个,就是ReadWriteLock实例持有的锁
 
 
 
@@ -882,27 +794,7 @@ public abstract class ForkJoinTask<V> implements Future<V>, Serializable {
 
 
 
-* 该模式可以理解为“每个消息一个线程”。消息这里可以理解为命令或请求。每个命令或请求分配一 个线程,由这个线程来处理
-* 这就是Thread-Per-Message模式
-* 在Thread-Per-Message模式中,消息的委托方和执行方是不同的线程
-
-
-
-### 示例程序
-
-
-
-* 在此示例程序中,ConcurrentDemo类委托Host来显示字符。Host类会创建一个线程,来处理委 托。启动的线程使用Helper类来执行实际的显示
-
-
-
-### 主入口类
-
-
-
-* **处理器类**
-* **工具类**
-* ![](D:/software/Typora/media/image342.png)
+* 该模式可以理解为每个消息一个线程,消息这里可以理解为命令或请求;在该模式中,消息的委托方和执行方是不同的线程
 
 
 
@@ -910,13 +802,13 @@ public abstract class ForkJoinTask<V> implements Future<V>, Serializable {
 
 
 
-* Client(委托方):Client角色向Host角色发起请求,而不用关心Host角色如何实现该请求处理。 当前案例中对应于ConcurrentDemo类
-* Host:Host角色收到Client角色请求后,创建并启用一个线程。新建的线程使用Helper角色来处理请求。 当前案例中对应于Host类
-* Helper:Helper角色为Host角色提供请求处理的功能。Host角色创建的新线程调用Helper角色。 当前案例中对应于Helper类
+* Client(委托方):Client向Host发起请求,而不用关心Host如何实现该请求处理
+* Host:Host收到Client请求后,创建并启用一个线程,新建的线程使用Helper角色来处理请求
+* Helper:Helper为Host提供请求处理的功能,Host创建的新线程调用Helper角色
 
 
 
-### 类图**1**
+### 类图
 
 
 
@@ -928,39 +820,10 @@ public abstract class ForkJoinTask<V> implements Future<V>, Serializable {
 
 
 
-* 提高响应性,缩短延迟时间
-  * Thread-Per-Message模式能够提高与Client角色对应的Host角色的响应性,降低延迟时间。 尤其是当handle操作非常耗时或者handle操作需要等待输入/输出时,效果很明显
-  * 为了缩短线程启动花费的时间,可以使用Worker Thread模式
+* 提高响应性,缩短延迟时间.能够提高与Client对应的Host的响应性,降低延迟时间,尤其是存在非常耗时操纵时,效果很明显
 * 适用于操作顺序没有要求时
-  * 在Thread-Per-Message模式中,handle方法并不一定按照request方法的调用顺序来执行
-* 适用于不需要返回值时
-  * Thread-Per-Message模式中,request方法并不会等待handle方法的执行结束。request得不到handle的结果
-  * 当需要获取操作结果时,可以使用Future模式
+* 适用于不需要返回值时,当需要获取操作结果时,可以使用Future模式
 * 应用于服务器
-
-
-
-### JUC和Thread-Per-Message
-
-
-
-* java.lang.Thread:最基本的创建、启动线程的类
-* java.lang.Runnable:线程锁执行的任务接口
-* java.util.concurrent.ThreadFactory:将线程创建抽象化的接口
-* java.util.concurrent.Executors:用于创建实例的工具类
-* java.util.concurrent.Executor:将线程执行抽象化的接口
-* java.util.concurrent.ExecutorService:将被复用的线程抽象化的接口
-* java.util.concurrent.ScheduledExecutorService:将被调度线程的执行抽象化的接口
-
-
-
-### 类图2
-
-
-
-> ![](D:/software/Typora/media/image341.png)
->
-> ![](D:/software/Typora/media/image351.png)
 
 
 
@@ -968,18 +831,8 @@ public abstract class ForkJoinTask<V> implements Future<V>, Serializable {
 
 
 
-* 在Worker Thread模式中,工人线程(worker thread)会逐个取回工作并进行处理。当所有工作全部完成后,工人线程会等待新的工作到来。
-* Worker Thread模式也被称为Background Thread模式。有时也称为Thread Pool模式
-
-
-
-### 示例程序
-
-
-
-* ClientThread类的线程会向Channel类发送工作请求(委托)。
-* Channel类的实例有五个工人线程进行工作。所有工人线程都在等待工作请求的到来。
-* 当收到工作请求后,工人线程会从Channel获取一项工作请求并开始工作。工作完成后,工人线程 回到Channel那里等待下一项工作请求
+* 在Worker Thread模式中,工人线程(worker thread)会逐个取回工作并进行处理,当所有工作全部完成后,工人线程会等待新的工作到来
+* Worker Thread模式也被称为Background Thread模式,有时也称为Thread Pool模式
 
 
 
@@ -989,63 +842,11 @@ public abstract class ForkJoinTask<V> implements Future<V>, Serializable {
 
 ![](D:/software/Typora/media/image353.jpeg)
 
-> **时序图**
->
-> threadPool = new WorkerThread\[threads\];
->
-> for (int i = 0; i \< threadPool.length; i++) { threadPool\[i\] = new WorkerThread("Worker-" + i, this);
->
-> }
->
-> 
->
-> 62 }
->
-> public void startWorkers() {
->
-> for (int i = 0; i \< threadPool.length; i++) { threadPool\[i\].start();
->
-> }
->
-> }
->
-> public synchronized void putRequest(Request request) { while (count \>= requestQueue.length) {
->
-> try {
->
-> wait();
->
-> } catch (InterruptedException e) {
->
-> }
->
-> }
->
-> requestQueue\[tail\] = request;
->
-> tail = (tail + 1) % requestQueue.length; count++;
->
-> notifyAll();
->
-> }
->
-> public synchronized Request takeRequest() { while (count \<= 0) {
->
-> try {
->
-> wait();
->
-> } catch (InterruptedException e) {
->
-> }
->
-> }
->
-> Request request = requestQueue\[head\]; head = (head + 1) % requestQueue.length; count--;
->
-> notifyAll(); return request;
->
-> }
+
+
+### 时序图
+
+
 
 
 
@@ -1053,89 +854,10 @@ public abstract class ForkJoinTask<V> implements Future<V>, Serializable {
 
 
 
-* Client(委托者):Client角色创建Request角色并将其传递给Channel角色。在本例中,ClientThread对应Client角色。
-* Channel:Channel角色接收来自Client角色的Request角色,并将其传递给Worker角色。在本例中,Channel类对应Channel角色
-* Worker:Worker角色从Channel角色中获取Request角色,并执行其逻辑。当一项工作结束后,继续从Channel获取另外的Request角色。本例中,WorkerThread类对应Worker角色
-* Request:Request角色表示工作。Request角色中保存了工作的逻辑。本例中,Request类对应Request角色
-
-
-
-### 优点
-
-
-
-* 提高吞吐量
-  * 如果将工作交给其他线程,当前线程就可以处理下一项工作,称为Thread Per Message模式。
-  * 由于启动新线程消耗时间,可以通过Worker Thread模式轮流和反复地使用线程来提高吞吐量。
-* 容量控制
-  * Worker角色的数量在本例中可以传递参数指定
-  * Worker角色越多,可以并发处理的逻辑越多。同时增加Worker角色会增加消耗的资源。必须 根据程序实际运行环境调整Worker角色的数量
-* 调用与执行的分离
-  * Worker Thread模式和Thread Per Message模式一样,方法的调用和执行是分开的。方法的调用是invocation,方法的执行是execution
-  * 这样,可以: 
-  * 提高响应速度；
-  * 控制执行顺序,因为执行不受调用顺序的制约； 可以取消和反复执行
-  * 进行分布式部署,通过网络将Request角色发送到其他Woker计算节点进行处理
-* Runnable接口的意义
-  * java.lang.Runnable 接口有时用作Worker Thread模式的Request角色。即可以创建Runnable接口的实现类对象表示业务逻辑,然后传递给Channel角色
-  * Runnable对象可以作为方法参数,可以放到队列中,可以跨网络传输,也可以保存到文件 中。如此则Runnable对象不论传输到哪个计算节点,都可以执行
-* 多态的Request角色
-  * 本案例中,ClientThread传递给Channel的只是Request实例。但是WorkerThread并不知道Request类的详细信息
-  * 即使我们传递的是Request的子类给Channel,WorkerThread也可以正常执行execute方法。 通过Request的多态,可以增加任务的种类,而无需修改Channel角色和Worker角色
-
-
-
-### JUC和Worker Thread
-
-
-
-* ThreadPoolExecutor:java.util.concurrent.ThreadPoolExecutor 类是管理Worker线程的类。可以轻松实现Worker Thread模式
-* 通过 java.util.concurrent 包创建线程池java.util.concurrent.Executors类就是创建线程池的工具类
-
-
-
-## Future
-
-
-
-* 假设由一个方法需要长时间执行才能获取结果,则一般不会让调用的程序等 待,而是先返回给它一张“提货卡”。获取提货卡并不消耗很多时间。该“提货卡”就是Future角色
-* 获取Future角色的线程稍后使用Future角色来获取运行结果
-
-
-
-### 示例程序
-
-
-
-#### Host类
-
-**Data接口: **
-
-**FutureData类: **
-
-**RealData类: **
-
-**Main类: **
-
-
-
-### 流程图
-
-![](D:/software/Typora/media/image354.png)
-
-
-
-### 角色
-
-
-
-* Client(请求者):Client角色向Host角色发出请求,并立即接收到请求的处理结果——VirtualData角色,也就是Future角色
-  * Client角色不必知道返回值是RealData还是Future角色。稍后通过VirtualData角色来操作。 本案例中,对应Main类
-* Host:Host角色创建新的线程,由新线程创建RealData角色。同时,Host角色将Future角色(当做VirtualData角色)返回给Client角色。本案例中对应Host类
-* VirtualData(虚拟数据):VirtualData角色是让Future角色与RealData角色具有一致性的角色。本案例中对应Data接 口
-* RealData(真实数据):RealData角色是表示真实数据的角色。创建该对象需要花费很多时间。本案例中对应RealData类
-* Future:Future角色是RealData角色的“提货单”,由Host角色传递给Client角色。对Client而言,Future角色就是VirtualData角色。当Client角色操作Future角色时线程会wait,直到RealData角色创建完成
-  * Future角色将Client角色的操作委托给RealData角色。本案例中,对应于FutureData类
+* Client(委托者):创建Request并将其传递给Channel
+* Channel:接收来自Client的Request,并将其传递给Worker
+* Worker:从Channel中获取Request,并执行其逻辑.当一项工作结束后,继续从Channel获取另外的Request
+* Request:表示工作,保存了工作的逻辑
 
 
 
@@ -1143,24 +865,41 @@ public abstract class ForkJoinTask<V> implements Future<V>, Serializable {
 
 
 
-* 使用Thread Per Message模式,可以提高程序响应性,但是不能获取结果。Future模式也可以提高程序响应性,还可以获取处理结果
-* 利用Future模式异步处理特性,可以提高程序吞吐量。虽然并没有减少业务处理的时长,但是 如果考虑到I/O,当程序进行磁盘操作时,CPU只是处于等待状态。CPU有空闲时间处理其他 的任务
-* 准备返回值和使用返回值的分离
-* 如果想等待处理完成后获取返回值,还可以考虑采用回调处理方式。即,当处理完成后,由Host角色启动的线程调用Client角色的方法,进行结果的处理。此时Client角色中的方法需要 线程安全地传递返回值
+* 提高吞吐量
+* 容量控制.Worker越多,可以并发处理的逻辑越多,但是会增加消耗的资源
+* 调用与执行的分离.这样可以提高响应速度;控制执行顺序,因为执行不受调用顺序的制约;可以取消和反复执行;进行分布式部署,通过网络将Request角色发送到其他Woker计算节点进行处理
+* 多态的Request.通过Request的多态,可以增加任务的种类,而无需修改Channel角色和Worker角色
 
 
 
-### JUC与Future
+## Future
 
 
 
-* java.util.concurrent包提供了用于支持Future模式的类和接口
-* java.util.concurrent.Callable接口将“返回值的某种处理调用”抽象化了。Callable接口声明了call方法。call方法类似于Runnable的run方法,但是call方法有返回值。Callable\<String\>表示Callable接口的call方法返回值类型为String类型
-* java.util.concurrent.Future接口相当于本案例中的Future角色。Future接口声明了get方法来获取结果,但是没有声明设置值的方法。设置值的方法需要在Future接口的实现类中声明。Future\<String\> 表示“Future接口的get方法返回值类型是String类型”。除了get方法,Future接口还声明了用于中断运行 的cancel方法
-* java.util.concurrent.FutureTask类是实现了Future接口的标准类。FutureTask类声明了用于获取值的get方法、用于中断运行的cancel方法、用于设置值的set方法,以及用于设置异常的setException 方法。由于FutureTask类实现了Runnable接口,还声明了run方法
+### 角色
 
 
 
-### Callable、Future、FutureTask类图
+* Client(请求者):向Host发出请求,并立即接收到请求的处理结果—VirtualData,也就是Future.Client不必知道返回值是RealData还是Future,稍后通过VirtualData来操作
+* Host:创建新的线程,由新线程创建RealData.同时,Host将Future(当做VirtualData)返回给Client
+* VirtualData(虚拟数据):是让Future与RealData具有一致性的角色
+* RealData(真实数据):是表示真实数据的角色.创建该对象需要花费很多时间
+* Future:是RealData的提货单,由Host传递给Client.对Client而言,Future就是VirtualData.当Client操作Future时线程会wait,直到RealData创建完成.Future将Client的操作委托给RealData
+
+
+
+### 要点
+
+
+
+* 相比于Thread Per Message模式,Future模式即可以提高程序响应性,还可以获取处理结果
+* 可以提高程序吞吐量
+* 如果想等待处理完成后获取返回值,还可以考虑采用回调处理方式.即,当处理完成后,由Host启动的线程调用Client的方法,进行结果的处理.此时Client中的方法需要线程安全地传递返回值
+
+
+
+### 类图
+
+
 
 ![](media/image355.png)

@@ -803,9 +803,9 @@ S0     S1     E      O      M     CCS    YGC   YGCT    FGC    FGCT     GCT
 
 * -Xmn:设置新生代大小,相当于同时设置NewSize==MaxNewSize,一般会设置为整个堆空间的1/3或1/4
 
-* -XX:NewRatio=n:设置新生代和老年代的比值,如为3,表示年轻代:老年代为1:3
+* -XX:NewRatio=n:设置新生代和老年代的比值,如为3,表示年轻代:老年代为1:3.默认为2
 
-* -XX:SurvivorRatio=n:设置新生代中eden和from/to空间比例,如2,表示eden/form=eden/to=2
+* -XX:SurvivorRatio=n:设置新生代中eden和from/to空间比例,默认8,即eden:form:to=8:1:1.但是实际上如果不设置,比例是6:2:2,只有显示的设置该参数时才会是准确的
 
 * -Xss:指定线程的最大栈空间大小,通常只有几百k
 

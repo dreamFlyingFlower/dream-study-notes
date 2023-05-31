@@ -120,12 +120,8 @@
 
 
 
-* 将整个内存分为N个小的独立空间,每个小空间都可以独立使用,每次GC可以回收多个小空间,而不是对整个空间进行回收,减少Full GC的停顿时间
+* 将整个内存分为N个小的独立空间,每个小空间都可以独立使用,每次GC可以回收多个小空间,而不是对整个空间进行回收
 * 分Region回收,优先回收花费时间少,垃圾比例高的Region
-* 每个Region的取值只能是1,2,4,8,16,32,单位M,默认最多有2048块Region
-* 新生代一般不用手动指定,初始化为整个堆的5%~60%,当达到60%时就会进行垃圾回收
-* -XX:MaxGCPauseMillis=200:设置STW的最大时间
-* -XX:G1HeapRegionSize:指定每个Region的大小
 
 
 
@@ -179,7 +175,19 @@
 
 
 
-# 回收器种类
+## Remembered Set
+
+
+
+* 一个对象可能被其他不同区域引用判断存活,为了保证准确,则需要扫描整个Java堆
+* 为解决该问题,无论G1还是其他分代收集器,JVM都是使用Remembered Set来避免全局扫描:
+  * 每个Region都有一个对应的Remembered Set,每次Reference类型数据写操作时,都会产生一个write Barrier暂时中断操作
+  * 然后检查将要写入的引用指向的对象是否和该Reference类型数据在不同的Region(其他收集器:检查老年代对象是否引用了新生代对象)
+  * 如果不同,通过CardTable把相关引用信息记录到引用指向对象的所在Region对应的Remembered Set中.当进行垃圾收集时,在GC根节点的枚举范围加入Remembered Set,就可以保证不进行全局扫描,也不会有遗漏
+
+
+
+# 回收器
 
 
 
@@ -281,6 +289,7 @@
   * 老年代并发标记过程 (Concurrent Marking):当堆内存使用达到一定值(默认45%)时,开始老年代并发标记过程
   * 混合回收 (Mixed Gc):标记完成后马上开始混合回收.G1从O区移动存活对象到空闲区,这些空闲区间也就成为了老年代的一部分.和年轻代不同,G1的老年代回收器一次只需要扫描/回收一小部分老年代的Region.同时,这个老年代Region是和年轻代一起被回收的
   * Full GC:它针对GC的评估失败提供了一种失败保护机制,即强力回收
+* 新生代一般不用手动指定,初始化为整个堆的5%~60%,当达到60%时就会进行垃圾回收
 * -XX:+UseG1GC:使用G1回收器,新生代和老年代都是G1.JDK9以后默认使用
 * -XX:MaxGCPauseMillis:指定最大停顿时间,默认是200ms.JVM只能尽量保证该时间内完成
 * -XX:ParallelGCThreads:设置并行回收的线程数量,最多为8
@@ -792,7 +801,7 @@ S0     S1     E      O      M     CCS    YGC   YGCT    FGC    FGCT     GCT
 
 * -Xmx:设置JVM堆的最大值,等价于-XX:MaxHeapSize.如-Xmx2048M
 
-* -Xmn:设置新生代大小,一般会设置为整个堆空间的1/3或1/4
+* -Xmn:设置新生代大小,相当于同时设置NewSize==MaxNewSize,一般会设置为整个堆空间的1/3或1/4
 
 * -XX:NewRatio=n:设置新生代和老年代的比值,如为3,表示年轻代:老年代为1:3
 
@@ -804,7 +813,9 @@ S0     S1     E      O      M     CCS    YGC   YGCT    FGC    FGCT     GCT
 
 * -XX:MaxMetaspaceSize:最大元空间大小
 
-* -XX:NewSize=n:设置新生代大小
+* -XX:NewSize=n:设置新生代初始大小
+
+* -XX:MaxNewSize=n:设置新生代最大大小,JDK8不能小于1536K
 
 * -XX:PermSize:设置老年代的初始大小,默认是64M
 
@@ -885,8 +896,64 @@ public static void main(String[] args) {
 }
 ```
 
+
+
+## Parallel Scavenge
+
+
+
 ```java
-// 设置JVM启动参数:-verbose:gc -XX:+PrintGCDetails -XX:+UseSerialGC -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:+PrintGCDateStamps -XX:+PrintHeapAtGC -Xloggc:E:/logs/gc-default.log  -Xmx20m -Xms20m -Xmn1m
+// 设置JVM启动参数:-verbose:gc -XX:+PrintGCDetails -XX:+UseSerialGC -Xmx10m -Xms10m -XX:NewSize=512k
+[GC (Allocation Failure) [PSYoungGen: 1976K->496K(2560K)] 8120K->6844K(9728K), 0.0005997 secs] [Times: user=0.00 sys=0.00, real=0.00 secs] 
+[GC (Allocation Failure) --[PSYoungGen: 1520K->1520K(2560K)] 7868K->7916K(9728K), 0.0011288 secs] [Times: user=0.00 sys=0.00, real=0.00 secs] 
+[Full GC (Ergonomics) [PSYoungGen: 1520K->0K(2560K)] [ParOldGen: 6396K->1644K(7168K)] 7916K->1644K(9728K), [Metaspace: 2657K->2657K(1056768K)], 0.0038580 secs] [Times: user=0.00 sys=0.00, real=0.00 secs] 
+[GC (Allocation Failure) [PSYoungGen: 1024K->0K(2560K)] 7788K->6764K(9728K), 0.0002767 secs] [Times: user=0.00 sys=0.00, real=0.00 secs] 
+[GC (Allocation Failure) --[PSYoungGen: 1024K->1024K(2560K)] 7788K->7788K(9728K), 0.0002484 secs] [Times: user=0.00 sys=0.00, real=0.00 secs] 
+[Full GC (Ergonomics) [PSYoungGen: 1024K->0K(2560K)] [ParOldGen: 6764K->1643K(7168K)] 7788K->1643K(9728K), [Metaspace: 2658K->2658K(1056768K)], 0.0048177 secs] [Times: user=0.00 sys=0.00, real=0.00 secs] 
+Heap
+ PSYoungGen      total 2560K, used 1044K [0x00000000ffd00000, 0x0000000100000000, 0x0000000100000000)
+  eden space 2048K, 51% used [0x00000000ffd00000,0x00000000ffe05370,0x00000000fff00000)
+  from space 512K, 0% used [0x00000000fff80000,0x00000000fff80000,0x0000000100000000)
+  to   space 512K, 0% used [0x00000000fff00000,0x00000000fff00000,0x00000000fff80000)
+ ParOldGen       total 7168K, used 5739K [0x00000000ff600000, 0x00000000ffd00000, 0x00000000ffd00000)
+  object space 7168K, 80% used [0x00000000ff600000,0x00000000ffb9aef8,0x00000000ffd00000)
+ Metaspace       used 2664K, capacity 4486K, committed 4864K, reserved 1056768K
+  class space    used 286K, capacity 386K, committed 512K, reserved 1048576K
+```
+
+
+
+* JDK8和之前的策略不一样,GC信息也不同
+* `GC (Allocation Failure)`:表明进行了一次新生代垃圾回收,且不需要STW
+  * 前面没有Full修饰,表明这是一次Minor GC(YGC),有Full表示全收集
+  * `Allocation Failure`表明本次引起GC的原因是年轻代中没有足够的空间能够存储新的数据
+* `[PSYoungGen: 1976K->496K(2560K)] 8120K->6844K(9728K), 0.0005997 secs]`:
+  * `PSYoungGen`:发生垃圾回收的回收器名称简写
+    * DefNew:Def New Generation,Serial GC
+    * Tenured:Serial Old GC
+    * ParNew:ParNew
+    * PSYoungGen:Parallel Scavenge
+    * ParOldGen:Parallel Old
+    * garbage-first heap:G1在新生代的名称
+  * `1976K->496K(2560K)`:GC前该区域已使用容量->GC后该区域已使用容量(该内存区域总容量)
+  * `8120K->6844K(9728K)`:GC前Java堆已使用容量->GC后Java堆已使用容量(Java堆总容量)
+  * `0.0005997 secs`:该内存区域GC所占用的时间
+* `[ParOldGen:  6396K->1644K(7168K)] 7916K->1644K(9728K)`:
+  * `ParOldGen`:老年代发生垃圾回收
+* `[Metaspace: 2657K->2657K(1056768K)], 0.0038580 secs]`:
+  * `Metaspace`:元空间发生垃圾回收.JDK1.8之前为compacting perm gen
+* `Heap`: 表示堆信息,所有used后面的0x开头一次是内存的起始地址,使用空间结束地址,整体空间结束地址
+* `class space`: 元空间中专门给class用来存储的空间
+* `[Times: user=0.00 sys=0.00, real=0.00 secs]`:分别表示用户态耗时,内核态耗时和总耗时
+
+
+
+## Serial GC
+
+
+
+```java
+// 设置JVM启动参数:-verbose:gc -XX:+PrintGCDetails -XX:+UseSerialGC -Xmx20m -Xms20m -Xmn1m
 [GC (Allocation Failure) [DefNew: 896K->63K(960K), 0.0009520 secs] 896K->628K(20416K), 0.0009838 secs] [Times: user=0.00 sys=0.00, real=0.00 secs] 
 [GC (Allocation Failure) [DefNew: 262K->63K(960K), 0.0012891 secs][Tenured: 19079K->1734K(19456K), 0.0012453 secs] 19259K->1734K(20416K), [Metaspace: 2661K->2661K(1056768K)], 0.0025666 secs] [Times: user=0.00 sys=0.00, real=0.00 secs] 
 Heap
@@ -899,22 +966,3 @@ Heap
  Metaspace       used 2668K, capacity 4486K, committed 4864K, reserved 1056768K
   class space    used 286K, capacity 386K, committed 512K, reserved 1048576K
 ```
-
-* JDK8和之前的策略不一样,GC信息也不同
-* `STW`:`Stop The World`,表示垃圾收集时是否需要停顿
-* `GC (Allocation Failure)`:表明进行了一次垃圾回收,且不需要STW
-  * 前面没有Full修饰,表明这是一次Minor GC(YGC)
-  * 它不表示只GC新生代,并且JDK8垃圾回收不管是新生代还是老年代都会STW
-  * `Allocation Failure`表明本次引起GC的原因是年轻代中没有足够的空间能够存储新的数据
-* `[DefNew:896K->63K(960K),0.0009520 secs] 896K->628K(20416K),0.0009838 secs]`:
-  * `DefNew`:表示是新生代发生垃圾回收,这个名称和所使用的收集器密切相关.可以有Tenured,Perm,ParNew,PSYoungGen等等.其中hotspot虚拟机使用的是PSYoungGen代表新生代
-  * `896K->63K(960K)`:GC前该区域已使用容量->GC后该区域已使用容量(该内存区域总容量)
-  * `0.0009520 secs`:该内存区域GC所占用的时间
-  * `896K->628K(20416K)`:GC前Java堆已使用容量->GC后Java堆已使用容量(Java堆总容量)
-* `Heap`: 表示堆信息,所有used后面的0x开头一次是内存的起始地址,使用空间结束地址,整体空间结束地址
-* `[Tenured: 19079K->1734K(19456K), 0.0012453 secs] 19259K->1734K(20416K)`:
-  * `Tenured`:老年代发生垃圾回收
-* `[Metaspace: 2661K->2661K(1056768K)], 0.0025666 secs]`:
-  * `Metaspace`:元空间发生垃圾回收.JDK1.8之前为compacting perm gen
-* `class space`: 元空间中专门给class用来存储的空间
-* `[Times: user=0.00 sys=0.00, real=0.00 secs]`:分别表示用户态耗时,内核态耗时和总耗时

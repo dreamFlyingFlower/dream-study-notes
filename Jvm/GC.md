@@ -326,10 +326,21 @@
 
 
 
-* 也叫Young GC(YGC),主要对年轻代进行垃圾回收
-* 对于复制算法来说,当年轻代Eden区域满的时候会触发一次Minor GC,将Eden和From Survivor的对象复制到另外一块To Survivor上
-* 如果某个对象存活的时间超过一定Minor gc次数会直接进入老年代,不再分配到To Survivor上
+* 也叫Young GC(YGC),主要对年轻代进行垃圾回收,会引起STW
+* 对于复制算法来说,当年轻代Eden区域满的时候会触发Minor GC,from/to满不会触发GC
+* GC会将Eden和S0的对象复制到S1上,果某个对象存活的时间超过一定Minor gc次数会直接进入老年代,不再分配到S1上
 * -XX:+MaxTenuringThreshold:默认15,经过15即从新生代转到老年代
+
+
+
+## Major GC
+
+
+
+* 老年代GC.老年代空间不足时,会先尝试触发Minor GC,如果之后空间还不足则触发Major GC.只有CMS会单独进行Major GC
+* 出现了Major GC,经常会伴随至少一次的Minor GC(并非绝对,Parallel Scavenge GC就有直接进行Major GC的策略)
+* Major GC的速度一般会比Minor GC慢10倍以上,STW的时间更长
+* 如果Major GC后,内存还不足,就报OOM了
 
 
 
@@ -337,14 +348,14 @@
 
 
 
-* 用于清理整个堆空间,它的触发条件主要有以下几种:
+* 用于清理整个堆空间+方法区,它的触发条件主要有以下几种:
   * 显式调用System.gc()(建议JVM触发)
+  * 老年代空间不足
   * 方法区空间不足(JDK8及之后不会有这种情况了,详见下文)
-* 老年代空间不足,引起Full GC.这种情况比较复杂,有以下几种:
+* 老年代空间不足引起Full GC的情况比较复杂,有以下几种:
   * 大对象直接进入老年代引起,由-XX:PretenureSizeThreshold参数定义
   * 经历多次Minor GC仍存在的对象进入老年代,由-XX:MaxTenuringThreashold定义
-  * Minor GC时,动态对象年龄判定机制会将对象提前转移老年代.年龄从小到大进行累加,当加入某个年龄段后,累加和超过survivor区域-XX:TargetSurvivorRatio的时候,从这个年龄段往上的年龄的对象进入老年代
-  * Minor GC时,Eden和From Space区向To Space区复制时,大于To Space区可用内存,会直接把对象转移到老年代
+  * Minor GC时,Eden和S0区向S1区复制时,对象大于S1区可用内存,会直接把对象转移到老年代
 * JVM的空间分配担保机制可能会触发Full GC:
   * 在进行Minor GC之前,JVM的空间担保分配机制可能会触发上述老年代空间不足引发的Full GC
   * 空间担保分配是指在发生Minor GC之前,虚拟机会检查老年代最大可用的连续空间是否大于新生代所有对象的总空间
@@ -361,8 +372,14 @@
 * 优先分配到eden
 * 大对象直接分配到老年代
 * 长期存活的对象分配到老年代
-* 空间分配担保:即新生代内存不足时,可能会向老年代借用内存
-* 动态对象年龄判断
+* 空间分配担保:即新生代内存不足时,是否直接MinorGC还是FullGC
+  * 在发生Minor GC之前,虚拟机会检查老年代最大可用的连续空间是否大于新生代所有对象的总空间:如果大于,则此次Minor GC是安全的;如果小于,则虚拟机会查看-xx:HandlePromotionFailure设置值是否允许担保失败
+    * 如果HandlePromotionFailure=true,则会继续检查老年代最大可用连续空间是否大于历次晋升到老年代的对象的平均大小:如果大于,则尝试进行一次Minor GC,但这次Minor GC依然是有风险的;如果小于,则改为进行一次Full GC
+    * 如果HandlePromotionFailure=false,则改为进行一次Full GC
+
+  * 在JDK6之后(JDK7),HandlePromotionFailure参数不会再影响到虚拟机的空间分配担保策略,虽然HandlePromotionFailure参数仍存在,但是在代码中已经不会再使用它.JDK6之后的规则变为只要老年代的连续空间大于新生代对象总大小或者历次晋升的平均大小就会进行Minor GC,否则将进行Full GC
+
+* 动态对象年龄判断:如若S区中相同年龄的所有对象大小总和超过S区的一半,大于等于该年龄的对象直接分配到老年代
 
 
 

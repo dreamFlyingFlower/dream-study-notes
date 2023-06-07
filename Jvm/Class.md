@@ -745,56 +745,6 @@ soucefile_index u2:UTF-8常量索引
 
 
 
-## 实例
-
-
-
-```java
-public class User {
-    private int id;
-    private String name;
-    private int age;
-    public int getId() {
-        return id;
-    }
-    public void setId(int id) {
-        this.id = id;
-    }
-    public String getName() {
-        return name;
-    }
-    public void setName(String name) {
-        this.name = name;
-    }
-    public int getAge() {
-        return age;
-    }
-    public void setAge(int age) {
-        this.age = age;
-    }
-}
-```
-
-16进制文件
-
-![](F:/repository/dream-study-notes/Jvm/img/007.png)
-
-
-
-![](F:/repository/dream-study-notes/Jvm/img/008.png)
-
-
-
-![](F:/repository/dream-study-notes/Jvm/img/009.png)
-
-
-
-![](F:/repository/dream-study-notes/Jvm/img/010.png)
-
-
-
-
-
 # Class文件校验
 
 
@@ -982,6 +932,10 @@ invokespecial #5 // Invoke myClass.<init>
   * `Array Length`: 如果当前对象是一个数组,那么此处存储的就是数组的大小,占用4字节,如果不是数组就不占用
   * 一般占有2个机器码(在32位虚拟机中,1个机器码等于4字节,也就是32bit;在64位虚拟机中,1个机器码是8个字节,也就是64bit),`Mark Word`和`Class Pointer`各占一个机器码,但是如果对象是数组类型,则需要3个机器码,因为JVM虚拟机可以通过Java对象的元数据信息确定Java对象的大小,但是无法从数组的元数据来确认数组的大小,所以用一块来记录数组长度
 * InstanceData:实例数据,存放类的属性数据信息,包括父类的属性信息
+  * 相同宽度的字段总是被分配在一起
+  * 父类中定义的变量会出现在子类之前
+  * 如果CompactFields参数为true(默认为true):子类的变量可能插入到父类变量的空隙
+
 * Padding:无实际意义,主要用来填充以达到字节数为8的倍数,仅仅是为了字节对齐,因为虚拟机要求对象起始地址必须是8字节的整数倍
 
 
@@ -1417,6 +1371,56 @@ public class Generator{
 
 * 在字节码中编译后是相同的,没有区别
 * 在程序赋值时,++i是先自增再赋值;i++是先赋值再自增
+
+
+
+# 实例
+
+
+
+```java
+public class User {
+    private int id;
+    private String name;
+    private int age;
+    public int getId() {
+        return id;
+    }
+    public void setId(int id) {
+        this.id = id;
+    }
+    public String getName() {
+        return name;
+    }
+    public void setName(String name) {
+        this.name = name;
+    }
+    public int getAge() {
+        return age;
+    }
+    public void setAge(int age) {
+        this.age = age;
+    }
+}
+```
+
+16进制文件
+
+![](F:/repository/dream-study-notes/Jvm/img/007.png)
+
+
+
+![](F:/repository/dream-study-notes/Jvm/img/008.png)
+
+
+
+![](F:/repository/dream-study-notes/Jvm/img/009.png)
+
+
+
+![](F:/repository/dream-study-notes/Jvm/img/010.png)
+
+
 
 
 

@@ -449,23 +449,27 @@
 
 
 
+* u表示utf-8编码,数字表示占用字节数
+
+
+
 | 类型           | 名称                | 数量                  | 描述                                             |
 | -------------- | ------------------- | --------------------- | ------------------------------------------------ |
 | u4             | magic               | 1                     | 魔数                                             |
-| u2             | minor_version       | 1                     | minor版本                                        |
-| u2             | major_version       | 1                     | major版本                                        |
-| u2             | constant_pool_count | 1                     | 2字节,常量池中常量数量                           |
+| u2             | minor_version       | 1                     | minor版本,副版本                                 |
+| u2             | major_version       | 1                     | major版本,主版本                                 |
+| u2             | constant_pool_count | 1                     | 常量池中常量数量                                 |
 | cp_info        | constant_pool       | constant_pool_count-1 | 常量数,字节长度不定,由常量池决定                 |
-| u2             | access_flags        | 1                     | 2字节,访问控制符                                 |
-| u2             | this_class          | 1                     | 2字节,类,指向常量池的Class                       |
-| u2             | super_class         | 1                     | 2字节,超类,指向常量池的Class                     |
-| u2             | interfaces_count    | 1                     | 2字节,接口数量                                   |
+| u2             | access_flags        | 1                     | 访问控制符                                       |
+| u2             | this_class          | 1                     | 类,指向常量池的Class                             |
+| u2             | super_class         | 1                     | 超类,指向常量池的Class                           |
+| u2             | interfaces_count    | 1                     | 接口数量                                         |
 | u2             | interfaces          | interfaces_count      | 接口数量,每个interface是指向CONSTANT_Class的索引 |
-| u2             | fields_count        | 1                     | 2字节,字段数量                                   |
+| u2             | fields_count        | 1                     | 字段数量                                         |
 | field_info     | fields              | fields_count          | 字段数,字节长度不定,由字段数量决定               |
-| u2             | methods_count       | 1                     | 2字节,方法数量                                   |
+| u2             | methods_count       | 1                     | 方法数量                                         |
 | method_info    | methods             | methods_count         | 字节长度不定,由方法数量决定                      |
-| u2             | attributes_count    | 1                     | 2字节,属性数量                                   |
+| u2             | attributes_count    | 1                     | 属性数量                                         |
 | attribute_info | attributes          | attributes_count      | 字节长度不定,由属性数量决定                      |
 |                |                     |                       |                                                  |
 
@@ -473,27 +477,50 @@
 
 
 
-* 0xCAFEBABE
+* CAFEBABE:魔数,Class文件的标志
 
 
 
-| JDK版本       | target参数                 | 十六进制minor.major | 十进制minor.major |
-| ------------- | -------------------------- | ------------------- | ----------------- |
-| jdk1.1.8      | 不能带  target  参数       | 00  03 \|00 2D      | 3\|45             |
-| jdk1.2.2      | 不带(默认为  -target  1.1) | 00  03 \|00 2D      | 3\|45             |
-| jdk1.2.2      | -target  1.2               | 00  00 \|00 2E      | 0\|46             |
-| jdk1.3.1_19   | 不带(默认为  -target  1.1) | 00  03 \|00 2D      | 3\|45             |
-| jdk1.3.1_19   | -target  1.3               | 00  00 \|00 2F      | 0\|47             |
-| j2sdk1.4.2_10 | 不带(默认为  -target  1.2) | 00  00 \|00 2E      | 0\|46             |
-| j2sdk1.4.2_10 | -target  1.4               | 00  00 \|00 30      | 0\|48             |
-| jdk1.5.0_11   | 不带(默认为  -target  1.5) | 00  00 \|00 31      | 0\|49             |
-| jdk1.5.0_11   | -target  1.4 -source 1.4   | 00  00 \|00 30      | 0\|48             |
-| jdk1.6.0_01   | 不带(默认为  -target  1.6) | 00  00 \|00 32      | 0\|50             |
-| jdk1.6.0_01   | -target  1.5               | 00  00 \|00 31      | 0\|49             |
-| jdk1.6.0_01   | -target  1.4 -source 1.4   | 00  00 \|00 30      | 0\|48             |
-| jdk1.7.0      | 不带(默认为  -target  1.6) | 00  00 \|00 32      | 0\|50             |
-| jdk1.7.0      | -target  1.7               | 00  00 \|00 33      | 0\|51             |
-| jdk1.7.0      | -target  1.4 -source 1.4   | 00  00 \|00 30      | 0\|48             |
+## version
+
+
+
+* Java 的版本号是从45开始,JDK 1.1之后的每个JDK大版本发布主版本号向上加1
+* 不同版本的Java编译器编译的Class文件对应的版本是不一样的.目前,高版本的Java虚拟机可以执行由低版本编译器生成的Class文件,但是低版本的不能执行由高版本的Class文件,否则JVM会抛出java.lang.UnsupportedClassVersionError异常
+* 虚拟机JDK版本为1.k (k >= 2) 时,对应的class文件格式版本号的范围为45.0 - 44+k.0 (含两端)
+
+
+
+| JDK版本       | target参数               | 十六进制minor.major | 十进制minor.major |
+| ------------- | ------------------------ | ------------------- | ----------------- |
+| jdk1.1.8      | 不能带 target 参数       | 00  03 \|00 2D      | 3\|45             |
+| jdk1.2.2      | 不带(默认为-target  1.1) | 00  03 \|00 2D      | 3\|45             |
+| jdk1.2.2      | -target  1.2             | 00  00 \|00 2E      | 0\|46             |
+| jdk1.3.1_19   | 不带(默认为-target  1.1) | 00  03 \|00 2D      | 3\|45             |
+| jdk1.3.1_19   | -target  1.3             | 00  00 \|00 2F      | 0\|47             |
+| j2sdk1.4.2_10 | 不带(默认为-target  1.2) | 00  00 \|00 2E      | 0\|46             |
+| j2sdk1.4.2_10 | -target  1.4             | 00  00 \|00 30      | 0\|48             |
+| jdk1.5.0_11   | 不带(默认为-target  1.5) | 00  00 \|00 31      | 0\|49             |
+| jdk1.5.0_11   | -target  1.4 -source 1.4 | 00  00 \|00 30      | 0\|48             |
+| jdk1.6.0_01   | 不带(默认为-target  1.6) | 00  00 \|00 32      | 0\|50             |
+| jdk1.6.0_01   | -target  1.5             | 00  00 \|00 31      | 0\|49             |
+| jdk1.6.0_01   | -target  1.4 -source 1.4 | 00  00 \|00 30      | 0\|48             |
+| jdk1.7.0      | 不带(默认为-target  1.6) | 00  00 \|00 32      | 0\|50             |
+| jdk1.7.0      | -target 1.7              | 00  00 \|00 33      | 0\|51             |
+| jdk1.7.0      | -target  1.4 -source 1.4 | 00  00 \|00 30      | 0\|48             |
+| jdk1.8.0      | -target 1.8              | 00  00 \|00 34      | 0\|52             |
+| jdk1.9.0      | -target 1.9              | 00  00 \|00 35      | 0\|53             |
+| jdk1.10.0     | -target 1.10             | 00  00 \|00 36      | 0\|54             |
+| jdk1.11.0     | -target 1.11             | 00  00 \|00 37      | 0\|55             |
+
+
+
+## constant_pool_count
+
+
+
+* 常量池中常量数量,比constant_pool的真实数量要多1个.因为第0项是空出来的,这是为了满足后面某些指向常量池的索引值数据在特定情况下需要表达不引用任何一个常量池项目的含义,这种情况就可用索引0来表示
+* 常量池索引从1开始,不是从0开始
 
 
 
@@ -501,60 +528,160 @@
 
 
 
-* CONSTANT_Utf8:1,UTF-8编码的Unicode字符串
-  * tag 1
-  * length u2
-  * bytes[length]
-* CONSTANT_Integer:3,int类型的字面值
-  * tag 3
-  * byte u4
-* CONSTANT_Float:4,float类型的字面值
-* CONSTANT_Long:5,long类型的字面值
-* CONSTANT_Double:6,double类型的字面值
-* CONSTANT_Class:7,对一个类或接口的符号引用
-  * tag 7
-  * name_index:u2,名字,指向utf8
-* CONSTANT_String:8,String类型字面值的引用
-  * tag 8
-  * string_index:u2,指向utf8的索引
-* CONSTANT_Fieldref:9,对一个字段的符号引用
-  * tag 9
-  * class_index :u2,指向CONSTANT_Class
-  * name_and_type_index:u2,指向CONSTANT_NameAndType
-* CONSTANT_Methodref:10,对一个类中方法的符号引用
-  * tag 10
-  * class_index :u2,指向CONSTANT_Class
-  * name_and_type_index:u2,指向CONSTANT_NameAndType
-* CONSTANT_InterfaceMethodref:11,对一个接口中方法的符号引用
-  * tag 11
-  * class_index :u2,指向CONSTANT_Class
-  * name_and_type_index:u2,指向CONSTANT_NameAndType
-* CONSTANT_NameAndType:12,对一个字段或方法的部分符号引用
-  * tag 12
-  * name_index:u2,名字,指向utf8
-  * descriptor_index:u2,描述符类型,指向utf8
+* 常量池,存放字面量和符号引用,包含了Class文件结果以及子结构中引用的所有字符串常量,类或接口名,字段名和其他常量
+* 字面量:
+  * 文本字符串(String)
+  * 声明为final的常量
+
+* 符号引用:
+  * 类和接口的全限定名
+  * 字段的名称和描述符
+  * 方法的名称描述符
+
+* 常量池中的每一项都具备相同的特征:第1个字节为类型标记(tag),用于确定该项的格式,紧挨着contant_pool_count之后
+* 常量池中常量个数为constant_pool_count-1
 
 
 
-## access_flag
+| 类型                             | 标志(tag) | 长度     | 描述                     |
+| -------------------------------- | --------- | -------- | ------------------------ |
+| CONSTANT_utf8_info               | 1         | u1+u2+un | UTF-8的Unicode字符串     |
+| CONSTANT_Integer_info            | 3         | u1+u4    | int类型的字面量          |
+| CONSTANT_Float_info              | 4         | u1+u4    | float类型的字面量        |
+| CONSTANT_Long_info               | 5         | u1+u8    | long类型的字面量         |
+| CONSTANT_Double_info             | 6         | u1+u8    | double类型的字面量       |
+| CONSTANT_Class_info              | 7         | u1+u2    | 类或接口的符号引用       |
+| CONSTANT_String_info             | 8         | u1+u2    | String类型字面量         |
+| CONSTANT_Fieldref_info           | 9         | u1+u2+u2 | 字段的符号引用           |
+| CONSTANT_Methodref_info          | 10        | u1+u2+u2 | 类中方法的符号引用       |
+| CONSTANT_InterfaceMethodref_info | 11        | u1+u2+u2 | 接口中方法的符号引用     |
+| CONSTANT_NameAndType_info        | 12        | u1+u2+u2 | 字段或方法的部分符号引用 |
+| CONSTANT_MethodHandle_info       | 15        | u1+u1+u2 | 方法句柄                 |
+| CONSTANT_MethodType_info         | 16        | u1+u2    | 方法类型                 |
+| CONSTANT_InvokeDynamic_info      | 18        | u1+u2+u2 | 表示一个动态方法调用点   |
+|                                  |           |          |                          |
+
+* CONSTANT_utf8_info:
+  * length:u2,utf8编码的字符串占用的字节数,通常表示的是类的全限定名,方法名,字段名等
+  * un:紧挨着length的length个字节,表示字符串
+* CONSTANT_Class_info:
+  * name_index:u2,名字,指向全限定名常量池中的索引
+* CONSTANT_String_info:
+  * name_index:u2,指向字符串字面量的索引
+* CONSTANT_Fieldref_info:
+  * class_index :u2,指向常量池中CONSTANT_Class_info的索引项
+  * name_and_type_index:u2,指向常量池中CONSTANT_NameAndType_info的索引项
+* CONSTANT_Methodref_info:
+  * class_index :u2,指向常量池中CONSTANT_Class_info的索引项
+  * name_and_type_index:u2,指向常量池中CONSTANT_NameAndType_info的索引项
+* CONSTANT_InterfaceMethodref_info:
+  * class_index :u2,指向常量池中CONSTANT_Class_info的索引项
+  * name_and_type_index:u2,指向常量池中CONSTANT_NameAndType_info的索引项
+* CONSTANT_NameAndType_info:
+  * name_index:u2,名字,指向该字段或方法名称常量池中的索引
+  * descriptor_index:u2,描述符类型,指向该字段或方法描述符常量池中的索引
+* CONSTANT_MethodHandle_info:
+  * reference_kind:u1,值必须在1-9之间,它决定了方法句柄的类型,方法句柄类型的值表示方法句柄的字节码行为
+  * reference_index:u2,值必须是对常量池的有效索引
+* CONSTANT_MethodType_info:
+  * descriptor_index:u2,值必须是对常量池的有效索引,常量池在该索引处的项必须是CONSTANT_Utf8_info结果,表示方法的描述符
+* CONSTANT_InvokeDynamic_info:
+  * bootstrap_method_attr:u2,值必须是对当前Class文件中引导方法表的bootstrap_methods[]数组的有效索引
+  * name_and_type_index:u2,值必须是对当前常量池的有效索引,常量池在该索引处的项必须是CONSTANT_NameAndType_info结构,表示方法名和方法描述符
 
 
 
-| Flag  Name     | Value  | Interpretation                                    |
-| -------------- | ------ | ------------------------------------------------- |
-| ACC_PUBLIC     | 0x0001 | public                                            |
-| ACC_PRIVATE    | 0x0002 | private                                           |
-| ACC_PROTECTED  | 0x0004 | protected                                         |
-| ACC_STATIC     | 0x0008 | static                                            |
-| ACC_FINAL      | 0x0010 | final,不能被继承                                  |
-| ACC_SUPER      | 0x0020 | 是否允许使用invokespecial指令,JDK1.2后,该值为true |
-| ACC_VOLATILE   | 0x0040 | volatile                                          |
-| ACC_TRANSIENT  | 0x0080 | transient                                         |
-| ACC_INTERFACE  | 0x0200 | 是否是接口                                        |
-| ACC_ABSTRACT   | 0x0400 | 抽象类                                            |
-| ACC_SYNTHETIC  | 0x1000 | 该类不是由用户代码生成,运行时生成的,没有源码      |
-| ACC_ANNOTATION | 0x2000 | 是否为注解                                        |
-| ACC_ENUM       | 0x4000 | 是否是枚举                                        |
+### 描述符
+
+
+
+* 描述字段的数据类型,方法参数列表(包括数量,类型以及顺序)和返回值
+* 基本类型以及void都用一个大写字母表示描述符,对象用L加类的全限定名表示
+
+
+
+| 标志符 | 描述                                           |
+| ------ | ---------------------------------------------- |
+| B      | byte                                           |
+| C      | char                                           |
+| S      | short                                          |
+| I      | int                                            |
+| J      | long                                           |
+| F      | float                                          |
+| D      | double                                         |
+| Z      | boolean                                        |
+| V      | void                                           |
+| L      | 对象,如Ljava/lang/String                       |
+| [      | 数组,多个代表多维数组,如`double[][][]`->`[[[D` |
+|        |                                                |
+
+
+
+## access_flags
+
+
+
+* 访问标识,u2,用于识别类或接口层次的访问信息
+
+
+
+| Flag  Name     | Value  | Interpretation                                     |
+| -------------- | ------ | -------------------------------------------------- |
+| ACC_PUBLIC     | 0x0001 | public                                             |
+| ACC_PRIVATE    | 0x0002 | private                                            |
+| ACC_PROTECTED  | 0x0004 | protected                                          |
+| ACC_STATIC     | 0x0008 | static                                             |
+| ACC_FINAL      | 0x0010 | final,不能被继承                                   |
+| ACC_SUPER      | 0x0020 | 是否允许使用invokespecial指令,JDK1.2后,该值为true  |
+| ACC_VOLATILE   | 0x0040 | volatile                                           |
+| ACC_TRANSIENT  | 0x0080 | transient                                          |
+| ACC_INTERFACE  | 0x0200 | 是否是接口                                         |
+| ACC_ABSTRACT   | 0x0400 | 抽象类                                             |
+| ACC_SYNTHETIC  | 0x1000 | 该类不是由用户代码生成,编译器运行时生成的,没有源码 |
+| ACC_ANNOTATION | 0x2000 | 是否为注解                                         |
+| ACC_ENUM       | 0x4000 | 是否是枚举                                         |
+
+
+
+## this_class
+
+
+
+* 类索引,u2,确定这个类的全限定名,指向常量池的索引
+* 所有常量池的长度表示完之后,紧接着就是this_class
+
+
+
+## super_class
+
+
+
+* 父类索引,u2,确定该类的父类全限定名,指向常量池的索引
+
+
+
+## interfaces_count
+
+
+
+* 接口数量,u2,按照implement或extends后的接口顺序从左到右排序
+
+
+
+## interfaces
+
+
+
+* 接口集合,指向常量池的索引集合,u2
+* 索引从0开始
+
+
+
+## fields_count
+
+
+
+* 字段计数器,索引从0开始
 
 
 
@@ -566,22 +693,24 @@
 
 
 
-* 字段表用于描述接口或类中声明的变量
+* 字段表用于描述接口或类中声明的变量(类变量和成员变量)
 * 获取某个字段有那些标志符,需要用访问标示(access_flag)值分别与标志符的特征值取与(&),如果结果为1,则表示该字段拥有相应的标志符
 * access_flags:字段访问标志,将class文件以16进制方式打开,占2个字节
 * name_index:常量池引用,表示字段的名字
-* descriptor_index:表示字段的类型
-  * B byte
-  * C char
-  * D double
-  * F float
-  * I int
-  * J long
-  * S short
-  * Z boolean
-  * V void
-  * L 引用对象,如Ljava/lang/Object
-  * [ 数组,如 [[Ljava/lang/String; = String\[][]
+* descriptor_index:表示字段的类型,见constant_pool下的描述符
+* ConstantValue_attribute:属于其他属性,final修饰的成员变量会有该属性
+  * attribute_name_index:u2,属性名在常量池中的索引
+  * attribute_length:u4,属性长度
+  * constantvalue_index:u2,属性值在常量池中的索引
+
+
+
+
+## methods_count
+
+
+
+* 方法计数器,索引从0开始
 
 
 
@@ -590,11 +719,13 @@
 
 
 * 方法表用于描述接口或类中声明的方法
-* 方法表的表示和描述和字段表中类似,method_info也和field_info相同
+* 方法表的表示和描述和字段表中类似,method_info比field_info多个attributes_count(u2),在descriptor_index之后
+* 属性信息在attributes_count之后,长度不固定,记录的是代码编译后的内容,对应的是字节码中的Code区域,解读方法同attribute_info
+* 方法中可能出现由编译器自动添加的方法,如`<init>()`
 * 方法描述符
-  * void inc()  **()V**
-  * void setId(int) **(I)V**
-  * int indexOf(char[],int ) **([CI)I**
+  * `void inc()->()V`:表示无参方法,返回类型为void
+  * `void setId(int)->(I)V`:一个int类型参数,返回类型为void
+  * `int indexOf(char[],int )->([CI)I`:一个char类型数组参数,一个int类型参数,返回类型为int
 
 | Flag  Name       | Value  | Interpretation          |
 | ---------------- | ------ | ----------------------- |
@@ -613,9 +744,19 @@
 
 
 
+## attributes_count
+
+
+
+* 属性计数器,索引从0开始
+
+
+
 ## attribute_info
 
 
+
+* 表示的是Class文件携带的辅助信息,如该Class文件的源文件名称,以及注解信息等
 
 ```properties
 attribute_info {
@@ -625,28 +766,34 @@ attribute_info {
 }
 ```
 
-* attribute_name_index:对于任意属性,必须是对当前Class文件的常量池的有效16位无符号索引.常量池在该索引处的项必须是CONSTANT_Utf8_info(结构),表示当前属性的名字
+* attribute_name_index:对于任意属性,必须是对当前Class文件的常量池的有效16位无符号索引.常量池在该索引处的项必须是CONSTANT_Utf8_info(结构),表示当前属性的名字,包含属性计数器和属性表
 * attribute_length:该值给出了跟随其后的字节的长度,这个长度不包括attribute_name_index和attribute_name_index项的6的字节
+* 字节码中具体的字节码执行,如istore_0,aload_0等需要从官方文档上查看其16进制表示
+* 以下是attribute_info可能存在的几种类型
 
-| **名称**          | **使用者**     | **描述**               |
-| ----------------- | -------------- | ---------------------- |
-| Deprecated        | field method   | 字段,方法,类被废弃     |
-| ConstantValue     | field          | final常量              |
-| Code              | method         | 方法的字节码和其他数据 |
-| Exceptions        | method         | 方法的异常             |
-| LineNumberTable   | Code_Attribute | 方法行号和字节码映射   |
-| LocalVaribleTable | Code_Attribute | 方法局部变量表描述     |
-| SourceFile        | Class  file    | 源文件名               |
-| Synthetic         | field method   | 编译器产生的方法或字段 |
-|                   |                |                        |
+| **名称**          | **使用者**     | **描述**                                  |
+| ----------------- | -------------- | ----------------------------------------- |
+| Deprecated        | field,method   | 字段,方法,类被废弃                        |
+| ConstantValue     | field          | final常量                                 |
+| Code              | method         | 方法的字节码和其他数据                    |
+| Exceptions        | method         | 方法的异常                                |
+| LineNumberTable   | Code_Attribute | Java源码的行号和字节码映射                |
+| LocalVaribleTable | Code_Attribute | 方法局部变量表描述                        |
+| SourceFile        | Class  file    | 源文件名                                  |
+| Synthetic         | field method   | 编译器产生的方法或字段                    |
+| EnclosingMethod   | method         | 局部类或匿名类才有,标识该类所在的外围方法 |
+| InnerClass        | Class file     | 内部类列表                                |
+|                   |                |                                           |
 
-* Deprecated:attribute_name_index u2;attribute_length u4
-* attribute_name_index:指向包含Deprecated的UTF-8常量
-* attribute_length:为0
-* ConstantValue:attribute_name_index u2;attribute_length u4;constantvalue_index u2
-* attribute_name_index:包含ConstantantValue字面量的UTF-8索引
-* attribute_length:为2
-* constantvalue_index:常量值,指向常量池,可以是UTF-8,Float,Double等
+* Deprecated:
+  * attribute_name_index:u2,指向包含Deprecated的UTF-8常量
+  * attribute_length:u4,为0
+
+* ConstantValue:常量值,被final修饰的基本类型成员变量会出现该值
+  * attribute_name_index:u2,包含ConstantantValue字面量的UTF-8索引
+  * attribute_length:u4,为2
+  * constantvalue_index:u2,常量值,指向常量池,可以是UTF-8,Float,Double等
+
 
 
 
@@ -656,20 +803,22 @@ attribute_info {
 
 ```java
 Code_attribute {
-    u2 attribute_name_index;
-    u4 attribute_length;
-    u2 max_stack;
-    u2 max_locals;
+    u2 attribute_name_index; // 属性名索引
+    u4 attribute_length; // 属性长度
+    u2 max_stack; // 操作数栈深度的最大值
+    u2 max_locals; // 局部变量表所需的存续空间
     u4 code_length;  // 字节码长度
     u1 code[code_length]; // 字节码
     u2 exception_table_length; // 异常表长度
-    {   u2 start_pc; // 异常处理的开始位置
-        u2 end_pc;
+    {   
+        u2 start_pc; // 异常处理的开始位置
+        u2 end_pc; // 异常处理的结束位置
         u2 handler_pc; // 处理这个异常的字节码位置
         u2 catch_type; // 处理的异常类型,指向Constant_Class的指针
-    } exception_table[exception_table_length];// exception_table在start_pc和end_pc之间,如果遇到catch_type异常或者它的子异常,则转到handler_pc处理
+    } 
+    exception_table[exception_table_length];// exception_table在start_pc和end_pc之间,如果遇到catch_type异常或者它的子异常,则转到handler_pc处理
     u2 attributes_count; // 属性数量
-    attribute_info attributes[attributes_count];
+    attribute_info attributes[attributes_count]; // 属性集合
 }
 ```
 
@@ -683,7 +832,7 @@ Code_attribute {
 
 ```java
 LineNumberTable_attribute {
-    u2 attribute_name_index; // UTF-8常量池，字面量LineNumberTable
+    u2 attribute_name_index; // UTF-8常量池,字面量LineNumberTable
     u4 attribute_length;
     u2 line_number_table_length; // 表项
     {   u2 start_pc; // 字节码偏移量和对应的行号
@@ -702,7 +851,7 @@ LineNumberTable_attribute {
 
 ```java
 LocalVariableTable_attribute {
-    u2 attribute_name_index; // UTF-8常量池，字面量LocalVariableTable
+    u2 attribute_name_index; // UTF-8常量池,字面量LocalVariableTable
     u4 attribute_length;
     u2 local_variable_table_length;
     {   u2 start_pc; // 局部变量作用域
@@ -738,9 +887,11 @@ exception_index_table[number_of_exceptions] u2:指向Constant_Class的索引
 * 描述生成Class文件的源码文件名称
 
 ```java
-attribute_name_index u2
-attribute_length u4:固定为2
-soucefile_index u2:UTF-8常量索引
+{
+	attribute_name_index // u2,属性名索引
+	attribute_length // u4:固定为2,无具体含义
+	sourcefile_index // u2:源码文件索引
+}
 ```
 
 
@@ -971,6 +1122,8 @@ invokespecial #5 // Invoke myClass.<init>
 
 
 ## 概述
+
+
 
 * Java虚拟机的指令是由一个字节长度的,代表某种特定操作含义的数字,称之为操作码,以及跟随其后的0至多个代表此操作所需参数的操作数而构成
 * 操作码的长度为1个字节,因此最大只有256条
@@ -1262,744 +1415,3 @@ public void spin() {
 ### 附加信息
 
 * 虚拟机规范中允许具体的虚拟机实现增加一些规范里没有描述的信息到栈帧中,这部分信息完全取决于虚拟机的实现
-
-
-
-# ASM
-
-
-
-* Java字节码操作框架,可以用于修改现有类或者动态产生新类.如AspectJ,Clojure,spring,cglib
-
-```java
-ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS|ClassWriter.COMPUTE_FRAMES);  
-cw.visit(V1_7, ACC_PUBLIC, "Example", null, "java/lang/Object", null);  
-MethodVisitor mw = cw.visitMethod(ACC_PUBLIC, "<init>", "()V", null,  null);  
-mw.visitVarInsn(ALOAD, 0);  //this 入栈
-mw.visitMethodInsn(INVOKESPECIAL, "java/lang/Object", "<init>", "()V");  
-mw.visitInsn(RETURN);  
-mw.visitMaxs(0, 0);  
-mw.visitEnd();  
-mw = cw.visitMethod(ACC_PUBLIC + ACC_STATIC, "main",  "([Ljava/lang/String;)V", null, null);  
-mw.visitFieldInsn(GETSTATIC, "java/lang/System", "out",  "Ljava/io/PrintStream;");  
-mw.visitLdcInsn("Hello world!");  
-mw.visitMethodInsn(INVOKEVIRTUAL, "java/io/PrintStream", "println",  "(Ljava/lang/String;)V");  
-mw.visitInsn(RETURN);  
-mw.visitMaxs(0,0);  
-mw.visitEnd();  
-byte[] code = cw.toByteArray();  
-AsmHelloWorld loader = new AsmHelloWorld();  
-Class exampleClass = loader  
-    .defineClass("Example", code, 0, code.length);  
-exampleClass.getMethods()[0].invoke(null, new Object[] { null }); 
-```
-
-
-
-## 模型AOP
-
-
-
-在函数开始部分或者结束部分嵌入字节码,可用于进行鉴权、日志等
-
-```java
-// 在操作前加上鉴权或日志
-public class Account { 
-    public void operation() { 
-        System.out.println("operation...."); 
-    } 
-}
-// 需要加入的内容
-public class SecurityChecker { 
-    public static boolean checkSecurity() { 
-        System.out.println("SecurityChecker.checkSecurity ...");
-        return true;
-    } 
-}
-```
-
-```java
-class AddSecurityCheckClassAdapter extends ClassVisitor {
-    public AddSecurityCheckClassAdapter( ClassVisitor cv) {
-        super(Opcodes.ASM5, cv);
-    }
-    // 重写 visitMethod,访问到operation方法时,给出自定义MethodVisitor,实际改写方法内容
-    public MethodVisitor visitMethod(final int access, final String name, 
-                                     final String desc, final String signature, final String[] exceptions) { 
-        MethodVisitor mv = cv.visitMethod(access, name, desc, signature,exceptions);
-        MethodVisitor wrappedMv = mv; 
-        if (mv != null) { 
-            // 对于operation方法
-            if (name.equals("operation")) { 
-                // 使用自定义 MethodVisitor,实际改写方法内容
-                wrappedMv = new AddSecurityCheckMethodAdapter(mv); 
-            } 
-        } 
-        return wrappedMv; 
-    } 
-}
-class AddSecurityCheckMethodAdapter extends MethodVisitor { 
-    public AddSecurityCheckMethodAdapter(MethodVisitor mv) { 
-        super(Opcodes.ASM5,mv); 
-    } 
-    public void visitCode() { 
-        visitMethodInsn(Opcodes.INVOKESTATIC, "geym/jvm/ch10/asm/SecurityChecker", 
-                        "checkSecurity", "()Z"); 
-        super.visitCode();
-    } 
-}
-public class Generator{ 
-    public static void main(String args[]) throws Exception { 
-        ClassReader cr = new ClassReader("geym.jvm.ch10.asm.Account"); 
-        ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS|ClassWriter.COMPUTE_FRAMES); 
-        AddSecurityCheckClassAdapter classAdapter = new AddSecurityCheckClassAdapter(cw); 
-        cr.accept(classAdapter, ClassReader.SKIP_DEBUG); 
-        byte[] data = cw.toByteArray(); 
-        File file = new File("bin/geym/jvm/ch10/asm/Account.class"); 
-        FileOutputStream fout = new FileOutputStream(file); 
-        fout.write(data); 
-        fout.close(); 
-    } 
-}
-```
-
-
-
-# ++i和i++
-
-
-
-* 在字节码中编译后是相同的,没有区别
-* 在程序赋值时,++i是先自增再赋值;i++是先赋值再自增
-
-
-
-# 实例
-
-
-
-```java
-public class User {
-    private int id;
-    private String name;
-    private int age;
-    public int getId() {
-        return id;
-    }
-    public void setId(int id) {
-        this.id = id;
-    }
-    public String getName() {
-        return name;
-    }
-    public void setName(String name) {
-        this.name = name;
-    }
-    public int getAge() {
-        return age;
-    }
-    public void setAge(int age) {
-        this.age = age;
-    }
-}
-```
-
-16进制文件
-
-![](F:/repository/dream-study-notes/Jvm/img/007.png)
-
-
-
-![](F:/repository/dream-study-notes/Jvm/img/008.png)
-
-
-
-![](F:/repository/dream-study-notes/Jvm/img/009.png)
-
-
-
-![](F:/repository/dream-study-notes/Jvm/img/010.png)
-
-
-
-
-
-# 实例1
-
-
-
-```java
-public class MyClass {
-
-	private int a = 5;
-
-	private int ttt;
-
-	private String b = "test";
-
-	private float c = 5.5f;
-
-	private double d = 55.6;
-
-	private int[] aa = new int[7];
-
-	private String[] bb = new String[5];
-
-	private Object obj = new Object();
-
-	private Object[] objs = new Object[5];
-    
-    public int add(int a, int b) {
-        int c = a + b;
-        return 1 + 1;
-	}
-}
-```
-
-使用javap -c 编译该类的class文件,如下
-
-```java
-Compiled from "MyClass.java"
-public class com.wy.jvm.MyClass {
-  public com.wy.jvm.MyClass();
-    Code:
-       0: aload_0
-       1: invokespecial #25                 // Method java/lang/Object."<init>":()V
-       4: aload_0
-       5: iconst_5
-       6: putfield      #27                 // Field a:I
-       9: aload_0
-      10: ldc           #29                 // String test
-      12: putfield      #31                 // Field b:Ljava/lang/String;
-      15: aload_0
-      16: ldc           #33                 // float 5.5f
-      18: putfield      #34                 // Field c:F
-      21: aload_0
-      22: ldc2_w        #36                 // double 55.6d
-      25: putfield      #38                 // Field d:D
-      28: aload_0
-      29: bipush        7
-      31: newarray       int
-      33: putfield      #40                 // Field aa:[I
-      36: aload_0
-      37: iconst_5
-      38: anewarray     #42                 // class java/lang/String
-      41: putfield      #44                 // Field bb:[Ljava/lang/String;
-      44: aload_0
-      45: new           #3                  // class java/lang/Object
-      48: dup
-      49: invokespecial #25                 // Method java/lang/Object."<init>":()V
-      52: putfield      #46                 // Field obj:Ljava/lang/Object;
-      55: aload_0
-      56: iconst_5
-      57: anewarray     #3                  // class java/lang/Object
-      60: putfield      #48                 // Field objs:[Ljava/lang/Object;
-      63: return
-
-  public int add(int, int);
-    Code:
-       0: iload_1
-       1: iload_2
-       2: iadd
-       3: istore_3
-       4: iconst_2
-       5: ireturn
-}
-```
-
-使用javap -verbose编译该类的class文件如下
-
-```java
-Classfile MyClass.class
-  Last modified 2021-9-11; size 853 bytes
-  MD5 checksum e4223d95d677282f40148c88c42eb20e
-  Compiled from "MyClass.java"
-public class com.wy.jvm.MyClass
-  minor version: 0
-  major version: 52
-  flags: ACC_PUBLIC, ACC_SUPER
-Constant pool:
-   #1 = Class              #2             // com/wy/jvm/MyClass
-   #2 = Utf8               com/wy/jvm/MyClass
-   #3 = Class              #4             // java/lang/Object
-   #4 = Utf8               java/lang/Object
-   #5 = Utf8               a
-   #6 = Utf8               I
-   #7 = Utf8               ttt
-   #8 = Utf8               b
-   #9 = Utf8               Ljava/lang/String;
-  #10 = Utf8               c
-  #11 = Utf8               F
-  #12 = Utf8               d
-  #13 = Utf8               D
-  #14 = Utf8               aa
-  #15 = Utf8               [I
-  #16 = Utf8               bb
-  #17 = Utf8               [Ljava/lang/String;
-  #18 = Utf8               obj
-  #19 = Utf8               Ljava/lang/Object;
-  #20 = Utf8               objs
-  #21 = Utf8               [Ljava/lang/Object;
-  #22 = Utf8               <init>
-  #23 = Utf8               ()V
-  #24 = Utf8               Code
-  #25 = Methodref          #3.#26         // java/lang/Object."<init>":()V
-  #26 = NameAndType        #22:#23        // "<init>":()V
-  #27 = Fieldref           #1.#28         // com/wy/jvm/MyClass.a:I
-  #28 = NameAndType        #5:#6          // a:I
-  #29 = String             #30            // test
-  #30 = Utf8               test
-  #31 = Fieldref           #1.#32         // com/wy/jvm/MyClass.b:Ljava/lang/String;
-  #32 = NameAndType        #8:#9          // b:Ljava/lang/String;
-  #33 = Float              5.5f
-  #34 = Fieldref           #1.#35         // com/wy/jvm/MyClass.c:F
-  #35 = NameAndType        #10:#11        // c:F
-  #36 = Double             55.6d
-  #38 = Fieldref           #1.#39         // com/wy/jvm/MyClass.d:D
-  #39 = NameAndType        #12:#13        // d:D
-  #40 = Fieldref           #1.#41         // com/wy/jvm/MyClass.aa:[I
-  #41 = NameAndType        #14:#15        // aa:[I
-  #42 = Class              #43            // java/lang/String
-  #43 = Utf8               java/lang/String
-  #44 = Fieldref           #1.#45         // com/wy/jvm/MyClass.bb:[Ljava/lang/String;
-  #45 = NameAndType        #16:#17        // bb:[Ljava/lang/String;
-  #46 = Fieldref           #1.#47         // com/wy/jvm/MyClass.obj:Ljava/lang/Object;
-  #47 = NameAndType        #18:#19        // obj:Ljava/lang/Object;
-  #48 = Fieldref           #1.#49         // com/wy/jvm/MyClass.objs:[Ljava/lang/Object;
-  #49 = NameAndType        #20:#21        // objs:[Ljava/lang/Object;
-  #50 = Utf8               LineNumberTable
-  #51 = Utf8               LocalVariableTable
-  #52 = Utf8               this
-  #53 = Utf8               Lcom/wy/jvm/MyClass;
-  #54 = Utf8               add
-  #55 = Utf8               (II)I
-  #56 = Utf8               MethodParameters
-  #57 = Utf8               SourceFile
-  #58 = Utf8               MyClass.java
-{
-  public com.wy.jvm.MyClass();
-    descriptor: ()V
-    flags: ACC_PUBLIC
-    Code:
-      stack=3, locals=1, args_size=1
-         0: aload_0
-         1: invokespecial #25                 // Method java/lang/Object."<init>":()V
-         4: aload_0
-         5: iconst_5
-         6: putfield      #27                 // Field a:I
-         9: aload_0
-        10: ldc           #29                 // String test
-        12: putfield      #31                 // Field b:Ljava/lang/String;
-        15: aload_0
-        16: ldc           #33                 // float 5.5f
-        18: putfield      #34                 // Field c:F
-        21: aload_0
-        22: ldc2_w        #36                 // double 55.6d
-        25: putfield      #38                 // Field d:D
-        28: aload_0
-        29: bipush        7
-        31: newarray       int
-        33: putfield      #40                 // Field aa:[I
-        36: aload_0
-        37: iconst_5
-        38: anewarray     #42                 // class java/lang/String
-        41: putfield      #44                 // Field bb:[Ljava/lang/String;
-        44: aload_0
-        45: new           #3                  // class java/lang/Object
-        48: dup
-        49: invokespecial #25                 // Method java/lang/Object."<init>":()V
-        52: putfield      #46                 // Field obj:Ljava/lang/Object;
-        55: aload_0
-        56: iconst_5
-        57: anewarray     #3                  // class java/lang/Object
-        60: putfield      #48                 // Field objs:[Ljava/lang/Object;
-        63: return
-      LineNumberTable:
-        line 10: 0
-        line 12: 4
-        line 16: 9
-        line 18: 15
-        line 20: 21
-        line 22: 28
-        line 24: 36
-        line 26: 44
-        line 28: 55
-        line 10: 63
-      LocalVariableTable:
-        Start  Length  Slot  Name   Signature
-            0      64     0  this   Lcom/wy/jvm/MyClass;
-
-  public int add(int, int);
-    descriptor: (II)I
-    flags: ACC_PUBLIC
-    Code:
-      stack=2, locals=4, args_size=3
-         0: iload_1
-         1: iload_2
-         2: iadd
-         3: istore_3
-         4: iconst_2
-         5: ireturn
-      LineNumberTable:
-        line 31: 0
-        line 32: 4
-      LocalVariableTable:
-        Start  Length  Slot  Name   Signature
-            0       6     0  this   Lcom/wy/jvm/MyClass;
-            0       6     1     a   I
-            0       6     2     b   I
-            4       2     3     c   I
-    MethodParameters:
-      Name                           Flags
-      a
-      b
-}
-SourceFile: "MyClass.java"
-```
-
-* 0: aload_0,加载默认构造函数
-* 1: invokespecial,执行特殊方法,次数表示执行构造函数.()表示空构造,V表示Void,无返回值
-* 4: aload_0:表示加载a字段
-* 5: iconst_5,i表示上一步加载的字段类型为int,初始化为5.如果没有初始化,则没有该行,如ttt字段
-* 6: putfield,将字段加入到字节码中,最后的注释表明了该字段的类型
-  * Field表示是字段,a表示变量名,I表示int类型
-* add方法
-  * 0: iload_1:从局部变量表中加载第一个int类型的参数到操作数栈中.该方法的args_size=3,但实际参数个数要比该值少1,其实是默认加载了this,所有的非静态方法都是如此,构造方法也一样
-  * 1: iload_2:同iload_1,只不过加载的是第2个参数,以此类推
-  * 2: iadd:进行int类型的加法运算
-  * 3: istore_3:将操作数栈中的值存储到局部变量表
-  * 4: iconst_2:由编译器进行优化,直接在编译时期就返回常量
-
-
-
-# 实例2
-
-
-
-```java
-public class MyClass {
-
-	public static int add(int a, int b) {
-		int hour = 24;
-		long m1 = hour * 60 * 60 * 1000;
-		long m2 = hour * 60 * 60 * 1000 * 1000;
-		// 结果是500654080
-		// 在内存中计算时由于都是int类型,计算的结果也是int类型,但超出了int类型的最大值
-		// 根据2进制int类型的长度,只会获得最终bit位的后32位,前面超出的舍弃,最后获得是500654080,得出的结果才会转换为long
-		// 可以使用javap -verbose 该类的字节码文件,查看运行指令
-		System.out.println((int) m2);
-		// 5
-		System.out.println(m2 / m1);
-		return 1 + 1;
-	}
-
-	public static void main(String[] args) {
-		add(1, 2);
-	}
-}
-```
-
-java -verbose MyClass.class
-
-```java
-Classfile MyClass.class
-  Last modified 2021-9-11; size 800 bytes
-  MD5 checksum 6caf640ba85fb6b564360472712d45c0
-  Compiled from "MyClass.java"
-public class com.wy.jvm.MyClass
-  minor version: 0
-  major version: 52
-  flags: ACC_PUBLIC, ACC_SUPER
-Constant pool:
-   #1 = Class              #2             // com/wy/jvm/MyClass
-   #2 = Utf8               com/wy/jvm/MyClass
-   #3 = Class              #4             // java/lang/Object
-   #4 = Utf8               java/lang/Object
-   #5 = Utf8               <init>
-   #6 = Utf8               ()V
-   #7 = Utf8               Code
-   #8 = Methodref          #3.#9          // java/lang/Object."<init>":()V
-   #9 = NameAndType        #5:#6          // "<init>":()V
-  #10 = Utf8               LineNumberTable
-  #11 = Utf8               LocalVariableTable
-  #12 = Utf8               this
-  #13 = Utf8               Lcom/wy/jvm/MyClass;
-  #14 = Utf8               add
-  #15 = Utf8               (II)I
-  #16 = Fieldref           #17.#19        // java/lang/System.out:Ljava/io/PrintStream;
-  #17 = Class              #18            // java/lang/System
-  #18 = Utf8               java/lang/System
-  #19 = NameAndType        #20:#21        // out:Ljava/io/PrintStream;
-  #20 = Utf8               out
-  #21 = Utf8               Ljava/io/PrintStream;
-  #22 = Methodref          #23.#25        // java/io/PrintStream.println:(I)V
-  #23 = Class              #24            // java/io/PrintStream
-  #24 = Utf8               java/io/PrintStream
-  #25 = NameAndType        #26:#27        // println:(I)V
-  #26 = Utf8               println
-  #27 = Utf8               (I)V
-  #28 = Methodref          #23.#29        // java/io/PrintStream.println:(J)V
-  #29 = NameAndType        #26:#30        // println:(J)V
-  #30 = Utf8               (J)V
-  #31 = Utf8               a
-  #32 = Utf8               I
-  #33 = Utf8               b
-  #34 = Utf8               hour
-  #35 = Utf8               m1
-  #36 = Utf8               J
-  #37 = Utf8               m2
-  #38 = Utf8               MethodParameters
-  #39 = Utf8               main
-  #40 = Utf8               ([Ljava/lang/String;)V
-  #41 = Methodref          #1.#42         // com/wy/jvm/MyClass.add:(II)I
-  #42 = NameAndType        #14:#15        // add:(II)I
-  #43 = Utf8               args
-  #44 = Utf8               [Ljava/lang/String;
-  #45 = Utf8               SourceFile
-  #46 = Utf8               MyClass.java
-{
-  public com.wy.jvm.MyClass();
-    descriptor: ()V
-    flags: ACC_PUBLIC
-    Code:
-      stack=1, locals=1, args_size=1
-         0: aload_0
-         1: invokespecial #8                  // Method java/lang/Object."<init>":()V
-         4: return
-      LineNumberTable:
-        line 10: 0
-      LocalVariableTable:
-        Start  Length  Slot  Name   Signature
-            0       5     0  this   Lcom/wy/jvm/MyClass;
-
-  public static int add(int, int);
-    descriptor: (II)I
-    flags: ACC_PUBLIC, ACC_STATIC
-    Code:
-      stack=5, locals=7, args_size=2
-         0: bipush        24
-         2: istore_2
-         3: iload_2
-         4: bipush        60
-         6: imul
-         7: bipush        60
-         9: imul
-        10: sipush        1000
-        13: imul
-        14: i2l
-        15: lstore_3
-        16: iload_2
-        17: bipush        60
-        19: imul
-        20: bipush        60
-        22: imul
-        23: sipush        1000
-        26: imul
-        27: sipush        1000
-        30: imul
-        31: i2l
-        32: lstore        5
-        34: getstatic     #16                 // Field java/lang/System.out:Ljava/io/PrintStream;
-        37: lload         5
-        39: l2i
-        40: invokevirtual #22                 // Method java/io/PrintStream.println:(I)V
-        43: getstatic     #16                 // Field java/lang/System.out:Ljava/io/PrintStream;
-        46: lload         5
-        48: lload_3
-        49: ldiv
-        50: invokevirtual #28                 // Method java/io/PrintStream.println:(J)V
-        53: iconst_2
-        54: ireturn
-      LineNumberTable:
-        line 13: 0
-        line 14: 3
-        line 15: 16
-        line 20: 34
-        line 22: 43
-        line 23: 53
-      LocalVariableTable:
-        Start  Length  Slot  Name   Signature
-            0      55     0     a   I
-            0      55     1     b   I
-            3      52     2  hour   I
-           16      39     3    m1   J
-           34      21     5    m2   J
-    MethodParameters:
-      Name                           Flags
-      a
-      b
-
-  public static void main(java.lang.String[]);
-    descriptor: ([Ljava/lang/String;)V
-    flags: ACC_PUBLIC, ACC_STATIC
-    Code:
-      stack=2, locals=1, args_size=1
-         0: iconst_1
-         1: iconst_2
-         2: invokestatic  #41                 // Method add:(II)I
-         5: pop
-         6: return
-      LineNumberTable:
-        line 27: 0
-        line 28: 6
-      LocalVariableTable:
-        Start  Length  Slot  Name   Signature
-            0       7     0  args   [Ljava/lang/String;
-    MethodParameters:
-      Name                           Flags
-      args
-}
-SourceFile: "MyClass.java"
-```
-
-* 从字节码指令集中可以看出,运行时一直都是int类型,到最后得到结果才从int转换为long,这导致最终的结果与预期的不符
-
-
-
-# 实例3
-
-
-
-```java
-public class Demo01{
-	static{
-		i = 0; // 编译通过
-		System.out.println(i); // 编译不通过
-	}
-	staitc int i = 1;
-}
-```
-
-* 该代码变量的赋值语句可以通过编译,而下面的输出却不能
-* <clinit>()方法是由编译器自动收集类中所有类变量的赋值动作和静态语句块中的语句合并产生的,并在类加载的初始化时调用
-* 编译器收集变量的顺序是由语句在源文件中出现的顺序决定的,**静态语句块中只能访问定义在静态语句块之前的变量,定义在它之后的变量,在前面的语句中可以赋值,但是不能访问**
-
-
-
-# 实例4
-
-
-
-```java
-public class Calc {
-    public int calc() {
-        int a = 500;
-        int b = 200;
-        int c = 50;
-        return (a + b) / c;
-    }
-}
-```
-
-```java
-public int calc();
-  Code:
-   Stack=2, Locals=4, Args_size=1
-   0:   sipush  500
-   3:   istore_1
-   4:   sipush  200
-   7:   istore_2
-   8:   bipush  50
-   10:  istore_3
-   11:  iload_1
-   12:  iload_2
-   13:  iadd
-   14:  iload_3
-   15:  idiv
-   16:  ireturn
-}
-```
-
-简单的执行过程
-
-* sipush:500入栈
-
-![](F:/repository/dream-study-notes/Jvm/img/012.png)
-
-
-
-![](F:/repository/dream-study-notes/Jvm/img/013.png)
-
-
-
-![](F:/repository/dream-study-notes/Jvm/img/014.png)
-
-
-
-* iload_1:第一个局部变量压栈
-
-
-
-![](F:/repository/dream-study-notes/Jvm/img/015.png)
-
-
-
-* iadd:2个数出栈,相加,和入栈
-
-
-
-![](F:/repository/dream-study-notes/Jvm/img/016.png)
-
-
-
-* idiv:2元素出栈,结果入栈;ireturn:将栈顶的整数结果返回
-
-
-
-![](F:/repository/dream-study-notes/Jvm/img/017.png)
-
-
-
-* 简单的字节码执行过程
-
-
-
-![](F:/repository/dream-study-notes/Jvm/img/018.png)
-
-
-
-* 字节码指令为一个byte整数
-
-```java
-_nop                  =   0, // 0x00
-_aconst_null          =   1, // 0x01
-_iconst_0             =   3, // 0x03
-_iconst_1             =   4, // 0x04
-_dconst_1             =  15, // 0x0f
-_bipush               =  16, // 0x10
-_iload_0              =  26, // 0x1a
-_iload_1              =  27, // 0x1b
-_aload_0              =  42, // 0x2a
-_istore               =  54, // 0x36
-_pop                  =  87, // 0x57
-_imul                 = 104, // 0x68
-_idiv                 = 108, // 0x6c
-```
-
-* `void setAge(int)`的字节码
-  * 2A 1B B5 00 20 B1
-  * 2A _aload_0
-    * 无参
-    * 将局部变量slot0 作为引用 压入操作数栈
-  * 1B _iload_1
-    * 无参
-    * 将局部变量slot1 作为整数 压入操作数栈
-  * B5 _putfield
-    * 设置对象中字段的值
-    * 参数为2bytes (00 20) (指明了字段)
-      * 指向常量池的引用
-      * Constant_Fieldref
-      * 此处为User.age
-    * 弹出栈中2个对象:objectref, value
-    * 将栈中的value赋给objectref的给定字段
-  * B1 _return
-
-
-
-# 特殊点
-
-
-
-* Class类中的getDeclaredField()只能拿到当前类中的字段,不能拿到父类中的字段,需要递归
-* Class类中的`getField()/getDeclaredField()`拿到的字段顺序是不固定的,但是长度和每个字段内容都仍然是相同的
-* 类中的修饰符在编译器就已经在字节码文件中确定了,不需要等到运行期

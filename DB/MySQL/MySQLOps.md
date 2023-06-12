@@ -563,21 +563,13 @@ ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '你的�
 * set [session] config_option=xxx:设置会话参数,只对当前会话有效,不影响其他连接
 
 ```mysql
-[client] # 客户端配置文件
-socket=/app/mysql/data/mysql.sock
-port = 3306 # 客户端端口
-default-character-set=utf8mb4 # 客户端字符集
 [mysqld] # 服务端配置文件
-server-id=1 # 服务器唯一标识
 basedir=/app/mysql # mysql安装目录
 datadir=/app/mysql/data # 数据存放目录
 socket=/app/mysql/data/mysql.sock 
 port = 3306 # socket访问端口
 bind-address=0.0.0.0 # 可访问数据库的ip地址,默认只能是本地访问
-character-set-server=utf8mb4 # 服务端字符集
-default_storage_engine # 数据库默认引擎类型,默认InnoDB
-log-bin=mysql-bin # 默认关闭,生产环境一定要开启.所有对数据库的更新操作都会记录到该文件中
-sql-log-bin # 临时不记录binlog
+
 # 0:默认值,表示不主动刷新cache到磁盘,而是由操作系统自己决定
 # 大于0:2次写入到磁盘的间隔不超过binlog的多少次写操作,写1最好.若开启主从同步,该配置要开启
 sync_binlog # 控制mysql如何向磁盘刷新binlog
@@ -589,7 +581,7 @@ sync_binlog # 控制mysql如何向磁盘刷新binlog
 sql_mode # 支持的各种服务器sql模式
 # 若是从库也开启binlog日志,做其他从库的主库(级联),或者做备份,还需要下面的参数
 # log-slave-updates 该参数无值,只需要写上即可,主库不需要
-binlog-ignore-db=mysql,performance-schema # binlog日志中,忽略同步的表,多个用逗号隔开
+binlog-ignore-db=mysql,performance-schema # binlog日志中,忽略同步的表,多个用逗号隔开或写多行
 binlog-do-db = mysql # binlog中只记录某些数据库,多个用逗号隔开
 binlog_format = mixed # binlog的类型,row,statement,mixed
 expire_logs_days = 15 # 保留binlog日志的天数,一般一个星期
@@ -627,14 +619,11 @@ max_allowed_packet = 32M # 结果集的最大容量
 max_length_for_fort_data # 用于排序数据的最大长度,可以影响mysql选择那个排序算法
 # 最大连接数,默认为0无上限
 max_user_connection
-# 确保sysdate()返回日期和now()的结果是一样的
-sysdate_is_now
 optimizer_switch # 设置mysql优化器中那个高级索引合并功能被开启
 init-connect = 'SET NAMES utf8mb4' # 初始化数据库链接时提供的配置信息
 # 数据库连接闲置时间,闲置连接会占用内存资源
 wait_timeout = 600
 interactive_timeout = 600 # 超过多长时间没有写入数据就断开连接,单位s
-autocommit = 1 # 自动提交事务,0为手动提交
 thread_cache_size=768 # 线程缓存大小
 table_cache_size # 缓存表的大小
 # 每个线程排序缓存大小.使用的时候才分配,而且是一次性指定,每个表会分配一个,多表同时排序可能会造成内存溢出
@@ -650,26 +639,13 @@ read_buffer_size=8M
 read_rnd_buffer_size=4M
 # 连接堆栈大小.MySql连接数据达到max_connections时,新来的请求将会被存在堆栈中,以等待连接释放,如果等待连接数超过back_log,将不被授予连接资源
 back_log=1024
-#flush_time=0
-open_files_limit=65535
-table_definition_cache=1400
-# 慢查询日志
-long_query_time = 10 # 慢查询的超时时间,单位为秒
-slow_query_log = 1/on # 开启慢日志,默认不开启
-slow_query_log_file = /data/slow.log # 慢查询日志文件地址
-log_queries_not_using_indexes = 1 # 记录所有未使用索引的查询到日志中
-log_slow_admin_statements = 1
-log_slow_slave_statements = 1
-log_throttle_queries_not_using_indexes = 10
-min_examined_row_limit = 100
+
 # 设置查询缓存大小
 query_cache_size
 # 对表进行顺序扫描的请求将分配一个读入缓冲区,MySql会为它分配一段内存缓冲区.如果对表的顺序扫描请求非常频繁.可以通过增加该变量值以及内存缓冲区大小提高其性能
 read_buffer_size = 16M
 # 每个线程查询时索引缓存大小,只会分配需要的内存大小
 read_rnd_buffer_size = 32M
-# 不需要值,只要该参数存在于配置文件中,表示当前数据库只读,不能写
-read_only
 # 主从开启时从库的设置
 replication-do-db # 设定需要复制的数据库,多个用逗号隔开
 replication-ignore-db # 设定忽略复制的数据库,多个用逗号隔开
@@ -1191,12 +1167,12 @@ systemctl restart crontab # 重启定时任务
 
 
 
-* slave服务器上执行start slave,开启主从复制开关
+* slave服务器上执行start slave,开启主从复制
 * 此时,slave服务器的io线程会通过在master上授权的复制用户权限请求连接master服务器,并请求从指定bin_log日志文件的指定位置(日志文件名和位置就是在配置主从复制服务器时执行的changet master命令指定的)之后发送bin_log日志内容
 * master服务器接收到来自slave服务器的io线程请求后,master服务器上负责复制的io线程根据slave服务器的io线程请求的信息读取指定bin_log日志文件指定位置之后的bin_log日志信息,然后返回给slave端的io线程.返回的信息中除了bin_log日志内容外,还有本次返回日志内容后在master服务器端的新的bin_log文件名以及在bin_log中的下一个指定更新位置
 * 当slave服务器的io线程获取到来自master服务器上io线程发送的日志内容以及日志文件位置点后,将bin_log日志内容一次写入到slave自身的relaylog(中继日志)文件(mysql-relay-bin.xxxxxx)的最末端,并将新的bin_log文件名和位置记录到master-info文件中,以便下次读取master端新bin_log日志时能够告诉master服务器要从新bin_log的那个文件,那个位置开始请求
 * slave服务器的sql线程会实时的检测本地relaylog中新增加的日志内容,并在吱声slave服务器上按语句的顺序执行应用这些sql语句,应用完毕后清理应用过的日志
-* 由于主从同步是异步执行的,突发情况下仍然会造成数据的丢失
+* 由于主从同步是异步串行执行的,突发情况下仍然会造成数据的丢失
 * 正常的主动同步下,应该主从都开启bin_log,在从库上开启全量和增量方式的备份,可以防止人为对主库的误操作导致数据丢失.确保备份的从库实时和主库是同步状态
 
 
@@ -1400,92 +1376,22 @@ systemctl restart crontab # 重启定时任务
 
 
 
+* MySQL版本一致且以后台服务运行
+
 * 每个slave只有一个master,每个master可以有多个slave.5.7后一个从库可以有多个主库
-
-* mysql主从之间的log复制是异步且串行化的
-
-* mysql版本一致且后台以服务运行
-
-* master配置文件/etc/my.cnf的mysqld下添加server-id,这是每个数据库的唯一标识,数字类型,不可重复,主库一般是1
-
-* mysqld下添加log-bin=xxx-bin,该配置为sql二进制日志的文件名,mysql会将所有执行语句存到xxx-bin中
-
-* 从库可以开启bin_log也可以不开启bin_log.若是从库需要进行备份时才开bin_log,不需要备份则不开启
-
-* mysqld下添加log-bin-index=xxx-bin.index,该值为log-bin的值加上index,表示日志文件的索引
-
-* 重启mysql:service mysqld restart,或者/etc/init.d/mysql stop之后/etc/inti.d/mysql start
-
-* 从库配置文件中添加server-id
-
-* mysqld下添加relay-log=slave-relay-bin,开启从库读取主库传到从库的bin-log中数据的线程服务
-
-* mysqld下read-only=0,表示读写都可以
-
-* binlog-ignore-db=mysql:设置不要复制的数据库,可选
-
-* binlog-do-db=需要复制的主数据库名字,设置需要复制的数据库可选
-
-* mysqld下添加relay-log-index=slave-relay-bin.index,表示当前读取的那一个日志
-
-* 重启mysql:service mysqld restart
-
-* 在主库上新建一个专门用来让从库连接的用户
-
-  ```mysql
-  # 创建用户
-  CREATE  USER  'username'  IDENTIFIED   BY  'password';
-  # 赋权其中*.*表示是将主库中所有的库的所有的表REPLICATION权限给username用户
-  GRANT REPLICATION SLAVE ON *.* TO 'username'@'slave_ip' IDENTIFIED BY 'password';
-  # 刷新
-  FLUSH PRIVILEGES;
-  ```
-
-* 查看master状态:show master status;
-
-  * File:此时正在使用的二进制文件名
-  * Position:此时正在File文件的那个位置
-  * Binlog_Do_DB:需要复制的数据库,为null表示所有数据库都复制
-  * Binlog_Ignore_DB:需要忽略的数据库
-
-* 在从库中执行主从语句
-
-  ```mysql
-  # 主库锁表
-  flush table with read lock;
-  # 查看当前主库的日志文件以及位置
-  show master status;
-  # master_log_file:这是从库读取主库的bin-log的文件名,需要从show master status的File获取
-  # master_log_pos:从库读取主库文件时,从那一个位置开始读取,需要从show master status的position获取
-  change master master_host='主库ip',master_port=主库port,master_user='username', master_password='password',master_log_file='xxx-bin.000001',master_log_pos=0;
-  # 完整后解除锁表
-  unlock tables;
-  ```
-
-* 开启主从,从库中执行命令:start slave;
-
-* 停止从库:stop slave;
-
-* 查询主从状态是否正常
-
-  ```mysql
-  # 查看slave装填,\G表示竖行显示,不要加分号,会报错
-  SHOW SLAVE STATUS\G
-  # 若输出的结果中不报错,且Slave_IO_Running和Slave_SLQ_Running都为yes时,表示主从正常
-  ```
 
 * 主从强制从主库查询数据:`/*MASTER*/select * from user;`
 
-* 主库配置文件操作
+* 开始主从同步前,从库上的数据需要先手动使其和主库相同,否则同步会失败
+
+* 主库配置文件,配置完成后重启数据库
 
   ```mysql
   # 配置文件中指定serverid,唯一
   server-id=1
-  # 配置文件中开启主从复制,主库的配置
+  # 配置文件中开启主从复制,指定bin-log名称,会自动添加索引,如mysql-bin.000001
   log-bin = mysql-bin
-  # 配置文件指定主库serverid
-  server-id=1
-  # 配置文件指定同步的数据库,如果不指定则同步全部数据库
+  # 配置文件指定同步的数据库,如果不指定则同步全部数据库.多个用逗号隔开或写多行
   binlog-do-db=my_test
   # 不需要同步的数据库
   binlog-ignore-db=information_schema
@@ -1496,23 +1402,25 @@ systemctl restart crontab # 重启定时任务
   #gtid_mode=on
   #enforce_gtid_consistency=1
   ```
-
+  
 * 主库SQL操作
 
   ```mysql
-  # MySQL中执行SQL语句查询状态,查看主库master_log_file='mysql-bin.000001',master_log_pos=154
-  SHOW MASTER STATUS\G
-  # MySQL中授权用户slave01使用123456密码登录mysql
-  grant replication slave on *.* to 'slave01'@'127.0.0.1' identified by '123456';
-  # MySQL中刷新配置
-  flush privileges;
+  # 创建一个专门用来让从库链接的用户
+  CREATE  USER  'username'  IDENTIFIED   BY  'password';
+  # 赋权其中*.*表示是将主库中所有的库的所有的表REPLICATION权限给username用户
+  GRANT REPLICATION SLAVE ON *.* TO 'username'@'slave_ip' IDENTIFIED BY 'password';
+  # 刷新权限
+  FLUSH PRIVILEGES;
   ```
   
-* 从库配置文件操作
+* 从库配置文件,配置完成后重启
 
   ```mysql
-  # 指定serverid,只要不重复即可,从库也只有这一个配置,其他都在SQL语句中操作
+  # 指定serverid,只要不重复即可,从库只需要这一个配置
   server-id=2
+  # 从库可以开启bin-log也可以不开启.若从库需要进行备份时才开bin-log
+  #bin-log=mysql_bin
   # 不需要同步的数据库
   binlog-ignore-db=information_schema
   binlog-ignore-db=mysql
@@ -1521,28 +1429,73 @@ systemctl restart crontab # 重启定时任务
   # 开启gtid
   #gtid_mode=on
   #enforce_gtid_consistency=1
+  # 是否只读,只要添加就是只读,默认不添加就是可读写
+  #read-only
+  # 指定从库读取主库传到从库的bin-log中数据的线程服务名称
+  #relay-log=slave-relay-bin
+  # 表示当前读取的那一个日志
+  #relay-log-index=slave-relay-bin.index
   ```
 
+* 主库执行SQL
+
+  ```mysql
+  # 主库锁表,防止数据变化
+  FLUSH TABLE WITH READ LOCK;
+  # 查看master上bin-log相关信息,在从库相关SQL操作中需要使用
+  SHOW MASTER STATUS\G
+  ## File:此时正在使用的二进制文件名
+  ## Position:此时正在File文件的那个位置
+  ## Binlog_Do_DB:需要复制的数据库,为null表示所有数据库都复制
+  ## Binlog_Ignore_DB:需要忽略的数据库
+  ```
+  
 * 从库SQL操作
 
   ```mysql
-  # MySQL中执行SQL
+  # 指定主从同步相关配置
   CHANGE MASTER TO
   # 指定主库的ip,端口,用户名和密码
   master_host='127.0.0.1',
   master_port=3306,
   master_user='slave01',
   master_password='123456',
-  # 指定从某个文件开始开始同步.该值和下面的位置值都是从show master status中获取
+  # 指定从主库的那个bin-log文件开始复制.在主库上执行show master status,根据File的值填写
   master_log_file='mysql-bin.000001',
-  # 指定从上述文件的某个位置开始同步
+  # 指定从上述文件的某个位置开始同步.在主库上执行show master status,根据Position的值填写
   master_log_pos=1120;
   # 启动slave同步
   START SLAVE;
-  # 查看同步状态
-  SHOW SLAVE STATUS;
+  # 停止主从
+  # STOP SLAVE;
+  # 查看同步状态,若输出的结果中不报错,且Slave_IO_Running和Slave_SLQ_Running都为yes时,表示主从正常
+  SHOW SLAVE STATUS\G
   ```
 
+* 主库SQL
+
+  ```mysql
+  # 在从库开启了主从之后解除主库锁表
+  unlock tables;
+  ```
+
+
+
+## 简单配置
+
+
+
+* 配置文件的修改同正常配置,不同的是进行主从复制的方式
+
+* 主库锁表:`FLUSH TABLE WITH READ LOCK;`
+
+* 对主库进行备份,同时加上--master-data=1参数,此时在主库的bin_log日志中会自动写入可执行的change master语句,详见4.1
+
+* 使用主库的备份文件在从库上进行恢复,然后在从库中执行进行bin_log同步,此时不再需要加上指定的文件名和文件位置
+
+  ```mysql
+  change master master_host='主库ip',master_port=主库port,master_user='username', master_password='password';
+  ```
 
 
 
@@ -1557,24 +1510,6 @@ systemctl restart crontab # 重启定时任务
 * waiting to reconnect after a failed binlog dump request:如果二进制日志转储请求失败,线程进入睡眠状态,然后定期尝试重新连接,可以使用--master-connect-retry选项指定重试之间的间隔
 * reconnecting after a failed binlog dump request:线程正尝试重新连接主服务器
 * waiting for master to send event:线程已经连接上主服务器,正等待二进制日志事件到达.如果主服务器正空闲,会持续较长时间.如果等待持续slave_read_timeout秒,则发生超时.此时,线程认为连接被中断并企图重新连接
-
-
-
-## 简单配置
-
-
-
-* 配置文件的修改同2正常配置,不同的是进行主从复制的方式
-
-* 对主库进行备份,同时加上--master-data=1参数,此时在主库的bin_log日志中会自动写入可执行的change master语句,详见4.1
-
-* 主库锁表
-
-* bin_log同步,此时不再需要加上指定的文件名和文件位置
-
-  ```mysql
-  change master master_host='主库ip',master_port=主库port,master_user='username', master_password='password';
-  ```
 
 
 

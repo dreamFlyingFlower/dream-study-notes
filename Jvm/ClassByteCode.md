@@ -136,12 +136,17 @@ public void spin() {
 * 除法指令:idiv,ldiv,fdiv,ddiv
 * 求余指令:irem,lrem,frem,drem
 * 取反指令:ineg,lneg,fneg,dneg
-* 位移指令:ishl,ishr,iushr,lshl,lshr,lushr
+* 位移指令:ishl(左移),ishr(右移),iushr(无符号右移),lshl,lshr,lushr
 * 按位或指令:ior,lor
 * 按位与指令:iand,land
 * 按位异或指令:ixor,lxor
-* 局部变量自增指令:iinc
+* 自增指令:iinc,`i++和++i`在字节码指令上是一样的
 * 比较指令:dcmpg,dcmpl,fcmpg,fcmpl,lcmp
+  * 对于double和float类型,由于NaN的存在,各有两个版本的比较指令,它们的区别在于在数字比较时,遇到NaN的处理结果不同
+  * fcmpg遇到NaN返回1,fcmgl遇到NaN返回-1.指令dcmpl和dcmpg也是类似的
+  * `0.0/0.0`会出现NaN
+  * 指令lcmp针对long型整数,由于long型整数没有NaN值,故无需准备两套指令
+
 
 
 
@@ -149,13 +154,26 @@ public void spin() {
 
 
 
-* 类型转换指令可以将两种不同的数值类型进行相互转换,这些转换操作一般用于实现用户代码中的显示类型转换操作以及用来处理字节码指令集中数据类型相关指令无法与数据类型一一对应的问题
+* 类型转换指令可以将两种不同的数值类型进行相互转换,这些转换操作一般用于实现用户代码中的显示类型转换以及处理字节码指令集中数据类型相关指令无法与数据类型一一对应的问题
 * 宽化类型处理和窄化类型处理:类似子类转父类和父类转子类,int转long,long转int
-* i2l,l2i,i2f,l2f,l2d,f2i,f2d,d2i,d2l,d2f,i2b,i2c,i2s
-* i2l:将int转为long
-  * 执行前,栈:..., value
-  * 执行后,栈:...,result.word1,result.word2
-  * 弹出int,扩展为long,并入栈
+* 从int到long,float,double: i2l,i2f,i2d
+* 从long到float,double: l2f,l2d
+* 从fload到double: f2d
+* 从int到byte,short,char: i2b,i2s,i2c
+* 从long到int: l2i
+* 从long到float,double: l2f,l2d
+* 从float到int,long: f2i,f2l
+* 从double到int,long,float: d2i,d2l,d2f
+* 没有直接转的,可以由多次转达成:如double转byte,先转int,再从int转byte
+* 当将一个浮点值窄化转换为整数类型int或long时,将遵循以下转换规则:
+  * 如果浮点值是NaN,那转换结果就是int或long类型的0
+  * 如果浮点值不是无穷大的话,浮点值使用IEEE 754的向零舍入模式取整,获得整数值V,如果V在目标类型T(int或long)的表示范围之内,那转换结果就是V.否则,将根据V的符号,转换为T所能表示的最大或者最小正数
+
+* 当将一个 double 转换为 float 时,将遵循以下转换规则:通过向最接近数舍入模式舍入一个可以使用float表示的数字,最后结果根据情况判断:
+  * 如果转换结果的绝对值太小而无法使用 float来表示,将返回 float类型的正负零
+  * 如果转换结果的绝对值太大而无法使用 float来表示,将返回 float类型的正负无穷大
+  * 对于double 类型的 NaN值将按规定转换为 float类型的 NaN值
+
 
 
 
@@ -163,17 +181,21 @@ public void spin() {
 
 
 
-* new:创建普通类实例的指令
+* new:创建普通类实例的指令,接收一个操作数,为指向常量池的索引,表示要创建的类型.执行完后,将对象引入压入栈顶
 * newarray:基本类型数组创建
 * anewarray:引用类型数组创建
 * multianewarray:多维引用数组创建
 * getfield:获取字段的值
-* putfield:设置字段的值
+* putfield:设置字段的值,从操作数栈中弹出
 * getstatic:获取静态字段的值
 * putstatic:设置静态字段的值
-* 把数组元素加载到操作数栈的指令:baload,caload,iaload,laload,saload,faload,faload,aaload(引用)
-* 将操作数栈的值存储到数组元素:astore
-* 取数组长度的指令:arraylength
+* 把数组元素加载到操作数栈的指令:baload(byte和boolean),caload,saload,iaload,laload,faload,daload,aaload(引用)
+  * xaload在执行时,要求操作数栈栈顶元素为数组索引i,栈顶顺位第2个元素为数组引用a,该指令会弹出栈顶这两个元素,并将a[i]重新压入栈
+
+* 将操作数栈的值存储到数组元素(操作堆,而不是局部变量表):bastore,castore,satore,iastore,lastore,fastore,dastore,aastore
+  * 在xastore执行前,操作数栈顶需要以此准备3个元素: 值,索引,数组引用,xastore会弹出这3个值,并将值赋给数组中指定索引的位置
+
+* 取数组长度的指令:arraylength,弹出栈顶数组元素,获取数组长度,将长度压入栈顶
 * 检查实例类型的指令:instanceof,checkcast
 
 
@@ -318,3 +340,39 @@ public void spin() {
 
 
 * 虚拟机规范中允许具体的虚拟机实现增加一些规范里没有描述的信息到栈帧中,这部分信息完全取决于虚拟机的实现
+
+
+
+
+
+# 案例1
+
+
+
+```java
+// 在字节码层面就是先load还是先自增:i++先load,++i先自增
+public void test(){
+    int i = 10;
+    int j = i++;
+    
+    int m = 20;
+    int n = ++m;
+}
+```
+
+
+
+```java
+0 bipush 10			 // 从常量池加载常量10,压入栈顶
+2 istore_1			// 将10赋值给局部变量表索引为1的变量,即将10赋值给i
+3 iload_1			// 从局部变量表中将索引为1的变量压入栈顶,即将10取出压入栈顶
+4 iinc 1 by 1		    // 将局部变量表索引为1的变量自增1,即将10自增1,i变为11;栈顶的10不变,弹出
+7 istore_2			// 将栈顶弹出的10赋值给局部变量表索引为2的变量,即j赋值为10
+
+8 bipush 20			// 从常量池加载常量20,压入栈顶
+10 istore_3			// 将栈顶的20赋值给局部变量表索引为3的变量,即将m赋值为20
+11 iinr 3 by 1		    // 将局部变量表中索引为3的变量自增1,即将20自增为21,m变为21
+14 iload_3			// 将局部变量表索引为3的值压入栈顶,即将21压入栈顶
+15 istore 4			 // 将栈顶的21弹出,赋值给布局变量表索引为4的变量,即n赋值为21
+17 return
+```

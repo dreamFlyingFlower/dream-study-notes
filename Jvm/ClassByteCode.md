@@ -16,8 +16,7 @@
 * 将一个数值从操作数栈存储到局部变量表:istore,lfda
 * 将一个常量加载到操作数栈:bipush,sipush,ldc,ldc_w,ldc2_w,aconst_null,iconst_m1,iconst
 * 扩充局部变量表的访问索引指令:wide
-
-
+* 
 
 # JVM编译
 
@@ -54,11 +53,8 @@ public void spin() {
 
 
 
-* <clinit>():
-* <init>():
-* nop:什么都不做
-* dup:复制栈顶数值并将复制值压入栈顶
-* new:创建一个对象,并将其引用值压入栈顶
+* <clinit>():如果对象中有静态成员变量,静态代码块时才会调用该构造方法
+* <init>():调用对象的初始化方法(构造函数)
 * i:对int类型的操作
 * l:对long类型的操作
 * s:对short的操作
@@ -223,24 +219,19 @@ public void spin() {
 
 
 * 控制转移指令可以让JVM有条件或无条件的从指定位置指令执行而不是顺序的从下一条指令继续执行程序,即控制转移指令就是在修改PC寄存器的值
-* 条件分支:
-  * ifeq/ifne:如果为0/不为0,则跳转
-    * 参数:byte1,byte2
-    * value出栈,如果栈顶value为0则跳转到(byte1<<8)|byte2
-    * 执行前,栈:...,value
-    * 执行后,栈:...
-  * iflt/ifle:如果小于0/小于等于0,则跳转
-  * ifgt/ifge:如果大于0/大于de等于0,则跳转
-  * ifnull/ifnonnull:如果为null/不为null,则跳转
-  * if_icmpeq/if_icmpne:如果两个int相同/不同,则跳转
-  * if_icmplt/if_icmple:如果int小于/小于等于,则跳转
-  * if_icmpgt/if_icmpge:如果int大于/大于等于,则跳转
-  * if_acmpeq/if_acmpne:如果2个引用类型相同/不同,则跳转
-* 复合条件分支:tableswitch,lookupswitch
-* 无条件分支:goto,goto_w,jsr,jsr_w,ret
-* 在Java虚拟机中有专门的指令集用来处理int和引用类型的条件分支比较操作,为了可以无需明显标识一个实体值是否null,也有专门的指令用来检测 null 值
+* 条件分支,这些指令接收两个字节的操作数用于计算跳转的位置:
+  * ifeq/ifne:如果栈顶元素为0/不为0,则跳转
+  * iflt/ifle:小于0/小于等于0,则跳转
+  * ifgt/ifge:大于0/大于de等于0,则跳转
+  * ifnull/ifnonnull:为null/不为null,则跳转
+  * if_icmpeq/if_icmpne:栈顶2个int相同/不同,则跳转
+  * if_icmplt/if_icmple:栈顶前1个int小于/小于等于后一个int,则跳转
+  * if_icmpgt/if_icmpge:栈顶前1个int大于/大于等于后一个int,则跳转
+  * if_acmpeq/if_acmpne:栈顶2个引用类型相同/不同,则跳转
+* 复合条件(多条件)分支:tableswitch,lookupswitch.2者的区别在于tableswitch的值连续,效率较高
+* 无条件分支:goto,goto_w.goto接收2个字节的的操作数,goto_w接收4个字节的操作数
+* 无条件分支:jsr,jsr_w,ret,主要用于try-finally,且已逐渐被废弃
 * boolean,byte,char,short的条件分支比较操作都使用int比较指令来完成,而对于long,float,double类型的条件分支比较操作,则会先执行相应类型的比较运算指令,运算指令会返回一个整形值到操作数栈中,随后再执行int类型的条件分支比较操作来完成整个分支跳转
-* 由于各种类型的比较最终都会转化为int类型的比较操作,基于int类型比较的这种重要性,Java虚拟机提供了非常丰富的int类型的条件分支指令
 * 所有int类型的条件分支转移指令进行的都是有符号的比较操作
 
 
@@ -265,11 +256,28 @@ public void spin() {
 
 
 
-# 抛出异常
+# 异常指令
 
 
 
-* 在程序中显式抛出异常的操作会由athrow指令实现,除了这种情况,还有别的异常会在其他Java虚拟机指令检测到异常状况时由虚拟机自动抛出
+* 在程序中显式抛出异常的操作会由athrow指令实现,除了这种情况,还有别的异常会在Java虚拟机指令检测到异常状况时由虚拟机自动抛出
+* 如果程序抛出的异常被主动捕获,会使用异常表处理
+* 正常情况下,操作数栈的压入弹出都是一条条指令完成的,唯一的例外情况是在抛异常时,Java 虚拟机会清除操作数栈上的所有内容,而后将异常实例压入调用者操作数栈上
+* 当一个异常被抛出时,JVM会在当前的方法里寻找一个匹配的处理,如果没有找到,这个方法会强制结束并弹出当前栈帧,并且异常会重新抛给上层调用的方法(在调用方法栈帧).如果在所有栈帧弹出前仍然没有找到合适的异常处理,这个线程将终止.如果这个异常在最后一个非守护线程里抛出,将会导致JVM自己终止,比如这个线程是个main线程
+* 不管什么时候抛出异常,如果异常处理最终匹配了所有异常类型,代码就会继续执行.在这种情况下,如果方法结束后没有抛出异常,仍然执行finally块,在return前,它直接跳到finally块来完成目标
+
+
+
+## 异常表
+
+
+
+* 如果方法定义了try-catch 或者try-finally的,就会创建一个异常表,它包含了每个异常处理或者finally块的信息.异常表保存了每个异常处理信息:
+  * 起始位置
+  * 结束位置
+  * 程序计数器记录的代码处理的偏移地址
+  * 被捕获的异常类在常量池甫的索引
+* finally在字节码中会复制2份,如果抛出异常会走异常的一部分;如果有return,则finally中的字节码会复制一份到return之前,见17.案例2
 
 
 
@@ -278,12 +286,15 @@ public void spin() {
 
 
 * Java虚拟机可以支持方法级的同步和方法内部一段指令序列的同步,这两种同步结构都是使用管程(Monitor)来支持的
-* 方法级的同步是隐式,即无需通过字节码指令来控制的,它实现在方法调用和返回操作之中
-* 虚拟机可以从方法常量池中的方法表结构(method_info)中的ACC_SYNCHRONIZED访问标志区分一个方法是否同步方法
-  * 当方法调用时,调用指令将会检查方法的ACC_SYNCHRONIZED访问标志是否被设置,如果设置了,执行线程将先持有管程,然后再执行方法,最后再方法完成(无论是正常完成还是非正常完成)时释放管程
+* 方法级的同步是隐式的,无需通过字节码指令来控制的,虚拟机从常量池的方法表结构(method_info)中的ACC_SYNCHRONIZED访问标志区分方法是否同步
+  * 当方法调用时,调用指令将会检查方法的ACC_SYNCHRONIZED访问标志是否被设置,如果设置了,执行线程将先持有管程,然后再执行方法,最后方法完成(无论是正常完成还是非正常完成)时释放管程
   * 在方法执行期间,执行线程持有了管程,其他任何线程都无法再获得同一个管程
   * 如果一个同步方法执行期间抛出了异常,并且在方法内部无法处理此异常,那这个同步方法所持有的管程将在异常抛到同步方法之外时自动释放
-* 同步一段指令集序列是由Java中的synchronized块来表示的,Java虚拟机的指令集中有monitorenter和monitorexit两条指令来支持synchronized关键字的语义,正确实现synchronized关键字需要编译器与Java虚拟机两者协作支持
+* monitorenter,monitorexit:JVM指令集使用上述两条指令来支持synchronized标识的同步代码块
+  * 当一个线程进入同步代码块时,它使用monitorenter指令请求进入.如果当前对象的监视器计数器为0,则它会被准许进入;若为1,则判断持有当前监视器的线程是否为自己,如果是,则进入,否则进行等待,直到对象的监视器计数器为0,才会被允许进入同步块
+  * 当线程退出同步块时,需要使用monitorexit声明退出.在Java虚拟机中,任何对象都有一个监视器与之相关联,用来判对象是否被锁定,当监视器被持有后,对象处于锁定状态
+  * monitorenter和monitorexit在执行时,都需要在操作数栈顶压入对象,之后monitorenter和monitorexit的锁定和释放都是针对这个对象的监视器进行的
+
 * 结构化锁定(Structured Locking)是指在方法调用期间每一个管程退出都与前面的管程进入相匹配的情形.因为无法保证所有提交给Java虚拟机执行的代码都满足结构化锁定,所以Java虚拟机允许(但不强制要求)通过以下两条规则来保证结构化锁定成立.假设T代表一条线程,M代表一个管程:
   * T在方法执行时持有管程M的次数必须与T在方法完成(正常和非正常完成)时释放管程M的次数相等
   * 在方法调用过程中,任何时刻都不会出现线程T释放管程M的次数比T持有管程M次数多的情况
@@ -299,7 +310,7 @@ public void spin() {
 
 
 
-![](F:/repository/dream-study-notes/Jvm/img/011.png)
+![](img/011.png)
 
 
 
@@ -353,8 +364,6 @@ public void spin() {
 
 
 
-
-
 # 案例1
 
 
@@ -386,3 +395,48 @@ public void test(){
 15 istore 4			 // 将栈顶的21弹出,赋值给布局变量表索引为4的变量,即n赋值为21
 17 return
 ```
+
+
+
+# 案例2
+
+
+
+```java
+public static String test(){
+    String sss = "heiheihei";
+    try{
+        return sss;
+    }finally{
+        sss="lalala";
+    }
+}
+```
+
+
+
+```java
+// 异常表
+start pc				end pc					handler pc					catchType
+3							5							10								cp_info #0
+																							any
+```
+
+
+
+```java
+0 ldc #17 <sss>
+2 astore_0
+3 aload_0						 // 将sss从局部变量表取出,此时为heiheihei压入栈顶
+4 astore_1						// 将heiheihei再存储到局部变量表索引为1的位置
+5 ldc #18 <lalala>			  // 从常量池取出lalala压入栈顶
+7 astore_0					   // 将lalala存储到局部变量表0的位置,覆盖掉原来的heiheihei
+8 aload_1						// 取出局部变量表索引为1的值,此时为heiheihei
+9 areturn						// 返回heiheihei
+10 astore_2					  // 从异常表中可得:当3到5的程序发生异常,即try中的代码发生异常时,直接跳到10.将异常类型存入局部变量表索引为2的位置
+11 ldc #18 <lalala>
+13 astore_0
+14 aload_2					   // 抛出异常
+15 athrow
+```
+

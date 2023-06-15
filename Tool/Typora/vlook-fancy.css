@@ -3107,7 +3107,7 @@ body.unfreeze {
   font: var(--v-f-w-title) 0.5em var(--v-f-fm-h);
 }
 #write h5 {
-  margin: 1em 0 0;
+  margin: 1em 0;
 }
 #write h1,
 #write h2,
@@ -3161,7 +3161,7 @@ body.unfreeze {
 }
 #write h3,
 #write h4 {
-  margin: 2em 0 0;
+  margin: 1em 0;
   font-size: 1.6em;
   counter-reset: h4;
 }
@@ -3192,7 +3192,7 @@ body.unfreeze {
 }
 #write h6 {
   text-align: left;
-  margin: 1em 0 0;
+  margin: 1em 0;
   padding-left: 0;
   padding-top: 0.5em;
   padding-bottom: 0.5em;

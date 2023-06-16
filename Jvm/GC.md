@@ -258,11 +258,19 @@
 
 * CMS尽可能降低了STW,但会影响系统整体吞吐量和性能,而且清理不彻底,会产生内存碎片,适用于响应时间要求高的应用
 * -XX:+UseConcMarkSweepGC:使用CMS GC,开启后将使用ParNew+CMS+Serial Old收集器组合,Serial Old是为了防止CMS回收失败
-* -XX:ConcGCThreads:设置并发线程数
+* -XX:ConcGCThreads:设置并发垃圾收集的线程数,默认该值是基于ParallelGCThreads计算出来的
 * -XX:ParallelCMSThreads:设定CMS的线程数量,默认为`(ParallelThreads + 3)/4`
 * -XX:CMSInitiatingOccupancyFraction:指定回收阀值,JDK6以前默认是68,以后是92.即当老年代空间使用率达到92%时,会执行CMS回收
 * -XX:+UseCMSCompactAtFullCollection:使用CMS回收器之后,是否进行碎片整理
 * -XX:CMSFullGCsBeforeCompaction:设置进行多少次CMS回收之后对内存进行一次压缩
+* -XX:+UseCMSInitiatingoccupancyonly:是否动态可调,这个参数可以使CMS一直按CMSInitiatingOccupancyFraction设定的值启动
+* -XX:+CMSScavengeBeforeRemark: 强制hotspot虚拟机在cms remark阶段之前做一次minor gc,用于提高remark阶段的速度
+* -XX:+CMSClassUnloadingEnable:如果有的话,启用回收Perm 区 (JDK8之前)
+* -XX:+CMSParallelInitialEnabled:用于开启CMS initial-mark阶段采用多线程的方式进行标记,用于提高标记速度,在Java8开始已经默认开启
+* -XX:+CMSParallelRemarkEnabled:用户开启CMS remark阶段采用多线程的方式进行重新标记,默认开启
+* -XX:+ExplicitGCInvokesConcurrent,-XX:+ExplicitGCInvokesConcurrentAndUnloadsClasses:指定hotspot在执行System.gc()时使用CMS周期
+* -XX:+CMSPrecleaningEnabled:指定CMS是否需要进行Pre cleaning这个阶段
+* CMS在JDK9中已经标记为废除,JDK14直接删除了CMS
 
 
 
@@ -295,6 +303,13 @@
 * -XX:ParallelGCThreads:设置并行回收的线程数量,最多为8
 * -XX:InitiatingHeapOccupancyPercent:触发GC的堆占用率大小,默认45%时触发mixed gc
 * -XX:G1HeapRegionSize:1,2,4,8,16,32,只有这几个值,单位是M,分成2048个区域,默认为堆的1/2000
+* -XX:ConcGCThreads:设置并发垃圾收集的线程数,默认该值是基于ParallelGCThreads(1/4)计算出来的
+* -XX:G1NewSizePercent,-XX:G1MaxNewSizePercent:新生代占用整个堆内存的最小百分比(默认5%) 、最大百分比(默认60%)
+* -XX:G1ReservePercent=10:保留内存区域,防止Survivor中的to溢出
+* -XX:G1MixedGCLiveThresholdPercent:old区region中存活的对象占用达到了某个百分比时,才会在Mixed GC中被回收.默认85%
+* -XX:G1HeapWastePercent:在全局并发标记结束之后,可以知道所有的区有多少空间要被回收,在每次Young GC之后和再次发生Mixed GC之前,会检查垃圾占比是否达到此参数,只有达到了,下次才会发生Mixed GC
+* -XX:G1MixedGCCountTarget:一次全局并发标记之后,最多执行Mixed GC的次数,默认是8
+* -XX:G1OldCSetRegionThresholdPercent:设置Mixed GC收集周期中要收集的old region数的上限.默认Java堆的10%
 
 
 
@@ -591,7 +606,7 @@ class OrderExample {
 
 
 
-在JDK安装目录bin下面有很多工具类,他们依赖lib下面的tools.jar
+* 在JDK安装目录bin下面有很多工具类,他们依赖lib下的tools.jar
 
 
 
@@ -599,8 +614,8 @@ class OrderExample {
 
 
 
-* 显示当前服务器上的Java进程PID和运行的程序名称
-* -l:显示程序主函数的完成路径
+* jps []:显示当前服务器上正在运行的Java进程PID和运行的程序名称
+* -l:显示程序主函数的完整路径
 * -m:显示Java程序启动时的入参,类似main方法运行时输入的args
 * -v:显示程序启动时设置的JVM参数
 * -q:指定jps只输出进程ID,不输出类的短名称
@@ -611,7 +626,22 @@ class OrderExample {
 
 
 
-* 运行状态信息,如类装载,内存,垃圾收集,jit编译的信息,详见Oracle官网[jstat]([jstat (oracle.com)](https://docs.oracle.com/javase/8/docs/technotes/tools/unix/jstat.html))
+* `jstat [] [-t] [-hn] pid [interval [count]]`:查看JVM统计信息,如运行状态信息,类装载,内存,垃圾收集,JIT编译的信息,详见Oracle官网[jstat]([jstat (oracle.com)](https://docs.oracle.com/javase/8/docs/technotes/tools/unix/jstat.html))
+  * -class:显示ClassLoader的相关信息,类的装载,卸载数量,总空间,类装载所消耗的时间等
+  * -gc:显示与GC相关的堆信息.包括Eden区,两个Survivor区,老年代永久代等的容量,已用空间,GC时间合计等信息
+  * -gccapacity:显示内容与-gc基本相同,但输出主要关注Java堆各个区域使用到的最大,最小空间
+  * -gcutil:显示内容与-gc基本相同,但输出主要关注已使用空间占总空间的百分比
+  * -gccause:与-gcutil功能一样,但是会额外输出导致最后一次或当前正在发生的GC产生的原因
+  * -gcnew:显示新生代GC状况
+  * -gcnewcapacity:显示内容与-gcnew基本相同,输出主要关注使用到的最大,最小空间
+  * -geold:显示老年代GC状况
+  * -compiler:显示JIT编译器编译过的方法,耗时等信息
+  * -printcompilation:输出已经被JIT编译的方法
+  * -t:程序从开始运行到执行jstat时总共运行了多少秒
+  * -hn:在周期性输出数据时,每隔n次输出一次表头
+  * interval:指定输出的时间间隔,单位毫秒
+  * count:指定输出的次数
+
 
 ```
 S0     S1     E      O      M     CCS    YGC   YGCT    FGC    FGCT     GCT
@@ -630,7 +660,6 @@ S0     S1     E      O      M     CCS    YGC   YGCT    FGC    FGCT     GCT
   * FGC:Full GC次数
   * FGCT:Full GC总共消耗的时间
   * GCT:垃圾回收使用的总时间
-* jstat -gcutil pid interval count:监控间隔时间指定次数的gc.count为监控次数,interval为间隔时间,单位毫秒
 
 
 
@@ -642,6 +671,7 @@ S0     S1     E      O      M     CCS    YGC   YGCT    FGC    FGCT     GCT
 * jinfo -flag  虚拟机参数 pid:查看某个进程的虚拟机设置参数
 * jinfo -flag [+|-] 虚拟机参数 pid:给指定进程加上(+)或禁用(-)某个虚拟机参数
 * jinfo -flag 虚拟机参数key=虚拟机参数value pid:给指定进程的虚拟机参数设置值
+* jinfo -flags pid:查看曾经赋值过个一些参数
 
 
 
@@ -649,10 +679,16 @@ S0     S1     E      O      M     CCS    YGC   YGCT    FGC    FGCT     GCT
 
 
 
-* 生成Java应用程序的堆快照和对象的统计信息
-* jmap -heap pid:查看堆信息
-* jmap -histo pid >c:\s.txt:查看内存中对象数量及大小,并将统计信息输出到指定目录指定文件
-* jmap -dump:format=b,file=c:\heap.hprof pid:将内存使用情况输出,使用jhat查看
+* `jmap [] pid`:生成Java应用程序的内存快照和对象的统计信息
+  * -heap:查看整个堆空间的详细信息,包括GC的使用,堆配置信息,以及内存的使用信息等
+  * -permstat:以ClassLoader为统计口径输出永久代的内存状态信息,仅linux系统有效
+  * -finalizerinfo:显示在F-Queue中等待Finalize线程执行finalize()的对象,仅linux系统有效
+  * -F:当虚拟机进程堆-dump选项没有响应时,可使用此选项强制执行生成dump文件,仅linux系统有效
+  * `-histo >f:\his.txt`:查看堆中统计信息,对象数量及大小,并将统计信息输出到指定文件
+  * `-histo:live > f:\his.txt`: 只输出存活的对象信息
+  * `-dump:format=b,file=f:\heap.hprof`:将内存使用情况输出,使用jhat查看
+  * `-dump:live,format=b,file=f:\heap.hprof`:只保存对内存活的对象
+
 
 
 
@@ -660,8 +696,15 @@ S0     S1     E      O      M     CCS    YGC   YGCT    FGC    FGCT     GCT
 
 
 
-* 查看jmap输出的dump文件,需要单独占用一个端口,可以在页面访问
-* jhat -port 12345 dump文件:分析dump文件,网页可通过ip:12345访问
+* jhat [] dumpfile:查看jmap输出的dump文件,需要单独占用一个端口,可以在页面访问
+  * -port 12345:指定Web访问端口,默认7000
+  * -stack falseltrue:关闭|打开对象分配调用栈跟踪
+  * -refs falseltrue:关闭|打开对象引用跟踪
+  * -exclude exclude-file:执行对象查询时需要排除的数据成员
+  * -baseline exclude-file:指定一个基准堆转储
+  * -debug int:设置debug级别
+  * -version:启动后显示版本信息就退出
+  * `-J<flag>`:传入启动参数,比如J-Xmx512m
 
 
 
@@ -669,33 +712,32 @@ S0     S1     E      O      M     CCS    YGC   YGCT    FGC    FGCT     GCT
 
 
 
-* 打印线程dump
-* -l:打印锁信息
-* -m:打印java和native的帧信息
-* -F:强制dump,当jstack没有响应时使用
+* jstack []:打印线程dump快照,可定位线程停顿过长,死锁,死循环等
+  * -l:打印锁信息
+  * -m:打印java和native的帧信息
+  * -F:强制dump,当jstack没有响应时使用
+
+* 在thread dump中,要留意下面几种状态:
+  * 死锁,Deadlock(重点关注)
+  * 等待资源,Waiting on condition (重点关注)
+  * 等待获取监视器,Waiting on monitor entry (重点关注)
+  * 阻塞,Blocked (重点关注)
+  * 执行中,Runnable
+  * 暂停,Suspended
+  * 对象等待中,Object.wait() 或 TIMED_WAITING
+  * 停止,Parked
 
 
 
-## Jconsole
+
+## Jcmd
 
 
 
-* 可视化查看当前虚拟机中基本的信息,例如CPI,堆,栈,类,线程信息
-* 在windows上直接输入该命令会打开一个可视化界面,选择需要监控的程序即可
-* 在可视化界面中列出了内存,线程(可以检测死锁),类,JVM的相关信息
-
-![](img/024.png)
-
-
-
-## Visualvm
-
-
-
- *          Java虚拟机性能分析工具,jconsole的更强版本,可视化工具,能看到JVM当前几乎所有运行程序的详细信息
- *          需要VisualVM[官网]([VisualVM: Plugins Centers](https://visualvm.github.io/index.html))上下载合适版本
- *          下载完成解压,进入bin,点击visualvm.exe打开,可实时检测Java程序的运行
- *          可以选择安装其他插件,从官网的[插件]([VisualVM: Plugins Centers](https://visualvm.github.io/pluginscenters.html))地址.从VisualVM的工具->插件中安装
+* jcmd []:实现除了jstat之外的所有命令的功能
+* `jcmd [-l]`:列出所有JVM进程
+* `jcmd pid -help`:列出指定进程支持的所有命令
+* `jcmd pid 具体命令`:执行`jcmd pid -help`得到的其中一个具体命令
 
 
 
@@ -709,12 +751,61 @@ S0     S1     E      O      M     CCS    YGC   YGCT    FGC    FGCT     GCT
 
 
 
+## Jconsole
+
+
+
+* 可视化查看当前虚拟机中基本的信息,例如CPU,堆,栈,类,线程信息
+* 在cmd中直接输入该命令会打开一个可视化界面,选择需要监控的程序即可
+  * 本地:直接链接本地的Java程序
+  * 远程:需要配置远程的用户名和密码
+
+* 在可视化界面中列出了内存,线程(可以检测死锁),类,JVM的相关信息
+
+
+
+![](img/030.png)
+
+
+
+![](img/024.png)
+
+
+
+![](img/031.png)
+
+
+
+## JVisualVM
+
+
+
+ *          Java虚拟机性能分析工具,jconsole的更强版本,可视化工具,能看到JVM当前几乎所有运行程序的详细信息
+ *          需要VisualVM[官网]([VisualVM: Plugins Centers](https://visualvm.github.io/index.html))上下载合适版本
+ *          下载完成解压,进入bin,点击visualvm.exe打开,可实时检测Java程序的运行
+ *          可以选择安装其他插件,从官网的[插件]([VisualVM: Plugins Centers](https://visualvm.github.io/pluginscenters.html))地址.从VisualVM的工具->插件中安装,Visual GC是必安插件
+
+![](img/032.png)
+
+
+
+ *          JDK自带的JVisualVM和下载的独立安装的VisualVM功能是相同的,可以直接控制台打开
+ *          可以右键在Java进程上生成堆快照,之后可另存为
+ *          在文件->比较快照可以对2个快照进行比较
+ *          如果有死锁发生,在线程界面的线程dump可以看到明确的提示,想要查看线程情况,点击线程dump即可
+
+
+
+![](img/033.png)
+
+
+
 ## MAT
 
 
 
-* Memory Analyzer Tool:基于Eclipse的[软件](http://www.eclipse.org/mat/),可以直接安装在Eclipse,也可以单独使用
-* 需要先使用Visualvm导出内存相关的dump文件,之后导入MAT中进行分析
+* Memory Analyzer Tool:基于Eclipse的[软件](http://www.eclipse.org/mat/),可以直接安装在Eclipse(插件Memory Analyzer),也可以单独使用
+* 需要先使用VisualVM导出内存相关的dump文件,之后导入MAT中进行分析.MAT也可以自己生成dump文件
 
 
 
@@ -722,181 +813,7 @@ S0     S1     E      O      M     CCS    YGC   YGCT    FGC    FGCT     GCT
 
 
 
-* GC Roots溯源
-
-
-
-# JVM参数
-
-
-
-* 所有参数示例可参见dream-study-java-common项目的com.wy.jvm包
-
-* -Dname=value:设置启动参数,main方法中可读取
-
-* `java -XX:+PrintFlagsFinal -version|grep gc`: 查看所有与GC相关的参数
-
-* -verbose:gc:可以打印GC的简要信息
-
-  ```java
-  [GC 4790K->374K(15872K), 0.0001606 secs]
-  [GC 4790K->374K(15872K), 0.0001474 secs]
-  [GC 4790K->374K(15872K), 0.0001563 secs]
-  [GC 4790K->374K(15872K), 0.0001682 secs]
-  ```
-
-* -XX:+PrintGC:当虚拟机启动后,只要遇到GC就会打印日志
-
-* -XX:+PrintGCDetails:可以查看详细信息,包括各个区的情况
-
-  ```java
-  // DefNew:新生代默认使用的垃圾收集器
-  // Tenured:老年代
-  // ParNew:新生代使用的并行垃圾回收器,Parallel New Generation
-  // PSYoungGen:新生代使用的并行垃圾回收器,Parallel Scavenge
-  // ParOldGen:老年代使用的并行垃圾回收器,Parallel Old Generation
-  // eden为新生代伊甸区,from是s0,to是s1,tenured是老年代,compacting是JDK1.8之前的永久代,JDK1.8称为元空间Metaspace
-  Heap
-   def new generation  total 13824K, used 11223K [0x27e80000,0x28d80000,0x28d80000)
-    eden space 12288K, 91% used [0x27e80000, 0x28975f20, 0x28a80000)
-    from space 1536K,  0% used [0x28a80000, 0x28a80000, 0x28c00000)
-    to   space 1536K,  0% used [0x28c00000, 0x28c00000, 0x28d80000)
-   tenured generation  total 5120K, used 0K [0x28d80000, 0x29280000, 0x34680000)
-     the space 5120K,  0% used [0x28d80000, 0x28d80000, 0x28d80200, 0x29280000)
-   compacting perm gen total 12288K, used 142K [0x34680000, 0x35280000, 0x38680000)
-     the space 12288K, 1% used [0x34680000, 0x346a3a90, 0x346a3c00, 0x35280000)
-      ro space 10240K, 44% used [0x38680000, 0x38af73f0, 0x38af7400, 0x39080000)
-      rw space 12288K, 52% used [0x39080000, 0x396cdd28, 0x396cde00, 0x39c80000)
-  ```
-
-* -XX:+PrintGCTimeStamps:打印CG发生的时间戳
-
-* -XX:+PrintHeapAtGC:每次一次GC后,都打印堆信息
-
-* -XX:+TraceClassLoading:监控类的加载
-
-  ```java
-  [Loaded java.lang.Object from shared objects file]
-  [Loaded java.io.Serializable from shared objects file]
-  [Loaded java.lang.Comparable from shared objects file]
-  [Loaded java.lang.CharSequence from shared objects file]
-  [Loaded java.lang.String from shared objects file]
-  [Loaded java.lang.reflect.GenericDeclaration from shared objects file]
-  [Loaded java.lang.reflect.Type from shared objects file]
-  ```
-
-* -XX:+PrintClassHistogram:按下Ctrl+Break后,打印类的信息
-
-  ```java
-   // 分别显示:序号,实例数量,总大小,类型
-   num     #instances         #bytes  class name
-  ----------------------------------------------
-     1:        890617      470266000  [B
-     2:        890643       21375432  java.util.HashMap$Node
-     3:        890608       14249728  java.lang.Long
-     4:            13        8389712  [Ljava.util.HashMap$Node;
-     5:          2062         371680  [C
-     6:           463          41904  java.lang.Class
-  ```
-
-* -Xloggc:filePath:指定GC日志的位置,以文件形式输出
-
-* -XX:+PrintFlagsFinal:运行java命令时打印参数.=表示默认值,:=表示被修改的值
-
-* -XX:+PrintCommandLineFlags:显示当前JVM使用的垃圾回收器以及初始堆配置
-
-  ```shell
-  java -XX:+PrintCommandLineFlags -version
-  
-  -XX:InitialHeapSize=397443008 -XX:MaxHeapSize=6359088128 -XX:+PrintCommandLineFlags -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:-UseLargePagesIndividualAllocation -XX:+UseParallelGC
-  java version "1.8.0_144"
-  Java(TM) SE Runtime Environment (build 1.8.0_144-b01)
-  Java HotSpot(TM) 64-Bit Server VM (build 25.144-b01, mixed mode)
-  ```
-
-* -Xms:设置JVM堆的最小值,包括新生和老年代,等价于-XX:InitialHeapSize
-
-* -Xmx:设置JVM堆的最大值,等价于-XX:MaxHeapSize.如-Xmx2048M
-
-* -Xmn:设置新生代大小,相当于同时设置NewSize==MaxNewSize,一般会设置为整个堆空间的1/3或1/4
-
-* -XX:NewRatio=n:设置新生代和老年代的比值,如为3,表示年轻代:老年代为1:3.默认为2
-
-* -XX:SurvivorRatio=n:设置新生代中eden和from/to空间比例,默认8,即eden:form:to=8:1:1.但是实际上如果不设置,比例是6:2:2,只有显示的设置该参数时才会是准确的
-
-* -Xss:指定线程的最大栈空间大小,通常只有几百k
-
-* -XX:MetaspaceSize:初始元空间大小
-
-* -XX:MaxMetaspaceSize:最大元空间大小
-
-* -XX:NewSize=n:设置新生代初始大小
-
-* -XX:MaxNewSize=n:设置新生代最大大小,JDK8不能小于1536K
-
-* -XX:PermSize:设置老年代的初始大小,默认是64M
-
-* -XX:MaxPermSize:设置老年代最大值
-
-* -XX:PretenureSizeThreshold:指定占用内存多少的对象直接进入老年代.由系统计算得出,无默认值
-
-* -XX:MaxTenuringThreshold:默认15,只能设置0-15.指经多少次垃圾回收,对象实例从新生代进入老年代.在JDK8中并不会严格的按照该次数进行回收,又是即使没有达到指定次数仍然会进入老年代
-
-* -XX:+HandlePromotionFailure:空间分配担保.+表示开启,-表示禁用
-
-* -XX:+UseSerialGC:配置年轻代为串行回收器
-
-* -XX:+UseParNewGC:在新生代使用并行收集器
-
-* -XX:+UseParallelGC:设置年轻代为并行收集器(Parallel Scavenge)
-
-* -XX:+UseParalledlOldGC:设置老年代并行收集器(Parallel Old)
-
-* -XX:+UseConcMarkSweepGC:新生代使用并行收集器(ParNew),老年代使用CMS+串行收集器(Serial Old)
-
-* -XX:+UseG1GC: 使用G1收集器
-
-* -XX:ParallelGCThreads:设置用于垃圾回收的线程数
-
-* -XX:ParallelCMSThreads:设定CMS的线程数量
-
-* -XX:CMSInitiatingOccupancyFraction:CMS收集器在老年代空间被使用多少后触发
-
-* -XX:+UseCMSCompactAtFullCollection:CMS收集器在完成垃圾收集后是否要进行一次内存碎片整理
-
-* -XX:CMSFullGCsBeforeCompaction:设定进行多少次CMS垃圾回收后,进行一次内存压缩
-
-* -XX:+CMSClassUnloadingEnabled:允许对类元数据进行回收
-
-* -XX:CMSInitiatingPermOccupancyFraction:当永久区占用率达到这一百分比时,启动CMS回收
-
-* -XX:UseCMSInitiatingOccupancyOnly:表示只在到达阀值的时候,才进行CMS回收
-
-* -XX:+HeapDumpOnOutOfMemoryError:使用该参数可以在OOM时导出整个堆信息,文件将导出在程序目录下
-
-* -XX:HeapDumpPath=filePath:设置OOM时导出的信息存放地址,最好是一个目录,不是一个文件
-
-* -XX:OnOutOfMemoryError=filePath:在OOM时,执行一个脚本,如发送邮件
-
-* -XX:MaxGCPauseMillis:设置最大垃圾收集停顿时间,可以把虚拟机在GC停顿的时间控制在指定范围内.如果希望减少GC停顿时间,可以将MaxGCPauseMillis设置的很小,但是会导致GC频繁,从而增加了GC的总时间降低了吞吐量,所以需要根据实际情况设置
-
-* -XX:GCTimeRatio:设置吞吐量大小,它是一个0到100之间的整数,默认情况下是99,系统将花费不超过1/(1+n)的时间用于垃圾回收,也就是1/(1+99)=1%的时间.该参数和-XX:MaxGCPauseMillis是矛盾的,因为停顿时间和吞吐量不可能同时调优
-
-* -XX:UseAdaptiveSizePolicy:自适应模式,在这种情况下,新生代的大小,eden,from/to的比例,以及晋升老年代的对象年龄参数会被自动调整,已达到在堆大小,吞吐量和停顿时间之间的平衡.该参数只适用于Parallel Scavenge GC
-
-* -Xint:在解释模式下会强制JVM执行所有字节码,会降低运行速度10倍以上
-
-* -Xcomp:和Xint相反,JVM在第一次使用时会把所有字节码编译成本地代码,带来最大程度的优化
-
-* -Xmixed:混合模式,由JVM决定使用解释模式或编译模式,JVM的默认模式
-
-
-
-## 日志输出
-
-
-
-* `-Xloggc:/tmp/logs/project/gc-%t.log -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=5 -XX:GCLogFileSize=20M -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCCause`: 将GC日志输出到指定目录,只输出5个文件,每个文件最大20M,若超出5个,循环覆盖前面的日志
+* GC Roots溯源,类似与VisualVM,收费
 
 
 

@@ -560,3 +560,188 @@ public class Sample{
 
 
 
+# JVM参数
+
+
+
+* 所有参数示例可参见dream-study-java-common项目的com.wy.jvm包
+
+* -Dname=value:设置启动参数,main方法中可读取
+
+* `java -XX:+PrintFlagsFinal -version|grep gc`: 查看所有与GC相关的参数
+
+* -verbose:gc:可以打印GC的简要信息
+
+  ```java
+  [GC 4790K->374K(15872K), 0.0001606 secs]
+  [GC 4790K->374K(15872K), 0.0001474 secs]
+  [GC 4790K->374K(15872K), 0.0001563 secs]
+  [GC 4790K->374K(15872K), 0.0001682 secs]
+  ```
+
+* -XX:+PrintGC:当虚拟机启动后,只要遇到GC就会打印日志
+
+* -XX:+PrintGCDetails:可以查看详细信息,包括各个区的情况
+
+  ```java
+  // DefNew:新生代默认使用的垃圾收集器
+  // Tenured:老年代
+  // ParNew:新生代使用的并行垃圾回收器,Parallel New Generation
+  // PSYoungGen:新生代使用的并行垃圾回收器,Parallel Scavenge
+  // ParOldGen:老年代使用的并行垃圾回收器,Parallel Old Generation
+  // eden为新生代伊甸区,from是s0,to是s1,tenured是老年代,compacting是JDK1.8之前的永久代,JDK1.8称为元空间Metaspace
+  Heap
+   def new generation  total 13824K, used 11223K [0x27e80000,0x28d80000,0x28d80000)
+    eden space 12288K, 91% used [0x27e80000, 0x28975f20, 0x28a80000)
+    from space 1536K,  0% used [0x28a80000, 0x28a80000, 0x28c00000)
+    to   space 1536K,  0% used [0x28c00000, 0x28c00000, 0x28d80000)
+   tenured generation  total 5120K, used 0K [0x28d80000, 0x29280000, 0x34680000)
+     the space 5120K,  0% used [0x28d80000, 0x28d80000, 0x28d80200, 0x29280000)
+   compacting perm gen total 12288K, used 142K [0x34680000, 0x35280000, 0x38680000)
+     the space 12288K, 1% used [0x34680000, 0x346a3a90, 0x346a3c00, 0x35280000)
+      ro space 10240K, 44% used [0x38680000, 0x38af73f0, 0x38af7400, 0x39080000)
+      rw space 12288K, 52% used [0x39080000, 0x396cdd28, 0x396cde00, 0x39c80000)
+  ```
+
+* -XX:+PrintGCTimeStamps:打印CG发生的时间戳
+
+* -XX:+PrintHeapAtGC:每次一次GC后,都打印堆信息
+
+* -XX:+TraceClassLoading:监控类的加载
+
+  ```java
+  [Loaded java.lang.Object from shared objects file]
+  [Loaded java.io.Serializable from shared objects file]
+  [Loaded java.lang.Comparable from shared objects file]
+  [Loaded java.lang.CharSequence from shared objects file]
+  [Loaded java.lang.String from shared objects file]
+  [Loaded java.lang.reflect.GenericDeclaration from shared objects file]
+  [Loaded java.lang.reflect.Type from shared objects file]
+  ```
+
+* -XX:+PrintClassHistogram:按下Ctrl+Break后,打印类的信息
+
+  ```java
+   // 分别显示:序号,实例数量,总大小,类型
+   num     #instances         #bytes  class name
+  ----------------------------------------------
+     1:        890617      470266000  [B
+     2:        890643       21375432  java.util.HashMap$Node
+     3:        890608       14249728  java.lang.Long
+     4:            13        8389712  [Ljava.util.HashMap$Node;
+     5:          2062         371680  [C
+     6:           463          41904  java.lang.Class
+  ```
+
+* -Xloggc:filePath:指定GC日志的位置,以文件形式输出
+
+* -XX:+PrintFlagsFinal:运行java命令时打印参数.=表示默认值,:=表示被修改的值
+
+* -XX:+PrintCommandLineFlags:显示当前JVM使用的垃圾回收器以及初始堆配置
+
+  ```shell
+  java -XX:+PrintCommandLineFlags -version
+  
+  -XX:InitialHeapSize=397443008 -XX:MaxHeapSize=6359088128 -XX:+PrintCommandLineFlags -XX:+UseCompressedClassPointers \
+  -XX:+UseCompressedOops -XX:-UseLargePagesIndividualAllocation -XX:+UseParallelGC
+  java version "1.8.0_144"
+  Java(TM) SE Runtime Environment (build 1.8.0_144-b01)
+  Java HotSpot(TM) 64-Bit Server VM (build 25.144-b01, mixed mode)
+  ```
+
+* -Xms:设置JVM堆的最小值,包括新生和老年代,等价于-XX:InitialHeapSize
+
+* -Xmx:设置JVM堆的最大值,等价于-XX:MaxHeapSize.如-Xmx2048M
+
+* -Xmn:设置新生代大小,相当于同时设置NewSize==MaxNewSize,一般会设置为整个堆空间的1/3或1/4
+
+* -XX:NewRatio=n:设置新生代和老年代的比值,如为3,表示年轻代:老年代为1:3.默认为2
+
+* -XX:SurvivorRatio=n:设置新生代中eden和from/to空间比例,默认8,即eden:form:to=8:1:1.但是实际上如果不设置,比例是6:2:2,只有显示的设置该参数时才会是准确的,且必须关闭-XX:-UseAdaptiveSizePolicy,该参数会自动调节3个区域的比例
+
+* -XX:UseAdaptiveSizePolicy:自适应模式,默认开启.新生代的大小,eden,from/to的比例,以及晋升老年代的对象年龄参数会被自动调整,已达到在堆大小,吞吐量和停顿时间之间的平衡.该参数只适用于Parallel Scavenge GC
+
+* -Xss:指定线程的最大栈空间大小,通常只有几百k,等价于-XX:ThreadStackSize
+
+* -XX:PermSize:设置老年代的初始大小,默认是64M.JDK7之前
+
+* -XX:MaxPermSize:设置老年代最大值.JDK7之前
+
+* -XX:MetaspaceSize:初始元空间大小.JDK8之后
+
+* -XX:MaxMetaspaceSize:最大元空间大小,默认无限制.JDK8之后
+
+* -XX:+UseCompressedOops:压缩指针对象
+
+* -XX:+UseCompressedClassPointers:压缩类指针
+
+* -XX:CompressedClassSpaceSize:设置Class Metaspace大小,默认1G
+
+* -XX:MaxDirectMemorySize:指定DirectMemory容量,若不指定,则默认和堆最大值相同
+
+* -XX:NewSize=n:设置新生代初始大小
+
+* -XX:MaxNewSize=n:设置新生代最大大小,JDK8不能小于1536K
+
+* -XX:PretenureSizeThreshold:指定占用内存多少的对象直接进入老年代.由系统计算得出,无默认值
+
+* -XX:MaxTenuringThreshold:默认15,只能设置0-15.指经多少次垃圾回收,对象实例从新生代进入老年代.在JDK8中并不会严格的按照该次数进行回收,又是即使没有达到指定次数仍然会进入老年代
+
+* -XX:+HandlePromotionFailure:空间分配担保.+表示开启,-表示禁用
+
+* -XX:+UseSerialGC:配置年轻代为串行回收器
+
+* -XX:+UseParNewGC:在新生代使用并行收集器
+
+* -XX:+UseParallelGC:设置年轻代为并行收集器(Parallel Scavenge)
+
+* -XX:+UseParallelOldGC:设置老年代并行收集器(Parallel Old)
+
+* -XX:+UseConcMarkSweepGC:新生代使用并行收集器(ParNew),老年代使用CMS+串行收集器(Serial Old)
+
+* -XX:+UseG1GC: 使用G1收集器
+
+* -XX:ParallelGCThreads:设置用于垃圾回收的线程数
+
+* -XX:ParallelCMSThreads:设定CMS的线程数量
+
+* -XX:CMSInitiatingOccupancyFraction:CMS收集器在老年代空间被使用多少后触发
+
+* -XX:+UseCMSCompactAtFullCollection:CMS收集器在完成垃圾收集后是否要进行一次内存碎片整理
+
+* -XX:CMSFullGCsBeforeCompaction:设定进行多少次CMS垃圾回收后,进行一次内存压缩
+
+* -XX:+CMSClassUnloadingEnabled:允许对类元数据进行回收
+
+* -XX:CMSInitiatingPermOccupancyFraction:当永久区占用率达到这一百分比时,启动CMS回收
+
+* -XX:UseCMSInitiatingOccupancyOnly:表示只在到达阀值的时候,才进行CMS回收
+
+* -XX:+HeapDumpOnOutOfMemoryError:使用该参数可以在OOM时导出整个堆信息,文件将导出在程序目录下
+
+* -XX:HeapDumpPath=filePath:设置OOM时导出的信息存放地址,最好是一个目录,不是一个文件
+
+* -XX:OnOutOfMemoryError=filePath:在OOM时,执行一个脚本,如发送邮件
+
+* -XX:MaxGCPauseMillis:设置最大垃圾收集停顿时间,可以把虚拟机在GC停顿的时间控制在指定范围内.如果希望减少GC停顿时间,可以将MaxGCPauseMillis设置的很小,但是会导致GC频繁,从而增加了GC的总时间降低了吞吐量,所以需要根据实际情况设置
+
+* -XX:GCTimeRatio:设置吞吐量大小,它是一个0到100之间的整数,默认情况下是99,系统将花费不超过1/(1+n)的时间用于垃圾回收,也就是1/(1+99)=1%的时间.该参数和-XX:MaxGCPauseMillis是矛盾的,因为停顿时间和吞吐量不可能同时调优
+
+* -Xint:在解释模式下会强制JVM执行所有字节码,会降低运行速度10倍以上
+
+* -Xcomp:和Xint相反,JVM在第一次使用时会把所有字节码编译成本地代码,带来最大程度的优化
+
+* -Xmixed:混合模式,由JVM决定使用解释模式或编译模式,JVM的默认模式
+
+
+
+## 日志输出
+
+
+
+* `-Xloggc:/tmp/logs/project/gc-%t.log -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=5 -XX:GCLogFileSize=20M -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCCause`: 将GC日志输出到指定目录,只输出5个文件,每个文件最大20M,若超出5个,循环覆盖前面的日志
+
+
+
+
+

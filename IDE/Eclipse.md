@@ -33,8 +33,15 @@
 
 
 
-* Ctrl+`:关闭项目
+* Ctrl+`:关闭项目,需自定义
 * CTRL+SHIFT+C: 如果该快捷键无效,可以修改Toggle Line Comment,将When修改为In Windows
+* `CTRL+6`:按1次查询整个WorkSpace,按2次查询当前Project,按3次查询当前文件
+  * `@+`:查找所有bean定义
+  * `@/`:查找所有Controller中的RequestMapping
+  * `@>` :查找所有方法(prototype implementation)
+  * `@`:查找所有Spring注解
+  * `//` :查找所有http请求地址
+
 
 
 

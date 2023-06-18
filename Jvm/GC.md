@@ -785,6 +785,8 @@ S0     S1     E      O      M     CCS    YGC   YGCT    FGC    FGCT     GCT
  *          下载完成解压,进入bin,点击visualvm.exe打开,可实时检测Java程序的运行
  *          可以选择安装其他插件,从官网的[插件]([VisualVM: Plugins Centers](https://visualvm.github.io/pluginscenters.html))地址.从VisualVM的工具->插件中安装,Visual GC是必安插件
 
+
+
 ![](img/032.png)
 
 
@@ -800,20 +802,89 @@ S0     S1     E      O      M     CCS    YGC   YGCT    FGC    FGCT     GCT
 
 
 
-## MAT
-
-
-
-* Memory Analyzer Tool:基于Eclipse的[软件](http://www.eclipse.org/mat/),可以直接安装在Eclipse(插件Memory Analyzer),也可以单独使用
-* 需要先使用VisualVM导出内存相关的dump文件,之后导入MAT中进行分析.MAT也可以自己生成dump文件
-
-
-
 ## JProfiler
 
 
 
 * GC Roots溯源,类似与VisualVM,收费
+
+
+
+## MAT
+
+
+
+* Memory Analyzer Tool:基于Eclipse的[软件](http://www.eclipse.org/mat/),可以直接安装在Eclipse(插件Memory Analyzer),也可以单独使用
+* 需要先使用JVisualVM或JMap导出内存相关的dump文件,之后导入MAT中进行分析.MAT也可以自己生成dump文件
+* MAT自己生成dump文件:File->Acquire Heap Dump
+
+
+
+![](img/034.png)
+
+
+
+* 导入dump文件之后,会出现上述弹框:
+  * Leak Suspects Report:自动检测dump文件中内存泄漏问题
+  * Component Report:分析可疑的内存对象,重复字符串,空集合等
+  * Re-open previously run reports:打开之前运行的dump文件
+
+
+
+### Histogram
+
+
+
+![](img/035.png)
+
+
+
+* 查看堆中对象总览信息,包括类数量,对象大小,GC Root等.从Overview或上面的小图标可进入直方图
+* 点击每个Class Name在左边的Inspector窗口会出现该类的详细信息,包括GC Root
+* Shallow Heap:浅堆,指一个对象本身占用的内存,不包括其内部引用的对象大小,但包含指针大小
+* Retained Heap:深堆,指只能通过该对象访问到的(直接或间接)所有对象的浅堆之和,即对象被回收后,可以释放的真实空间.等同于保留集中所有浅堆大小之和
+* Retained Set:保留集.垃圾回收时只能被对象(包括对象本身)直接或间接访问的所有对象的集合
+
+
+
+### Thread Overview
+
+
+
+![](img/036.png)
+
+
+
+* 线程堆栈信息
+
+
+
+### Arthas
+
+
+
+* 线上诊断工具,[官网下载](https://github.com/alibaba/arthas/releases)
+* 解压后用as.sh启动或用java -jar arthas-boot.jar启动
+* 启动后会检测所有Java程序,需要在控制台中根据序号选择,等待启动完成
+* 启动完成后是在arthas的终端中,可以输入[命令](https://arthas.aliyun.com/doc/commands.html):
+  * dashboard:查看首页
+  * thread:查看线程
+  * jvm:查看jvm相关信息
+  * logger:查看日志
+  * memory:查看内存
+  * sysprop:系统属性信息
+  * heapdump file.hprof:导出堆栈信息
+  * jad classname [func]:反编译全类名的字节码.func为方法名,不需要带参数
+  * mc classname:将java文件编译成class文件,搭配retransform替换jar包中的class
+  * retransform classname:替换jar包中的class文件
+  * monitor:方法执行监控
+  * watch:方法执行数据观测
+  * trace:方法内部调用路径,并输出方法路径上的每个节点上耗时
+  * profiler start:启动火焰图
+  * profiler getSamples:获得已采样的sample数量
+  * profiler stop [filepath]:将火焰图保存到指定目录指定文件,之后可以在Web中访问:`http://localhost:3658/arthas-boot`
+* 也可以在Web界面查看信息:`http://localhost:8563`
+* 查看arthas的日志:`cat ~/logs/arthas/arthas.log`
 
 
 

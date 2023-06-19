@@ -6,13 +6,12 @@
 
 
 
-* 安装相关依赖:yum install -y gcc-c++
-* 下载或上传redis压缩包到linux服务上,解压:tar zxvf redis-5.0.14.tar.gz
-* 编译,设置安装路径为/app/software/redis下:make install PREFIX=/app/software/redis
-* 修改配置文件:vi redis.conf
-* 将daemonize修改成yes,守护进程启动
-* 启动:../redis-server redis.conf
-* ./redis-cli:进入Redis自带客户端中
+* 安装相关依赖:`yum install -y gcc-c++`
+* 下载或上传redis压缩包到linux服务上,解压:`tar zxvf redis-5.0.14.tar.gz`
+* 编译,设置安装路径为/app/software/redis下:`make install PREFIX=/app/software/redis`
+* 修改配置文件:vi redis.conf,将daemonize修改成yes,守护进程启动
+* 启动:`./redis-server redis.conf`
+* `./redis-cli`:进入Redis自带客户端中
 
 
 
@@ -21,6 +20,8 @@
 
 
 ## 备份
+
+
 
 1. 写crontab定时调度脚本去做数据备份
 
@@ -54,13 +55,13 @@
    rm -rf /usr/local/redis/snapshotting/$del_date
    ```
 
-4. 每次复制备份时,都把太久的删掉
-
 5. 每天晚上定时将当前服务器上所有数据备份,发送一份到远程服务器上
 
 
 
 ## 还原
+
+
 
 1. 若redis进程挂掉,那么重启redis进程即可,直接基于RDB或AOF日志文件恢复数据
 2. 若redis进程所在机器挂掉,那么重启机器后,尝试重启redis,尝试基于AOF日志文件进行恢复,若AOF文件破损,那么用redis-check-aof fix
@@ -77,12 +78,16 @@
 
 ## 瓶颈
 
+
+
 1. redis不能支撑高并发的瓶颈是单机,一般单机的redis集合不太可能QPS超过10W
 2. 读写分离,因为写比较少,但是消耗时间.读很多,也比较快
 
 
 
 # 主从
+
+
 
 > redis replication -> 主从架构 -> 读写分离 -> 水平扩容支撑读高并发
 
@@ -108,23 +113,21 @@
     * logfile
     * dir
 * 当启动一个slave的时候,它会发送一个PSYNC命令给master
-* 如果是slave第一次连接master,那么会触发一次全量复制(full resynchronization)
-* 如果是slave重新连接master,那么master仅仅会复制给slave部分缺少的数据
+  * 如果是slave第一次连接master,那么会触发一次全量复制(full resynchronization)
+  * 如果是slave重新连接master,那么master仅仅会复制给slave部分缺少的数据
+
 * 开始全量复制时,master会启动一个后台进程生成一份RDB快照,同时还会将从客户端收到的所有写命令缓存在内存中
+* master如果发现有多个slave都来重连,仅仅会启动一个rdb bgsave操作,用一份数据服务所有slave
 * RDB文件生成完之后,master会将这个RDB发送给slave,slave会先写入本地磁盘,然后再从本地磁盘加载到内存中,然后master会将内存中缓存的写命令发送给slave,slave也会同步这些数据
-* slave如果跟master有网络故障,断开了连接,会自动重连
-* master如果发现有多个slave都来重新连接,仅仅会启动一个rdb save操作,用一份数据服务所有slave
-* 如果主从复制过程中,网络断开,那么可以接着上次复制的地方继续复制,而不是从头开始复制
+* slave在复制的时候,不会打断master的正常工作,也不会打断对自己的查询,它会用旧数据集来提供服务.但是复制完之后,需要删除旧数据集,加载新数据集,这个时候就会暂停对外服务
+* 如果主从复制过程中,网络断开,会自动重连,slave可以接着上次复制的地方继续复制,而不是从头开始复制
   * redis会在内存中创建一个backlog,master和slave都会保存一个replica offset和master id,offset在backlog中
-  * 如果master和slave网络连接断开,slave会让master从上次的replica offset开始继续复制,如果没有找到对应的offset,就会执行一次full resynchronization
+  * 如果master和slave连接断开,slave会让master从上次的replica offset开始继续复制,如果没有找到对应的offset,就会执行一次full resynchronization
 * 采用异步方式复制数据到slave节点,同时slave会周期性地确认自己每次复制的数据量
-* 无磁盘化复制
-  * master在内存中直接创建rdb,通过内部的socket方式发送给slave,不会在本地磁盘落地
+* 无磁盘化复制:master在内存中直接创建rdb,通过内部的socket方式发送给slave,不会在本地磁盘落地
   * repl-diskless-sync:是否开启无磁盘化,默认是no,不开启
   * repl-diskless-sync-delay:等待一定时长再开始复制,因为要等更多slave重新连接过来
 * 一个master可以配置多个slave,slave也可以连接其他slave
-* slave做复制的时候,是不会打断master的正常工作的
-* slave在做复制的时候,也不会打断对自己的查询操作,它会用旧的数据集来提供服务.但是复制完成之后,需要删除旧数据集,加载新数据集,这个时候就会暂停对外服务
 * slave主要用来进行横向扩容,做读写分离,扩容的slave可以提高读的吞吐量
 * slave不会过期key,只会等待master过期key.如果master过期了一个key,或通过LRU淘汰了一个key,就会模拟一条del命令发送给slave
 * master必须开启持久化,否则一旦发生故障,可能造成所有数据丢失
@@ -135,12 +138,12 @@
 
 
 
-* slave启动,只保存master的信息,包括host和ip,在slave的redis.conf里的slaveof配置,但是复制流程没开始
+* slave启动,只保存master的信息,包括host和ip,在slave的redis.conf里的replicaof配置,但是复制流程没开始
 * slave内部有个定时任务,每秒检查是否有新的master要连接和复制,如果发现,就跟master建立socket连接
 * slave发送ping命令给master
 * 口令认证,如果master设置了requirepass,那么salve必须发送masterauth的口令过去进行认证
 * master第一次执行全量复制,将所有数据发给slave
-* master后续持续将写命令,异步复制给slave
+* master后续持续将写命令,异步复制增量数据给slave
 
 
 
@@ -148,16 +151,15 @@
 
 
 
-* 指的就是第一次slave连接msater的时候,执行的全量复制
+* 指第一次slave连接msater的时候,执行的全量复制
 * offset:一个数字,描述复制缓冲区中的指令字节位置  
   * slave每秒都会上报自己的offset给master,同时master也会保存每个slave的offset
   * offset不仅用于全量复制,主要是master和slave都要知道各自的offset,才能知道主从数据是否一致
   * master offset:记录发送给所有slave的指令字节对应的位置,有多个
   * slave offset:记录slave接收master发送过来的指令字节对应的位置,只有一个
-* backlog
+* backlog:主要是用来做全量复制中断时的增量复制
   * master有一个backlog,默认是1MB大小
   * master给slave复制数据时,也会将数据在backlog中同步写一份
-  * backlog主要是用来做全量复制中断时的增量复制
 * master run id
   * info server,可以看到master run id
   * 根据host+ip定位master是不靠谱的,如果master重启或者数据出现了变化,那么slave应该根据不同的run id区分,run id不同就做全量复制
@@ -263,7 +265,7 @@
 
 
 
-* master的CPU占用过高 或 slave频繁断开连接
+* master的CPU占用过高或slave频繁断开连接
 * 问题原因:
   * slave每1秒发送REPLCONF ACK命令到master
   * 当slave接到了慢查询时( keys * , hgetall等),会大量占用CPU性能
@@ -369,14 +371,13 @@
 1. redis cluster之间采用gossip协议进行通信,即不是将所有的集群元数据(故障,节点信息等)存储在某一个单独的节点上,而是每个master上都会存在.当某个master上的数据发生变更时,会和其他master进行通讯,相互之间传递最新的元数据,保持整个集群所有节点的数据完整性
 
 2. goosip协议包含多种信息:ping,pong,meet,fail等
+   1. meet:某个节点发送meet给新加入节点,让新节点加入到集群中,然后新节点就开始和其他节点进行通讯
 
-   > meet:某个节点发送meet给新加入节点,让新节点加入到集群中,然后新节点就开始和其他节点进行通讯
-   >
-   > ping:每个节点都会频繁的给其他节点发送ping信息,其中包括自己的状态和其他需要维护的信息,和其他节点互相交换信息
-   >
-   > pong:当接收到其他节点的ping信息时,返回自己的ping和meet信息
-   >
-   > fail:某个节点判断另外一个节点fail之后,就会通知其他节点
+   2. ping:每个节点都会频繁的给其他节点发送ping信息,其中包括自己的状态和其他需要维护的信息,和其他节点互相交换信息
+
+   3. pong:当接收到其他节点的ping信息时,返回自己的ping和meet信息
+
+   4. fail:某个节点判断另外一个节点fail之后,就会通知其他节点
 
 3. 10000以上的端口进行相互通讯,通常是16379,每隔一段时间发送ping消息,保证节点的正常运行
 
@@ -398,6 +399,8 @@
 
 ## hash slot
 
+
+
 * cluster有固定的16384个hash slot,对每个key计算CRC16值,然后对16384取模,可以获取key对应的hash slot
 * cluster中每个master都会持有部分slot,比如有3个master,那么可能每个master持有5000多个slot
 * slot让node的增加和移除很简单,增加一个master,就将其他master的slot移动部分过去,减少一个master,就将它的slot移动到其他master上去
@@ -408,6 +411,8 @@
 
 
 ## 移动已分配的Slot
+
+
 
 * 假设要迁移123号Slot,从A到B
 * 在B上执行`cluster setslot 123 importing A`
@@ -452,7 +457,7 @@
 
 
 
-1. 哨兵至少需要3个实例,来保证自己的健壮性,以便进行master故障时的选举.如果哨兵季芹仅仅部署了2个哨兵实例,quorum=1,当master宕机时,哨兵(S1)哨兵(S2)只要有1个哨兵认为master宕机就可以切换,同时S1和S2中会选举一个哨兵进行故障转义,而选举需要哨兵中过半数的实例(majority)运行.如果是部署2个哨兵,一台哨兵刚好在master那台机器上,而master那台机器整体瘫痪了,那么就没有足够的实例来同意选举进行故障转移.所以至少要3个哨兵,而且不能部署在同一台机器
+1. 哨兵至少需要3个实例,来保证自己的健壮性,以便进行master故障时的选举.如果仅仅部署了2个哨兵实例,quorum=1,当master宕机时,哨兵(S1)哨兵(S2)只要有1个哨兵认为master宕机就可以切换,同时S1和S2中会选举一个哨兵进行故障转移,而选举需要哨兵中过半数的实例(majority)运行.如果是部署2个哨兵,一台哨兵刚好在master那台机器上,而master那台机器整体瘫痪了,那么就没有足够的实例来同意选举进行故障转移.所以至少要3个哨兵,而且不能部署在同一台机器
 2. 哨兵+redis主从的部署架构,是不会保证数据零丢失的,只能保证redis集群的高可用性
 3. 哨兵+redis主从这种复杂的部署架构,需要在测试环境和生产环境,都进行充足的测试和演练
 4. master故障的时候,因为选举的问题,可能会在极短时间内redis集群无法提供缓存服务
@@ -495,7 +500,7 @@
     * 优先级
     * offset
     * runid
-* 发送指令( sentinel)
+* 发送指令(sentinel)
   * 向新的master发送slaveof no one
   * 向其他slave发送slaveof 新masterIP端口
 
@@ -505,11 +510,9 @@
 
 
 
-* 跟master断开连接的时长:如果一个slave跟master断开连接已经超过了down-after-milliseconds的10倍,外加master宕机的时长,那么slave就被认为不适合选举为master.
+* 跟master断开连接的时长:如果一个slave跟master断开连接已经超过了down-after-milliseconds的10倍,外加master宕机的时长,那么slave就被认为不适合选举为master:`(down-after-milliseconds*10)+milliseconds_since_master_is_in_SDOWN_state`
 
-  (down-after-milliseconds*10)+milliseconds_since_master_is_in_SDOWN_state
-
-* slave优先级:按照slave优先级进行排序,slave priority越低,优先级就越高
+* slave优先级:按照slave优先级进行排序,slave priority越小,优先级就越高
 
 * 复制offset:如果slave priority相同,那么看replica offset,哪个slave复制了越多的数据,offset越靠后,优先级就越高
 
@@ -562,11 +565,13 @@
 
 ## 配置sentinel
 
+
+
 * 配置文件在redis安装目录下的sentinel.conf,端口默认是26379,只能本地访问
-* sentinel monitor mymaster 127.0.0.1 6379 2:mymaster自定义,指定监听的master-slave的名称,后面紧接的是master的ip和端口,最后一个参数是quorum,自定义
-* sentinel down-after-milliseconds mymaster 60000:超过多少毫秒跟一个redis实例断了连接,哨兵就可能认为这个redis实例挂了
-* sentinel failover-timeout mymaster 180000:执行故障转移的timeout超时时长
-* sentinel parallel-syncs mymaster 1:新的master切换之后,同时有多少个slave被切换到去连接新master,重新做同步,数字越低,花费的时间越多.挂载完一批之后再挂载余下的,直到挂载完
+* `sentinel monitor mymaster 127.0.0.1 6379 2`:mymaster自定义,指定监听的master-slave的名称,后面紧接的是master的ip和端口,最后一个参数是quorum,自定义
+* `sentinel down-after-milliseconds mymaster 60000`:超过多少毫秒跟一个redis实例断了连接,哨兵就可能认为这个redis实例挂了
+* `sentinel failover-timeout mymaster 180000`:执行故障转移的timeout超时时长
+* `sentinel parallel-syncs mymaster 1`:新的master切换之后,同时有多少个slave被切换到去连接新master,重新做同步,数字越低,花费的时间越多.挂载完一批之后再挂载余下的,直到挂载完
 * 启动哨兵:
 * sentinel相关操作
   * ./src/redis-sentinel:启动sentinel
@@ -711,12 +716,26 @@
 
 
 
+## docker中使用
+
+
+
+* -p localport:dockerport:将docker中的端口映射到本地端口
+* --restart=always:总是随着docker的启动而启动
+* --requirepass:使用密码进入redis-cli
+* -v /localdir:/dockerdir:将docker中的目录映射到本地的目录中
+* --name:容器的名称,自定义
+* `redis[:6.2.5]`:镜像的名称:镜像版本,若不是最新版本的redis,需要加上版本号,如redis:6.2.5
+* redis-server:启动命令
+* --appendonly:开启AOF
+
 ```shell
 #docker启动redis
 docker run -d -p 6379:6379 --restart=always \
+--requirepass '123456' \
 -v /app/redis/conf/redis.conf:/etc/redis/redis.conf \
--v  /app/redis-01/data:/data \
+-v  /app/redis/data:/data \
  --name redis-01 redis:6.2.5 \
- redis-server /etc/redis/redis.conf
+ redis-server /etc/redis/redis.conf --appendonly yes
 ```
 

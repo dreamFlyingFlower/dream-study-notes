@@ -574,6 +574,9 @@
   --primary-color: #d36c28;
   --rawblock-edit-panel-bd: var(--d-bc-lg);
 }
+ul {
+  margin: 0;
+}
 .typora-export-sidebar {
   display: none !important;
 }
@@ -1652,7 +1655,7 @@ content > #write {
   font-family: var(--v-f-fm-code);
   border-radius: var(--v-r-b);
   border: 2px solid var(--tbl-bder);
-  margin: 0 0 0.5em;
+  margin: 1em 0;
 }
 #write pre.ty-contain-cm {
   padding: 0;
@@ -2847,7 +2850,7 @@ body.unfreeze {
 #write p > svg[data-inject-url*='align=center'],
 #write svg[data-inject-url*='mode=figure'] {
   display: block !important;
-  margin: auto !important;
+  margin: 0.5em 0 !important;
 }
 #write p > .md-image:only-child:not(.md-img-error) > img[src*='#left'],
 #write p > .md-image:only-child:not(.md-img-error) > img[src*='align=left'],
@@ -3107,7 +3110,7 @@ body.unfreeze {
   font: var(--v-f-w-title) 0.5em var(--v-f-fm-h);
 }
 #write h5 {
-  margin: 1em 0;
+  margin: 0.5em 0;
 }
 #write h1,
 #write h2,
@@ -3142,7 +3145,7 @@ body.unfreeze {
 }
 #write h1,
 #write h2 {
-  margin: 1em 0;
+  margin: 0.5em 0;
   font-size: 2em;
   counter-reset: h2;
 }
@@ -3161,7 +3164,7 @@ body.unfreeze {
 }
 #write h3,
 #write h4 {
-  margin: 1em 0;
+  margin: 0.5em 0;
   font-size: 1.6em;
   counter-reset: h4;
 }

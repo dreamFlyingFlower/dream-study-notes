@@ -1,33 +1,34 @@
 # Redis
 
+
+
 # 概述
 
-* redis主要来做系统缓存,减少程序对数据库的访问,加大程序吞吐量
-* redis默认有16384的slots(槽).每个槽可以存储多个hash值
+
+
+* redis默认有16384个slots(槽),每个槽可以存储多个hash值
 * redis的3种主从模式
   * 普通模式:单主,多从,主从节点数据一致,故障自动切换
-  * 哨兵模式:单主,多从,主从节点数据一致,另外一个为哨兵节点,用来检测其他节点的运行状态
+  * 哨兵模式:单主,多从,哨兵只为主节点配置,数据和主节点相同,主要用来检测其他节点的运行状态,故障时进行切换
   * 集群模式:多主,每一个节点有多个从节点,数据分摊,实现高可用
-* redis持久化
-  * RDB模式:默认策略,周期性的将内存中的数据写入dump.rdb文件中,可能会造成数据丢失
-  * AOF模式:当redis发生了类似数据库的DML操作时,将会实时写入日志文件中,不会造成数据丢失
-* redis常用配置文件
-  * daemonize:默认no,前台启动.该为yes守护线程启动
-  * appendonly:默认no,不开启AOF持久化.改为yes开启,防止数据丢失过多
-* redis的发布/订阅
-  * 只能在集群中或同一台机器中使用
-  * 发布主题:publish topic content:topic为发布的主题名,content为发布的内容
-  * 订阅主题:每个redis可监听多个发布的主题
-    * subscribe topic1 topic2...:精准订阅,完全符合topic的才会收到消息
-    * psubscribe topic*:通过通配符订阅多个主题
+
+
 
 # 核心
 
+
+
 ## 单线程工作
+
+
 
 ![](REDIS01.PNG)
 
+
+
 # 事务
+
+
 
 > redis的事务比较简单,multi命令打开事务,之后开始进行设置.设置的值都会放在一个队列中进行保存,当设置完之后,使用exec命令,执行队列中的所有操作
 
@@ -37,26 +38,26 @@
 
 * 不保证原子性,也就是不保证所有指令同时成功或同时失败,只有决定是否开始执行全部指令的能力,没有执行到一半进行回滚的能力
 
-* watch key1...:监视一组key,当某个key的值发生变动时,事务被打断
+* watch key1...:监听一组key,当某个key的值发生变动时,事务被打断
 
-* unwatch:取消监视
+* unwatch:取消监听
 
-* multi:开始事务
+* multi:开始事务,之后可以使用set等命令添加或修改元素
 
 * exec:执行事务内的所有命令,同时会取消watch的监听
 
 * discard:取消事务
 
-* **若在加入队列过程中发生了异常,整个队列中的操作都将无效.若是在加入队列之后,执行exec时发生异常,那么发生异常的操作会无效,其他未发生异常的操作仍然有效**
+* **若在加入队列过程中发生了异常,整个事务都将无效.若是在执行exec时发生异常,那么发生异常的操作会无效,其他未发生异常的操作仍然有效**
 
-* 使用watch监听key时,若事务还未开始,而其他线程对监听的key进行了修改操作,之后再开始事务,此时,事务内所有的操作都将无效.该功能可以认为是一种乐观锁机制,一旦被监听的key值发生了改变,说明事务失效,需要重新查询之后再做操作
+* 使用watch监听key时,若事务还未开始,而其他线程对key进行了修改,之后再开始事务,此时事务内所有的操作都将无效.该功能可以认为是一种乐观锁机制
   
   ```shell
   # watch必须在事务开启之前使用
   watct name
   multi
   set name test
-  # 若在执行exec之前另外一个线程改变了name的值,那么事务全部无效
+  # 若在执行exec之前另外一个线程改变了name的值,那么事务全部无效;若是执行exex时,其他操作发生异常,未发生异常的操作仍然有效
   exec
   ```
 
@@ -66,21 +67,16 @@
 
 
 
-* Redis的发布订阅模式可以实现进程间的消息传递
-
-* publish:发布消息,格式是publish channel 消息
-
-* subscribe:订阅频道,格式是subscribe channel,可以是多个channel
-
-* psubscribe:订阅频道,格式是psubscribe channel,支持glob风格的通配符
-
-* unsubscribe:取消订阅,格式是unsubscribe channel,不指定频道表示取消所有subscribe命令的订阅
-
-* punsubscribe:取消订阅,格式是punsubscribe channel,不指定频道表示取消所有psubscribe命令的订阅.这里匹配模式的时候,是不会将通配符展开的,是严格进行字符串匹配的.比如:`punsubscribe *`是无法退定c1.\*的,必须严格使用punsubscribe c1.*才可以
+* Redis的发布订阅模式可以实现进程间的消息传递,只能在集群中或同一台机器中使用
+* `publish topic content`:发布主题,topic为主题名,content为发布的内容
+* `subscribe topic1 topic2...`:精准订阅,完全符合topic的才会收到消息,可同时监听多个
+* `unsubscribe topic`:取消订阅,不指定topic表示取消所有subscribe的订阅
+* `psubscribe topic*`:订阅频道,支持glob风格的通配符
+* `punsubscribe topic*`:取消订阅,不指定频道表示取消所有psubscribe的订阅.这里匹配模式的时候,是不会将通配符展开的,是严格进行字符串匹配的.比如:`punsubscribe *`是无法退定`c1.*`的,必须严格使用`punsubscribe c1.*`才可以
 
 
 
-# 命令
+# 常用命令
 
 
 
@@ -176,25 +172,25 @@
 
 * 无序不重复集合
 
-* SADD key value:往集合key中添加value元素
+* sadd key value:往集合key中添加value元素
 
-* SREM key value:从集合key中删除value元素
+* srem key value:从集合key中删除value元素
 
-* SISMEMBER key value:检查集合key中是否有value元素
+* sismember key value:检查集合key中是否有value元素
 
-* SMEMBERS key:获取集合key中所有元素
+* smembers key:获取集合key中所有元素
 
-* SCARD key:获取集合key中元素个数
+* scard key:获取集合key中元素个数
 
-* SRANDMEMBER key num:从集合key中随机获取num个元素,取出的元素仍然在原集合中
+* srandmember key num:从集合key中随机获取num个元素,取出的元素仍然在原集合中
 
-* SPOP key num:从集合key中随机取出2个元素,取出的元素将中原集合中删除
+* spop key num:从集合key中随机取出2个元素,取出的元素将中原集合中删除
 
-* SINTER key1 key2...:取多个集合的交集,即取出所有集合中都有的元素
+* sinter key1 key2...:取多个集合的交集,即取出所有集合中都有的元素
 
-* SUNION key1 key2...:取多个集合的并集,即将所有集合中的元素进行合并
+* sunion key1 key2...:取多个集合的并集,即将所有集合中的元素进行合并
 
-* SDIFF key1 key2...:取多个key1集合的差集,即以第一个集合为基准,只保留其他集合中没有的元素
+* sdiff key1 key2...:取多个key1集合的差集,即以第一个集合为基准,只保留其他集合中没有的元素
 
 
 
@@ -204,16 +200,16 @@
 
 * 有序不重复集合
 
-* ZADD key score value [[score value]...]:往有序集合key中加入带分值元素,score可用来排序
-  
-  * ZREM key value [value...]:从有序集合key中删除元素
-  * ZSCORE key value:返回有序集合key中元素member的分值
-  * ZINCREBY key num value:为有序集合key中元素value的分值加上num
-  * ZCARD key:返回有序集合key中元素个数
-  * ZRANGE key start end [WITHSCORES]:正序获取有序集合key从start下标到end下标的元素
-  * ZREVRANGE key start end [WITHSCORES]:倒序获取有序集合key从start下标到end下标的元素
-  * ZUNIONSTORE destkey numkeys key [key...]:并集计算
-  * ZINTERSTORE dest key numkeys key [key...]:交集计算
+* zadd key score value [[score value]...]:往有序集合key中加入带分值元素,score可用来排序
+
+* zrem key value [value...]:从有序集合key中删除元素
+* zscore key value:返回有序集合key中元素member的分值
+* zincreby key num value:为有序集合key中元素value的分值加上num
+* zcard key:返回有序集合key中元素个数
+* zrange key start end [WITHSCORES]:正序获取有序集合key从start下标到end下标的元素
+* zrevrange key start end [WITHSCORES]:倒序获取有序集合key从start下标到end下标的元素
+* zunionstore destkey numkeys key [key...]:并集计算
+* zinterstore dest key numkeys key [key...]:交集计算
 
 
 
@@ -231,245 +227,6 @@
 
 
 
-# 适用场景
-
-
-
-* 缓存
-* 取最新N个数据的操作:zincrby
-* 排行榜类的应用,取TOP N操作,前面操作以时间为权重,这个是以某个条件为权重
-* 存储关系,比如社交关系
-* 获取某段时间所有数据排重值,使用set,比如某段时间访问的用户id,或者是客户端ip
-* 构建对队列系统,list可以构建栈和队列,使用zset构建优先级队列
-* 实时分析系统,如访问频率控制
-* 模拟类似于httpsession这种需要设定过期时间的功能
-* 分布式锁:setnx
-* 分布式唯一主键生成:incrby
-* 计数器:incr
-* 限流:incr
-* 购物车
-* 用户消息时间线timeline,list,双向链表
-* 抽奖:使用SET的spop
-* 点赞,签到,打卡:使用SET的sadd,srem,sismember,smembers,scard
-  * 点赞:`SADD like:<消息ID> <用户ID>`
-  * 取消点赞:`SREM like:<消息ID> <用户ID>`
-  * 检查用户是否点过赞:`SISMEMBER like:<消息ID> <用户ID>`
-  * 获取点赞的用户列表:`SMEMBERS like:<消息ID>`
-  * 获取点赞的用户数:`SCARD like:<消息ID>`
-* 商品标签
-* 商品筛选:sdiff set1 set20->获取差集;sinter set1 set2->获取交集;sunion set1 set2->获取并集
-* 用户关注,推荐模型
-* 应用于抢购,限购类,限量发放优惠卷,激活码等业务的数据存储设计
-* 应用于具有操作先后顺序的数据控制
-* 应用于最新消息展示
-* 应用于同类信息的关联搜索,二度关联搜索,深度关联搜索
-* 应用于基于黑名单与白名单设定的服务控制
-* 应用于计数器组合排序功能对应的排名
-* 应用于即时任务/消息队列执行管理
-
-
-
-## 微博
-
-
-
-### 用户账号
-
-
-
-#### 帐号唯一性检查
-
-
-
-* 使用集合存储所有的帐号,新增用户的同时更新缓存和数据库
-
-
-
-#### 用户信息存储
-
-
-
-* 使用Map存储,key为用户唯一标识,value可根据情况尽量少存储信息
-
-
-
-### 关注和被关注
-
-
-
-* 被关注用户的唯一标识作为key,使用集合存储关注用户的唯一标识
-
-
-
-### 时间线
-
-
-
-* 每条时间线都是一个有序集合,有序集合的元素 为微博的 ID,分值为微博的发布时间
-* 用户发送新的微博时,程序就会使用 ZADD 命令,将新微博的 ID 以及发布时间添加到有序集合里
-
-
-
-### 点赞
-
-
-
-* 同关注和被关注,不过key换成被点赞的消息ID
-
-
-
-## String
-
-
-
-* 主页高频访问信息显示控制,例如新浪微博大V主页显示粉丝数与微博数量
-* 如set `user:id:222111:focus` 123.以表名:主键字段:主键值:表中需要存储字段为key
-
-
-
-## Hash
-
-
-
-* 电商网站购物车的商品添加,浏览,更改,删除,清空等
-  
-  * 以客户id作为key,每位客户创建一个hash存储结构存储对应的购物车信息
-  
-  * 将商品编号作为field,购买数量作为value进行存储
-  
-  * 添加商品:追加全新的field与value
-  
-  * 浏览:遍历hash
-  
-  * 更改数量:自增/自减,设置value值
-  
-  * 删除商品:删除field
-  
-  * 清空:删除key
-  
-  * 每条购物车中的商品记录保存成两条field
-    
-    * field1专用于保存购买数量
-      
-      * 命名格式:商品id:nums
-      * 保存数据:数值
-    
-    * field2专用于保存购物车中显示的信息,包含文字描述,图片地址,所属商家信息等
-      
-      * 命名格式:商品id:info
-      * 保存数据:json
-
-* 应用于抢购,限购类,限量发放优惠卷,激活码等业务的数据存储设计
-  
-  * 以商家id作为key
-  * 将参与抢购的商品id作为field
-  * 将参与抢购的商品数量作为对应的value
-  * 抢购时使用降值的方式控制产品数量
-
-
-
-## List
-
-
-
-* 微信朋友圈点赞,要求按照点赞顺序显示点赞好友信息,如果取消点赞,移除对应好友信息
-* 应用于最新消息展示,如微博中个人用户的关注列表需要按照用户的关注顺序进行展示,粉丝列表需要将最近关注的粉丝列在前面
-  * 依赖list的数据具有顺序的特征对信息进行管理
-  * 使用队列模型解决多路信息汇总合并的问题
-  * 使用栈模型解决最新消息的问题
-
-
-
-## Set
-
-
-
-* 应用于随机推荐类信息检索,例如热点歌单推荐,热点新闻推荐,应用APP推荐,大V推荐等
-  * 随机获取集合中指定数量的数据:srandmember key [count]
-  * 随机获取集合中的某个数据并将该数据移出集合:spop key [count]
-* 应用于同类信息的关联搜索,二度关联搜索,深度关联搜索
-  * 显示共同关注(一度)
-  * 显示共同好友(一度)
-  * 由用户A出发,获取到好友用户B的好友信息列表(一度)
-  * 由用户A出发,获取到好友用户B的购物清单列表(二度)
-  * 由用户A出发,获取到好友用户B的游戏充值列表(二度)
-  * 求两个集合的交、并、差集
-    * sinter key1 [key2]
-    * sunion key1 [key2]
-    * sdiff key1 [key2]
-  * 求两个集合的交、并、差集并存储到指定集合中
-    * sinterstore destination key1 [key2]
-    * sunionstore destination key1 [key2]
-    * sdiffstore destination key1 [key2]
-  * 将指定数据从原始集合中移动到目标集合中
-    * smove source destination member
-* 应用于同类型数据的快速去重
-  * 公司对旗下新的网站做推广,统计网站的PV(访问量) ,UV(独立访客) ,IP(独立IP)
-    * PV:网站被访问次数,可通过刷新页面提高访问量
-    * UV:网站被不同用户访问的次数,可通过cookie统计访问量,相同用户切换IP地址, UV不变
-    * IP网站被不同IP地址访问的总次数,可通过IP地址统计访问量,相同IP不同用户访问, IP不变
-  * 利用set集合的数据去重特征,记录各种访问数据
-  * 建立string类型数据,利用incr统计日访问量(PV)
-  * 建立set模型,记录不同cookie数量(UV)
-  * 建立set模型,记录不同IP数量(IP)
-* 应用于基于黑名单与白名单设定的服务控制
-  * 基于经营战略设定问题用户发现、鉴别规则
-  * 周期性更新满足规则的用户黑名单,加入set集合
-  * 用户行为信息达到后与黑名单进行比对,确认行为去向
-  * 黑名单过滤IP地址:应用于开放游客访问权限的信息源
-  * 黑名单过滤设备信息:应用于限定访问设备的信息源
-  * 黑名单过滤用户:应用于基于访问权限的信息源
-
-
-
-## ZSet
-
-
-
-* 应用于计数器组合排序功能对应的排名
-  * 获取数据对应的索引(排名)
-    * zrank key member
-    * zrevrank key member
-  * score值获取与修改
-    * zscore key member
-    * zincrby key increment member
-* 应用于即时任务/消息队列执行权重管理
-  * 对于带有权重的任务,优先处理权重高的任务,采用score记录权重即可
-  * 如果权重条件过多时,需要对排序score值进行处理,保障score值能够兼容2条件或者多条件
-  * 因score长度受限,需要对数据进行截断处理,尤其是时间设置为小时或分钟级即可
-  * 先设定订单类别,后设定订单发起角色类别,整体score长度必须是统一的,不足位补0.第一排序规则首
-    位不得是0
-
-
-
-## 限时按次结算的服务控制
-
-
-
-* 设计计数器,记录调用次数,用于控制业务执行次数.以用户id作为key,使用次数作为value
-* 利用incr操作超过最大值抛出异常的形式替代每次判断是否大于最大值
-  * 判断是否为nil,如果是,设置为Max-次数
-  * 如果不是,计数+1
-  * 业务调用失败,计数-1
-* 遇到异常即+1操作超过上限,视为使用达到上限
-* 为计数器设置生命周期为指定周期,例如1秒/分钟,自动清空周期内使用次数
-
-
-
-## 基于时间顺序的数据操作
-
-
-
-* 例子:微信消息排序
-* 依赖list的数据具有顺序的特征对消息进行管理,将list结构作为栈使用
-* 对置顶与普通会话分别创建独立的list分别管理
-* 当某个list中接收到用户消息后,将消息发送方的id从list的一侧加入list,此处设定左侧
-* 多个相同id发出的消息反复入栈会出现问题,在入栈之前无论是否具有当前id对应的消息,先删除对应id
-* 推送消息时先推送置顶会话list,再推送普通会话list,推送完成的list清除所有数据
-* 消息的数量,也就是微信用户对话数量采用计数器的思想另行记录,伴随list操作同步更新
-
-
-
 # 数据结构
 
 
@@ -478,7 +235,7 @@
 
 
 
-* 编码数据结构主要在对象包含的值数量比较少、或者值的体积比较小时使用
+* 编码数据结构主要在对象包含的值数量比较少或值的体积比较小时使用
 
 
 
@@ -487,10 +244,10 @@
 
 
 * 类似于数组
-* 压缩列表包含的项都是有序的,列表的两端分 别为表头和表尾
+* 压缩列表包含的项都是有序的,列表的两端分别为表头和表尾
 * 每个项可以储存一个字符串、整数或者浮点数
-* 可以从表头开始或者从表尾开始遍 历整个压缩列表,复杂度为 O(N) 
-* 定位压缩列表中指定索引上的项,复杂度为 O(N) 
+* 可以从表头开始或者从表尾开始遍历整个压缩列表,复杂度为O(N) 
+* 定位压缩列表中指定索引上的项,复杂度为O(N) 
 * 使用压缩列表来储存值消耗的内存比使用双向链表来储存值消耗的内存要少
 * List,Set,ZSet在数据量小时都可能会使用该数据类型
 
@@ -500,9 +257,12 @@
 
 
 
-* 集合元素只能是整数(最大为64位),并且集合中不会出 现重复的元素
+* 集合元素只能是整数(最大为64位),并且集合中不会出现重复的元素
 * 集合的底层使用有序的整数数组来表示
-* 数组的类型会随着新添加元素的类型而改变.如果集合中位长度最大的元素可以使用16位整数来保存,那么数组的类型就是int16_t,而如果集合中位长度最大的元素可以使用 32 位整数来保存,那么数组的类型就是 int32_t,诸如此类
+* 数组的类型会随着新添加元素的类型而改变:
+  * 如果集合中长度最大的元素可以使用16位整数来保存,那么数组的类型就是int16_t
+  * 如果集合中长度最大的元素可以使用32位整数来保存,那么数组的类型就是 int32_t,诸如此类
+
 * 数组的类型只会自动增大,但不会减小
 * Set在数据量比较小时可能会使用该数据类型
 
@@ -517,8 +277,8 @@
 
 
 * SDS, simple dynamic string
-* 可以储存位数组(实现 BITOP 和 HyperLogLog)、字符串、整数和浮点数,其中超过64位的整数和超过 IEEE 754 标准的浮点数使用字符串来表示
-* 具有int、embstr和raw三种表示形式可选,其中 int 表示用于储存小于等于 64 位的整数,embstr 用来储存比较短的位数组和字符串,而其他格式的 值则由 raw 格式储存
+* 可以储存位数组(实现BITOP和HyperLogLog),字符串,整数和浮点数,其中超过64位的整数和超过 IEEE 754 标准的浮点数使用字符串来表示
+* 有int,embstr和raw三种表示形式:int 用于储存小于等于 64 位的整数,embstr 用来储存比较短的位数组和字符串,而其他格式的值则由 raw 格式储存
 * 比起 C 语言的字符串格式,SDS 具有以下四个优点:
   * 常数复杂度获取长度值
   * 不会引起缓冲区溢出
@@ -546,7 +306,7 @@
 * 查找、添加、删除键值对的复杂度为 O(1),键和值都是字符串对象
 * 使用散列表(hash table)为底层实现,使用链地址法(separate chaining)来解决键冲突
 * Redis 会在不同的地方使用不同的散列算法,其中最常用的是 MurmurHash2 算法
-* 在键值对数量大增或者大减的时候会对散列表进行重新散列(rehash),并且rehash 是渐进式、分多次进行的,不会在短时间内耗费大量 CPU 时间,造成服务器阻塞
+* 在键值对数量大增或者大减的时候会对散列表进行重新散列(rehash),并且rehash 是渐进式,分多次进行的,不会在短时间内耗费大量 CPU,造成服务器阻塞
 
 
 
@@ -559,7 +319,7 @@
   * score:是一个浮点数,用于记录成员的分值
   * obj:是一个字符串对象,用来记录成员本身
 * 和字典一起构成 ZSET 结构,用于实现 Redis的有序集合结构
-  * 字典用于快速 获取元素的分值,以及判断元素是否存在
+  * 字典用于快速获取元素的分值,以及判断元素是否存在
   * 跳表用于执行范围操作,比如实现 ZRANGE 命令
 
 
@@ -604,17 +364,9 @@
 * databases:database数量,如果小于1则启动失败
 * include:加载其他配置文件
 * maxclients:同时最大的连接数,默认10000,如果小于1启动失败
-* maxmemory:最大使用内存,超过则触发内存策略
+* maxmemory:最大使用内存,超过则触发内存策略.默认0不限制,设置最大不要超过服务器的50%
 * maxmemory-policy:最大缓存策略.当缓存过多时使用某种策略,删除内存中的数据
-  * volatile-lru:在设置了过期的key中通过lru算法查找key删除
-  * volatile-lfu:在所有key中通过lfu算法查找key删除
-  * volatile-random:在设置了过期的key中随机查找key删除
-  * volatile-ttl:最近要超时的key删除
-  * allkeys-lru:所有key通过lru算法查找key删除
-  * allkeys-lfu:所有key通过lfu算法查找key删除
-  * allkeys-random:所有key随机查找key删除
-  * noeviction:不过期,对于写操作返回错误
-* maxmemory-samples:lru,lfu算法都不是精确的算法,而是估算值.lru和lfu在进行检查时,会从该配置指定的数量中进行运算,设置过高会消耗cpu,小于0则启动失败
+* maxmemory-samples:lru,lfu算法都不是精确的算法,而是估算值.lru和lfu在进行检查时,会从该配置指定的数量中进行运算,设置过高会消耗cpu
 * proto-max-bulk-len:批量请求的大小限制
 * client-query-buffer-limit:客户端查询缓存大小限制,如果multi/exec 大可以考虑调节
 * lfu-log-factor:小于0则启动失败
@@ -696,7 +448,7 @@
 
 
 
-* appendonly:是否开启AOF模式,生产环境必然开启
+* appendonly no/yes:是否开启AOF模式,默认关闭,生产环境必然开启
 
 * appendfilename:AOF文件名,默认为appendonly.aof
 
@@ -887,7 +639,7 @@
 
 
 
-* 默认情况下,Redis每100ms随机选取10个key,检查这些key是否过期,如果过期则删除.如果在1S内有25个以上的key过期,立刻再额外随机100个key
+* 默认情况下,Redis每100ms随机选取10个key,检查这些key是否过期,过期则删除.如果在1S内有25个以上的key过期,立刻再额外随机100个key
 * 当Client主动访问key时,会先对key进行超时判断,过期的key会被删除
 * 当Redis内存最大值时,会执行相应算法,对内存中的key进行不同的过期操作
 * 每次set的时候都会清除key的过期时间
@@ -898,24 +650,25 @@
 
 
 
-* LRU:Least Recently Used,最近最少使用算法,将最近一段时间内,最少使用的一些数据给干掉
+* LRU:Least Recently Used,最近最少使用算法,将最近一段时间内,最少使用的一些数据清除
 * 默认情况下,当内存中数据太大时,redis就会使用LRU算法清理掉部分数据,然后让新的数据写入缓存
 
 
 
-## 缓存清理设置
+## 缓存设置
 
 
 
-* maxmemory:设置redis用来存放数据的最大的内存大小,一旦超出该值,就会立即使用LRU算法.若maxmemory设置为0,那么就默认不限制内存的使用,直到耗尽机器中所有的内存为止
-* maxmemory-policy:可以设置内存达到最大值后,采取什么策略来处理
-  * noeviction:如果内存使用达到了maxmemory,client还要继续写入,直接报错给客户端
-  * allkeys-lru:就是我们常说的LRU算法,移除掉最近最少使用的那些keys对应的数据,默认策略
-  * allkeys-random:随机选择一些key来删除掉
-  * volatile-lru:也是采取LRU算法,但是仅仅针对那些设置了指定存活时间(TTL)的key才会清理掉
+* maxmemory:设置redis缓存的最大值,超出该值就会立即使用LRU算法.若设置为0,那么就不限制内存的使用,直到耗尽机器中所有的内存为止
+* maxmemory-policy:设置内存达到最大值后,采取什么策略来处理
+  * noeviction:无操作,直接报错给客户端
+  * allkeys-lru:LRU算法,移除掉最近最少使用的那些keys对应的数据,默认策略
+  * allkeys-lfu:LFU算法,删除最不常用的key
+  * allkeys-random:随机选择一些key删除
+  * volatile-lru:LRU算法,但是仅仅针对那些设置了指定存活时间(TTL)的key才会清理掉
+  * volatile-lfu:LFU算法,仅针对设置了过期时间的key删除最不常用的key
   * volatile-random:随机选择一些设置了TTL的key来删除掉
   * volatile-ttl:移除掉部分keys,选择那些TTL时间比较短的keys
-* redis在写入数据的时候,可以设置TTL,过期时间
 * 缓存清理的流程
   * 客户端执行数据写入操作
   * redis接收到写入操作后,检查maxmemory,如果超过就根据对应的policy清理掉部分数据
@@ -949,14 +702,12 @@
 
 
 
-* Redis启动服务器初始化时,读取配置server.hz的值,默认为10
-* 每秒钟执行server.hz次serverCron()->databasesCron()->activeExpireCycle()
-* activeExpireCycle()对每个expires[*]逐一进行检测,每次执行250ms/server.hz
-* 对某个expires[*]检测时,随机挑选W个key检测
+* Redis启动服务器初始化时,读取配置server.hz的值,默认为10,表示每秒执行server.hz次serverCron()->databasesCron()->activeExpireCycle()
+* `activeExpireCycle()`对每个expires[*]逐一进行检测,每次执行250ms/server.hz
+* 对某个expires[*]检测时,随机挑选W个key检测,W取值=ACTIVE_EXPIRE_CYCLE_LOOKUPS_PER_LOOP属性值
   * 如果key超时,删除key
   * 如果一轮中删除的key的数量>W*25%,循环该过程
   * 如果一轮中删除的key的数量≤W*25%,检查下一个expires[\*],0-15循环
-  * W取值=ACTIVE_EXPIRE_CYCLE_LOOKUPS_PER_LOOP属性值
 * 参数current_db用于记录activeExpireCycle() 进入哪个expires[*] 执行
 * 如果activeExpireCycle()执行时间到期,下次从current_db继续向下执行
 * 周期性轮询redis库中的时效性数据,采用随机抽取的策略,利用过期数据占比的方式控制删除频度
@@ -972,20 +723,9 @@
 * Redis使用内存存储数据,在执行每一个命令前,会调用freeMemoryIfNeeded()检测内存是否充足.如果内存不满足新加入数据的最低存储要求,redis要临时删除一些数据为当前指令清理存储空间.清理数据的策略称为逐出算法
 * 逐出数据的过程不是100%能够清理出足够的可使用的内存空间,如果不成功则反复执行.当对所有数据尝试完毕后,如果不能达到内存清理的要求,将抛出异常`(error) OOM command not allowed when used memory >'maxmemory`
 * 相关配置
-  * maxmemory:最大可使用内存.占用物理内存的比例,默认值为0,表示不限制.生产环境中根据需求设定,通常设置在50%以上
-  * maxmemory-samples:每次选取待删除数据的个数.选取数据时并不会全库扫描,导致严重的性能消耗,降低读写性能,因此采用随机获取数据的方式作为待检测删除数据
-  * maxmemory-policy:删除策略.达到最大内存后的,对被挑选出来的数据进行删除的策略
-  * 检测易失数据,可能会过期的数据集server.db[i].expires
-    * volatile-lru:挑选最近最少使用的数据淘汰
-    * volatile-lfu:挑选最近使用次数最少的数据淘汰
-    * volatile-ttl:挑选将要过期的数据淘汰
-    * volatile-random:任意选择数据淘汰
-  * 检测全库数据,所有数据集server.db[i].dict
-    * allkeys-lru:挑选最近最少使用的数据淘汰
-    * allkeys-lfu:挑选最近使用次数最少的数据淘汰
-    * allkeys-random:任意选择数据淘汰
-  * 放弃数据驱逐
-    * no-enviction:禁止驱逐数据,会引发错误OOM
+  * maxmemory:最大可使用内存
+  * maxmemory-samples:每次选取待删除数据的个数.选取数据时并不会全库扫描,采用随机获取数据的方式作为待检测删除数据
+  * maxmemory-policy:删除策略,见9.3
 
 
 
@@ -997,35 +737,37 @@
 
 
 
-* 默认开启,每隔指定时间将内存中的所有数据生成到一份RDB文件中,性能比较高
+* 默认,每隔指定时间将内存中的所有数据写入到一份RDB文件中,性能比较高,但可能会造成数据丢失
 * 配置save检查点
 
 ```shell
-# 在配置文件redis.conf中配置,如下
 # 每隔60秒时间,若有超过1000个key发生了变更,那么就生成一个新的dump.rdb
 save  60  1000
 ```
 
-* save检查点可以有多个,只要满足其中之一就会检查,发现变更就会生成新的dump.rdb文件
-* 可以手动调用save或bgsave进行快照备份
-  * save:冷备时只管备份,不管其他,全部阻塞
-  * bgsave:异步备份,不阻塞redis的读写操作,可用lastsave获得最近一次备份的时间
+* 检查点可以有多个,只要满足其中之一就会检查,发现变更就会生成新的dump.rdb文件
 * 若在生成快照期间发生故障,可能会丢失比较多的数据,适合做冷备份
 * redis在优雅退出的时候,会立即将内存中的数据生成完整的RDB快照,强制退出则不会
-* RDB对redis对外提供的读写服务,影响非常小,可以让redis保持高性能,因为redis主进程只需要fork一个子进程,让子进程执行磁盘IO操作来进行RDB持久化即可
+* RDB对Redis的读写服务影响非常小,因为redis主进程只需要fork一个子进程,让子进程执行磁盘IO操作来进行RDB持久化即可
 * 相对于AOF持久化机制来说,直接基于RDB数据文件来重启和恢复redis进程,更加快速
-* redis会单独创建(fork)一个子进程来进行持久化,会先将数据写入到一个临时文件中,当持久化过程都结束时,再用这个临时文件替换上次持久化好的文件.整个过程中,主进程是不进行任何IO操作的,这就确保了极高的性能.如果需要进行大规模数据的恢复,且对数据恢复的完整性不是非常敏感,则RDB比较高效,但是可能丢失最后一次持久化后的数据
+* redis会单独创建(fork)一个子进程来进行持久化:先将数据写入到一个临时文件中,当持久化过程结束时,再用这个临时文件替换旧的持久化文件.整个过程中,主进程不进行任何IO操作
+* 如果需要进行大规模数据的恢复,且对数据恢复的完整性不是非常敏感,则RDB比较高效,因为可能丢失最后一次持久化后的数据
+* 手动调用save或bgsave进行快照备份
+  * save:冷备时只管备份,不管其他,全部阻塞
+  * bgsave:异步备份,不阻塞redis的读写操作,可用lastsave获得最近一次备份的时间
 
 
 
-### BGSAVE机制
+### BGSAVE
 
 
 
-* Redis借助操作系统提供的写时复制技术(Copy-On-Write, COW),在生成快照的同时,依然可以正常处理写命令.即bgsave子进程是由主线程fork生成的,可以共享主线程的所有内存数据
-* bgsave子进程运行后,开始读取主线程的内存数据,并把它们写入RDB文件
-* 如果主线程对这些数据也都是读操作,那么主线程和bgsave子进程相互不影响
-* 如果主线程要修改一块数据,那么这块数据就会被复制一份,生成该数据的副本.然后,bgsave子进程会把这个副本数据写入RDB文件,而在这个过程中,主线程仍然可以直接修改原来的数据  
+* Redis借助OS提供的写时复制技术(Copy-On-Write, COW),在生成快照的同时,依然可以正常处理写命令
+* bgsave子进程是由主线程fork生成的,可以共享主线程的所有内存数据
+* bgsave子进程运行后,开始读取主线程的内存数据,并把它们写入RDB文件:
+  * 如果主线程是读操作,那么主线程和bgsave子进程互不影响
+  * 如果主线程是修改数据,那么该数据会被复制一份,生成该数据的副本,bgsave子进程会把这个副本写入RDB文件.在这个过程中,主线程仍然可以直接修改原数据  
+
 
 
 
@@ -1034,29 +776,17 @@ save  60  1000
 
 
 * 生成一份修改记录日志文件(appendonly.aof),每次执行操作都会将命令先写入os cache,然后每隔一定时间再fsync写到AOF文件中
-
-* 配置AOF持久化,生产环境中,AOF一般都是开启的:将redis.conf中的appendonly no改为appendonly yes即可开启
-
 * 同时开启了RDB和AOF时,redis重启之后,**仍然优先读取AOF中的数据**,但是AOF数据恢复比较慢
-
-* fsync策略,在配置文件中修改appendfsync
-
-* AOF文件只有一份,当文件增加到一定大小时,AOF会进行rewrite操作,会基于当前redis内存中的数据,重新构造一个更小的AOF文件,然后将大的文件删除
-
-* 可以使用bgrewriteaof强制进行AOF文件重写
-
+* AOF文件只有一份,当文件增加到一定大小时,AOF会进行rewrite,会基于当前redis内存中的数据,重新构造一个更小的AOF文件,然后将大的文件删除
 * rewrite是另外一线程来写,对redis本身的性能影响不大
   
-  * auto-aof-rewrite-percentage:redis每次rewrite都会记住上次rewrite时文件大小,下次达到上次rewrite多少时会再次进行rewrite,默认是100,可以不改
+  * auto-aof-rewrite-percentage:redis每次rewrite都会记住上次rewrite时文件大小,下次达到上次rewrite多少时会再次进行rewrite,默认100,可不改
   * auto-aof-rewrite-min-size:redis进行rewrite的最小内存,默认是64M,几乎不用改
-
-* 如果AOF文件有破损,备份之后,可以用**redis-check-aof  --fix appendonly.aof**命令进行修复,命令在redis的bin目录下
-
-* 修复后可以用diff -u查看两个文件的差异,确认问题点
-
 * RDB的快照和AOF的fsync不会同时进行,必须先等其中一个执行完之后才会执行另外一个
-
-* 热启动appendonly,数据恢复时可用,但并没有修改配置文件,仍需手动修改:**config set appendonly yes**
+* 配置见8.2
+* bgrewriteaof:强制进行AOF文件重写
+* `redis-check-aof  --fix appendonly.aof`:修复破损的AOF文件,该命令在redis的bin目录下
+* `diff -u`:查看两个AOF文件的差异,确认问题.主要对破损修复后的AOP使用
 
 
 
@@ -1064,13 +794,12 @@ save  60  1000
 
 
 
-* 混合持久化模式,需要同时开启RDB和AOF
-* 重启Redis时,RDB恢复更快,但是会丢失大量数据.使用AOF重启,性能相对RDB要慢,在Redis实例很大的情况下,启动需要花费很长的时间.Redis 4.0带来了一个新的持久化选项—混合持久化
-* 通过如下配置可以开启混合持久化:`aof-use-rdb-preamble yes`
-* 如果开启了混合持久化,AOF在重写时,不再是单纯将内存数据转换为RESP命令写入AOF文件,而是将
-  重写这一刻之前的内存做RDB快照处理,并将RDB快照内容和增量的AOF修改内存数据的命令存在一
-  起写入新的AOF文件,新文件一开始不叫appendonly.aof,重写完新的AOF文件才会进行改名,覆盖原有的AOF文件
-* 在Redis重启的时候,可以先加载RDB的内容,然后再重放增量AOF日志就可以完全替代之前的AOF全量文件重放,重启效率大幅得到提升 
+* 重启Redis时,RDB恢复更快,但是会丢失大量数据.使用AOF重启,在Redis实例很大的情况下,速度慢.Redis 4.0带来了一个新的持久化选项—混合持久化
+* 如果开启了混合持久化,AOF在重写时,不再是单纯将内存数据转换为RESP命令写入AOF文件,而是将重写这一刻之前的内存做RDB快照处理,并将RDB快照内容和增量的AOF修改内存数据的命令存在一起写入新的AOF文件,新文件一开始不叫appendonly.aof,重写完新的AOF文件才会进行改名,覆盖原有的AOF文件
+* 在Redis重启的时候,可以先加载RDB的内容,然后再加载增量AOF日志就可以完全替代之前的AOF全量文件
+* `aof-use-rdb-preamble yes`:开启混合持久化,同时要开启RDB和AOF
+
+
 
 # 优化
 
@@ -1204,9 +933,15 @@ save  60  1000
   echo 511 > /proc/sys/net/core/somaxconn
   ```
 
+
+
 # 其他
 
+
+
 ## 自启动
+
+
 
 * 在redis目录里的utils目录下有个redis_init_script脚本,将该脚本拷贝到/etc/init.d中,并改名,将后缀改为redis的端口号:cp redis_init_script /etc/init.d/redis_6379
 * REDISPORT:redis_6379中的变量指定redis运行时的端口号,默认为6379
@@ -1216,52 +951,70 @@ save  60  1000
 * CONF:redis安装目录中的redis.conf的地址,实际上是redis运行时的具体配置文件地址
 * 在redis_6379最上面添加# chkconfig:2345 90 10,另起一行chkconfig  redis_6379 on
 
+
+
 ## 内置管理工具
+
+
 
 ### redis-benchmark
 
+
+
 * 性能测试工具,测试Redis在你的系统及配置下的读写性能
+
+
 
 ### redis-check-aof
 
+
+
 * 用于修复出问题的AOF文件
+
+
 
 ### redis-check-dump
 
+
+
 * 用于修复出问题的dump.rdb文件
 
+
+
 ### redis-cli
+
+
 
 * 在redis安装目录的src下,执行./redis-cli,可进入redis控制台
 * redis-cli -h ip -p port:连接指定ip地址的redis控制台
 
+
+
 ### redis-sentinel
+
+
 
 * Redis集群的管理工具
 
+
+
 ## 第三方管理工具
+
+
+
+
 
 ### CacheCloud
 
+
+
 * 一个管理Redis主从,哨兵,集群的平台
 
-## docker中使用
 
-docker中启动redis
-
-```
-docker run -d -p 6379:6379 --requirepass '123456' -v /app/redis/conf/redis.conf:/usr/local/etc/reids/redis.conf -v /app/redis/data:/data --name redis-single redis redis-server /usr/local/etc/redis/redis.conf --appendonly yes --restart=always
-```
-
-* --requirepass:使用密码进入redis-cli
-* -p localport:dockerport:将docker中的端口映射到本地端口
-* -v /localdir:/dockerdir:将docker中的目录映射到本地的目录中
-* --name:容器的名称,自定义
-* redis:镜像的名称,若不是最新版本的redis,需要加上版本号,如redis:4.0.1
-* --appendonly:开启AOF
-* --restart=always:总是随着docker的启动而启动
 
 # Lua脚本
+
+
 
 * 使用脚本的好处
   * 减少网络开销
@@ -1270,7 +1023,11 @@ docker run -d -p 6379:6379 --requirepass '123456' -v /app/redis/conf/redis.conf:
 * 在Redis脚本中不允许使用全局变量,以防止脚本之间相互影响
 * Redis脚本中不能使用Lua的模块化功能
 
+
+
 ## Lua标准库
+
+
 
 * Lua的标准库提供了很多使用的功能,Redis支持其中大部分
 * Base:提供一些基础函数
@@ -1279,7 +1036,11 @@ docker run -d -p 6379:6379 --requirepass '123456' -v /app/redis/conf/redis.conf:
 * Math:提供数据计算的函数
 * Debug:提供用于调试的函数
 
+
+
 ## Redis常用函数
+
+
 
 * string.len(string):字符串长度
 * string.lower(string)/string.upper(string):字符串转为小写/大写
@@ -1310,7 +1071,11 @@ docker run -d -p 6379:6379 --requirepass '123456' -v /app/redis/conf/redis.conf:
 * math.random([m[,n]]):获取随机数,如果是同一个种子的话,每次获得的随机数是一样的,没有参数,返回0-1的小数;只有m,返回1-m的整数;设置了m和n,返回m-n的整数
 * math.randomseed(x):设置生成随机数的种子
 
+
+
 ## 其它库
+
+
 
 * 除了标准库外,Redis还会自动加载cjson和cmsgpack库,以提供对Json和MessagePack的支持,在脚本中分别通过cjson和cmsgpack两个全局变量来访问相应功能
 * cjson.encode(表):把表序列化成字符串
@@ -1318,12 +1083,20 @@ docker run -d -p 6379:6379 --requirepass '123456' -v /app/redis/conf/redis.conf:
 * cmsgpack.pack(表):把表序列化成字符串
 * cmsgpack.unpack(字符串):把字符串还原成为表  
 
+
+
 ## Lua中调用Redis
+
+
 
 * redis.call:在脚本中调用Redis命令,遇到错误会直接返回
 * redis.pcall:在脚本中调用Redis命令,遇到错误会记录错误并继续执行
 
+
+
 ## Lua和Redis返回值类型对应
+
+
 
 * 数字——整数
 * 字符串——字符串
@@ -1331,40 +1104,76 @@ docker run -d -p 6379:6379 --requirepass '123456' -v /app/redis/conf/redis.conf:
 * 表类型(只有一个ok字段存储状态信息)——状态回复
 * 表类型(只有一个err字段存储错误信息)——错误回复
 
+
+
 ## 相关脚本命令
 
+
+
+
+
 ### eval
+
+
 
 * 在Redis中执行脚本
 * eval 脚本内容 key参数数量 [key…] [arg…]:通过key和arg两类参数来向脚本传递数据,在脚本中分别用KEYS[index]和ARGV[index]来获取,index从1开始
 * 对于KEYS和ARGV的使用并不是强制的,也可以不从KEYS去获取键,而是在脚本中硬编码,但是这种写法无法兼容集群
 
+
+
 ### evalsha
+
+
 
 * 可以通过脚本摘要来运行,其他同eval.执行的时候会根据摘要去找缓存的脚本,找到了就执行,否则返回错误
 
+
+
 ### script load
+
+
 
 * 将脚本加入缓存,返回值就是SHA1摘要
 
+
+
 ### script exists
+
+
 
 * 判断脚本是否已经缓存
 
+
+
 ### script flush
+
+
 
 * 清空脚本缓存
 
+
+
 ### script kill
+
+
 
 * 强制终止脚本的执行,如果脚本中修改了某些数据,那么不会终止脚本的执行,以保证脚本执行的原子性
 
+
+
 ## 沙箱
+
+
 
 * 为了保证Redis服务器的安全,并且要确保脚本的执行结果只和脚本执行时传递的参数有关,Redis禁止脚本中使用操作文件或系统调用相关的函数,脚本中只能对Redis数据进行操作
 * Redis会禁用脚本的全局变量,以保证脚本之间是隔离的,互不相干的
 
+
+
 ## 随机数和随机结果的处理
+
+
 
 * 为了确保执行结果可以重现,Redis对随机数的功能进行了处理,以保证每次执行脚本生成的随机数列都相同
 * Redis还对产生随机结果进行了处理,比如smembers或hkeys等,数据都是无序的,Redis会对结果按照字典进行顺序排序
@@ -1380,12 +1189,12 @@ docker run -d -p 6379:6379 --requirepass '123456' -v /app/redis/conf/redis.conf:
 * 为避免这种情况可以在缓存中存null或一个特定的值表示该值不存在,同时设置较短过期时间
 * 若对准确率要求不高,可以使用布隆过滤器,但是有失败率(失败率比较小)
 * 白名单策略
-  * 提前预热各种分类数据id对应的bitmaps, id作为bitmaps的offset,相当于设置了数据白名单.当加载正常数据时,放行,加载异常数据时直接拦截,此法效率偏低
+  * 提前预热各种分类数据id对应的bitmaps,id作为bitmaps的offset,相当于设置了数据白名单.当加载正常数据时,放行,加载异常数据时直接拦截,此法效率偏低
   * 使用布隆过滤器
 
 * 实施监控redis命中率(业务正常范围时,通常会有一个波动值)与null数据的占比
   * 非活动时段波动:通常检测3-5倍,超过5倍纳入重点排查对象
-  * 活动时段波动:通常检测10-50倍, 超过50倍纳入重点排查对象
+  * 活动时段波动:通常检测10-50倍,超过50倍纳入重点排查对象
   * 根据倍数不同,启动不同的排查流程,然后使用黑名单进行防控
 
 * key加密:问题出现后,临时启动防灾业务key,对key进行业务层传输加密服务,设定校验程序,过来的key校验.例如每天随机分配60个加密串,挑选2到3个,混淆到页面数据id中,发现访问key不满足规则,驳回数据访问
@@ -1397,9 +1206,9 @@ docker run -d -p 6379:6379 --requirepass '123456' -v /app/redis/conf/redis.conf:
 
 
 * 大量相同过期时间的key同时过期或缓存服务器崩溃,造成请求全部转到数据库,数据库压力过大而崩溃
-* 在原有的过期时间上增加一个随机值,这样每个缓存的过期时间重复率就会降低,就很难引发缓存集体失效
+* 在原有的过期时间上增加一个随机值,这样每个缓存的过期时间重复率就会降低
 * 加上本地缓存ehcache以及降级组件(hystrix或sentinel),先走流量降级,再走本地ehcache,最后走redis
-* 超热数据使用永久key
+* 热点数据使用永久key
 * 定期维护:自动+人工.对即将过期数据做访问量分析,确认是否延时,配合访问量统计,做热点数据的延时  
 
 
@@ -1422,12 +1231,9 @@ docker run -d -p 6379:6379 --requirepass '123456' -v /app/redis/conf/redis.conf:
 
 
 * 数据库和redis中缓存不一致,先删缓存,再修改数据库
-* 若是先修改数据库,再删缓存,当缓存删除失败时,会造成数据不一致问题
 * 先删缓存,再更新数据库,即使数据库更新失败,redis中无缓存,拿到的只有数据库的数据,不存在不一致问题
 * 在redis中修改消耗的性能要稍高于删除
-* 缓存删除之后,需要修改数据库,而此时又来了查询该数据的请求,redis中没有,去查数据库,而数据库的该数据仍然是原数据,此时刚好修改的请求已经完成,将新的数据写入缓存中.之后查询的请求也完成了,再次写入数据,此时缓存中的数据仍然是旧数据,此时可以使用加锁或队列来完成操作,请求放入队列中完成
-* 若缓存对业务影响不高,如商品介绍,菜单修改等,可以通过添加缓存过期时间来减少数据一致性问题
-* 使用加锁的机制保证数据的一致性,会稍微降低程序的性能,若不经常变更的数据,不建议存缓存
+* 使用加锁的机制保证数据的一致性,会稍微降低程序的性能,若经常变更的数据,不建议存缓存
 
 
 
@@ -1435,7 +1241,7 @@ docker run -d -p 6379:6379 --requirepass '123456' -v /app/redis/conf/redis.conf:
 
 
 
-* 先删除缓存,更新数据库之后再删除缓存
+* 先删除缓存,更新数据库之后再删除缓存,可减少缓存不一致问题,但并不绝对,特别是分布式环境下
 * 再次删除缓存时使用队列进行异步操作,同时要加上时间戳,防止网络问题出现
 
 
@@ -1477,11 +1283,11 @@ docker run -d -p 6379:6379 --requirepass '123456' -v /app/redis/conf/redis.conf:
 * 在请求量极大或主从之间数据吞吐量较大,数据同步操作频度较高时,出现服务器宕机
 * 日常例行统计数据访问记录,统计访问频度较高的热点数据
 * 利用LRU数据删除策略,构建数据留存队列.如storm与kafka配合
-* 将统计结果中的数据分类,根据级别, redis优先加载级别较高的热点数据
-* 利用分布式多服务器同时进行数据读取, 提速数据加载过程
+* 将统计结果中的数据分类,根据级别,redis优先加载级别较高的热点数据
+* 利用分布式多服务器同时进行数据读取,提速数据加载过程
 * 热点数据主从同时预热
 * 使用脚本程序固定触发数据预热过程
-* 如果条件允许, 使用CDN
+* 如果条件允许,使用CDN
 
 
 
@@ -1556,11 +1362,9 @@ docker run -d -p 6379:6379 --requirepass '123456' -v /app/redis/conf/redis.conf:
 
 
 
-* [官网](https://github.com/redisson/redisson/)
+* [官网](https://github.com/redisson/redisson/),[官方文档](https://github.com/redisson/redisson/wiki/8.-%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81%E5%92%8C%E5%90%8C%E6%AD%A5%E5%99%A8)
 
 * Redisson是redis对分布式锁的封装,需要添加相关依赖,JDK8以上才可使用
-
-* 如何使用分布式锁可参照[官方文档](https://github.com/redisson/redisson/wiki/8.-%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81%E5%92%8C%E5%90%8C%E6%AD%A5%E5%99%A8)
 
 * Java示例
   
@@ -1622,3 +1426,235 @@ docker run -d -p 6379:6379 --requirepass '123456' -v /app/redis/conf/redis.conf:
 
 
 * 并发设置同key可以在设置值时传递一个时间戳,时间戳大的覆盖时间戳小的,时间戳小的不覆盖大的
+
+
+
+# 适用场景
+
+
+
+* 缓存
+* 取最新N个数据,排行榜
+* 存储关系,比如社交关系
+* 获取某段时间所有数据排重值,使用set,比如某段时间访问的用户id,或者是客户端ip
+* 构建对队列系统,list可以构建栈和队列,使用zset构建优先级队列
+* 实时分析系统,如访问频率控制
+* 模拟类似于httpsession这种需要设定过期时间的功能
+* 分布式锁:setnx
+* 分布式唯一主键生成:incrby
+* incr:计数器,限流
+* 购物车
+* 推荐系统
+* 用户消息时间线timeline,list,双向链表
+* 抽奖:使用spop
+* 商品标签
+* 商品筛选:sdiff set1 set20->获取差集;sinter set1 set2->获取交集;sunion set1 set2->获取并集
+* 应用于抢购,限购类,限量发放优惠卷,激活码等业务的数据存储设计
+* 应用于具有操作先后顺序的数据控制
+* 应用于最新消息展示
+* 应用于同类信息的关联搜索,二度关联搜索,深度关联搜索
+* 应用于基于黑名单与白名单设定的服务控制
+* 应用于计数器组合排序功能对应的排名
+* 应用于即时任务/消息队列执行管理
+
+
+
+## 用户账号
+
+
+
+### 帐号唯一性检查
+
+
+
+* 使用集合存储所有的帐号,新增用户的同时更新缓存和数据库
+
+
+
+### 用户信息存储
+
+
+
+* 使用Map存储,key为用户唯一标识,value可根据情况尽量少存储信息
+
+
+
+## 关注和被关注
+
+
+
+* 被关注用户的唯一标识作为key,使用集合存储关注用户的唯一标识
+
+
+
+## 时间线
+
+
+
+* 每条时间线都是一个有序集合,有序集合的元素 为微博的 ID,分值为微博的发布时间
+* 用户发送新的微博时,程序就会使用 ZADD 命令,将新微博的 ID 以及发布时间添加到有序集合里
+
+
+
+## 点赞,签到,打卡
+
+
+
+* 同关注和被关注,不过key换成被点赞的消息ID
+* 点赞:`SADD like:<消息ID> <用户ID>`
+* 取消点赞:`SREM like:<消息ID> <用户ID>`
+* 检查用户是否点过赞:`SISMEMBER like:<消息ID> <用户ID>`
+* 获取点赞的用户列表:`SMEMBERS like:<消息ID>`
+* 获取点赞的用户数:`SCARD like:<消息ID>`
+
+
+
+## String
+
+
+
+* 主页高频访问信息显示控制,例如新浪微博大V主页显示粉丝数与微博数量
+* 如set `user:id:222111:focus` 123.以表名:主键字段:主键值:表中需要存储字段为key
+
+
+
+## Hash
+
+
+
+* 电商网站购物车的商品添加,浏览,更改,删除,清空等
+
+  * 以客户id作为key,每位客户创建一个hash存储结构存储对应的购物车信息
+
+  * 将商品编号作为field,购买数量作为value进行存储
+
+  * 添加商品:追加全新的field与value
+
+  * 浏览:遍历hash
+
+  * 更改数量:自增/自减,设置value值
+
+  * 删除商品:删除field
+
+  * 清空:删除key
+
+  * 每条购物车中的商品记录保存成两条field
+
+    * field1专用于保存购买数量
+
+      * 命名格式:商品id:nums
+      * 保存数据:数值
+
+    * field2专用于保存购物车中显示的信息,包含文字描述,图片地址,所属商家信息等
+
+      * 命名格式:商品id:info
+      * 保存数据:json
+
+* 应用于抢购,限购类,限量发放优惠卷,激活码等业务的数据存储设计
+
+  * 以商家id作为key
+  * 将参与抢购的商品id作为field
+  * 将参与抢购的商品数量作为对应的value
+  * 抢购时使用降值的方式控制产品数量
+
+
+
+## List
+
+
+
+* 微信朋友圈点赞,要求按照点赞顺序显示点赞好友信息,如果取消点赞,移除对应好友信息
+* 应用于最新消息展示,如微博中个人用户的关注列表需要按照用户的关注顺序进行展示,粉丝列表需要将最近关注的粉丝列在前面
+  * 依赖list的数据具有顺序的特征对信息进行管理
+  * 使用队列模型解决多路信息汇总合并的问题
+  * 使用栈模型解决最新消息的问题
+
+
+
+## Set
+
+
+
+* 应用于随机推荐类信息检索,例如热点歌单推荐,热点新闻推荐,应用APP推荐,大V推荐等
+  * 随机获取集合中指定数量的数据:srandmember key [count]
+  * 随机获取集合中的某个数据并将该数据移出集合:spop key [count]
+* 应用于同类信息的关联搜索,二度关联搜索,深度关联搜索
+  * 显示共同关注(一度)
+  * 显示共同好友(一度)
+  * 由用户A出发,获取到好友用户B的好友信息列表(一度)
+  * 由用户A出发,获取到好友用户B的购物清单列表(二度)
+  * 由用户A出发,获取到好友用户B的游戏充值列表(二度)
+  * 求两个集合的交、并、差集
+    * sinter key1 [key2]
+    * sunion key1 [key2]
+    * sdiff key1 [key2]
+  * 求两个集合的交、并、差集并存储到指定集合中
+    * sinterstore destination key1 [key2]
+    * sunionstore destination key1 [key2]
+    * sdiffstore destination key1 [key2]
+  * 将指定数据从原始集合中移动到目标集合中
+    * smove source destination member
+* 应用于同类型数据的快速去重
+  * 公司对旗下新的网站做推广,统计网站的PV(访问量) ,UV(独立访客) ,IP(独立IP)
+    * PV:网站被访问次数,可通过刷新页面提高访问量
+    * UV:网站被不同用户访问的次数,可通过cookie统计访问量,相同用户切换IP地址, UV不变
+    * IP网站被不同IP地址访问的总次数,可通过IP地址统计访问量,相同IP不同用户访问, IP不变
+  * 利用set集合的数据去重特征,记录各种访问数据
+  * 建立string类型数据,利用incr统计日访问量(PV)
+  * 建立set模型,记录不同cookie数量(UV)
+  * 建立set模型,记录不同IP数量(IP)
+* 应用于基于黑名单与白名单设定的服务控制
+  * 基于经营战略设定问题用户发现、鉴别规则
+  * 周期性更新满足规则的用户黑名单,加入set集合
+  * 用户行为信息达到后与黑名单进行比对,确认行为去向
+  * 黑名单过滤IP地址:应用于开放游客访问权限的信息源
+  * 黑名单过滤设备信息:应用于限定访问设备的信息源
+  * 黑名单过滤用户:应用于基于访问权限的信息源
+
+
+
+## ZSet
+
+
+
+* 应用于计数器组合排序功能对应的排名
+  * 获取数据对应的索引(排名)
+    * zrank key member
+    * zrevrank key member
+  * score值获取与修改
+    * zscore key member
+    * zincrby key increment member
+* 应用于即时任务/消息队列执行权重管理
+  * 对于带有权重的任务,优先处理权重高的任务,采用score记录权重即可
+  * 如果权重条件过多时,需要对排序score值进行处理,保障score值能够兼容2条件或者多条件
+  * 因score长度受限,需要对数据进行截断处理,尤其是时间设置为小时或分钟级即可
+  * 先设定订单类别,后设定订单发起角色类别,整体score长度必须是统一的,不足位补0.第一排序规则首
+    位不得是0
+
+
+
+## 限时按次结算的服务控制
+
+
+
+* 设计计数器,记录调用次数,用于控制业务执行次数.以用户id作为key,使用次数作为value
+* 利用incr操作超过最大值抛出异常的形式替代每次判断是否大于最大值
+  * 判断是否为nil,如果是,设置为Max-次数
+  * 如果不是,计数+1
+  * 业务调用失败,计数-1
+* 遇到异常即+1操作超过上限,视为使用达到上限
+* 为计数器设置生命周期为指定周期,例如1秒/分钟,自动清空周期内使用次数
+
+
+
+## 基于时间顺序的数据操作
+
+
+
+* 例子:微信消息排序
+* 依赖list的数据具有顺序的特征对消息进行管理,将list结构作为栈使用
+* 对置顶与普通会话分别创建独立的list分别管理
+* 当某个list中接收到用户消息后,将消息发送方的id从list的一侧加入list,此处设定左侧
+* 多个相同id发出的消息反复入栈会出现问题,在入栈之前无论是否具有当前id对应的消息,先删除对应id
+* 推送消息时先推送置顶会话list,再推送普通会话list,推送完成的list清除所有数据
+* 消息的数量,也就是微信用户对话数量采用计数器的思想另行记录,伴随list操作同步更新

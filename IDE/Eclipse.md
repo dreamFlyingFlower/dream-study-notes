@@ -29,18 +29,13 @@
 
 
 
-## Keys
+### Keys
 
 
 
-* Ctrl+`:关闭项目,需自定义
-* CTRL+SHIFT+C: 如果该快捷键无效,可以修改Toggle Line Comment,将When修改为In Windows
-* `CTRL+6`:按1次查询整个WorkSpace,按2次查询当前Project,按3次查询当前文件
-  * `@+`:查找所有bean定义
-  * `@/`:查找所有Controller中的RequestMapping
-  * `@>` :查找所有方法(prototype implementation)
-  * `@`:查找所有Spring注解
-  * `//` :查找所有http请求地址
+* SHIFT+`:关闭项目,需自定义
+* `Multi caret down`:`CTRL+SHIFT+Q`,从鼠标选中的当前行一直往下选择多行进行编辑
+* `Add all matches to multi-selection`:CTRL+SHIFT+`,先选一个字符串,按快捷键后选中所有相同字符串,可进行同时编辑
 
 
 
@@ -63,11 +58,11 @@
 
 
 
-### Type Filters
+#### Type Filters
 
 
 
-* java.awt.List:不勾选
+* `java.awt.*`:勾选,会在导入或自动提示时不导入awt包
 
 
 
@@ -140,6 +135,8 @@ ${type_declaration}
 
 #### Formatter
 
+
+
 * eclipse_formatter.xml
 
 
@@ -172,6 +169,8 @@ ${type_declaration}
 
 #### Content Assist
 
+
+
 * 勾选
   * Completion inserts
   * Insert single proposals automatically
@@ -195,7 +194,7 @@ ${type_declaration}
 
 
 
-* SWT Ttempalte Proposals:不勾选
+* SWT Tempalte Proposals:都不勾选
 
 
 
@@ -381,6 +380,56 @@ ${imp:import(java.util.ArrayList,java.util.List,java.util.Map)}
 
 
 
+## Spring
+
+
+
+* 需要先安装Spring插件才有
+
+
+
+### OpenRewrite
+
+
+
+* Prompt for Reconciling of Java Sources:不勾选,否则每次启动都有提示Spring xxxx Reconciling
+
+
+
+### Validation
+
+
+
+#### Boot 2.x Best Practices & Optimizations
+
+
+
+* Enablement:可关闭,SpringBoot2.x一些优化
+
+
+
+#### Boot 3.x Best Practices & Optimizations
+
+
+
+* Enablement:可古纳比,SpringBoot3.x一些优化
+
+
+
+#### SpEL Expresions
+
+
+
+* Enablement:ON,开启SpEL表达式提示
+
+
+
+#### Versions and Support Ranges
+
+
+
+* Enablement:OFF,关闭版本提示
+
 
 
 ## Maven
@@ -392,13 +441,25 @@ ${imp:import(java.util.ArrayList,java.util.List,java.util.Map)}
 
 ### Installations
 
+
+
 * add->选择自己的maven插件
 
 
 
 ### UserSettings
 
+
+
 * 选择自己的Maven插件,使用自己的Maven配置文件,修改默认的仓库地址,不要放C盘
+
+
+
+## Validation
+
+
+
+* MyBatis XML Mapper Validator:勾选,其他全部不勾选
 
 
 
@@ -423,7 +484,7 @@ ${imp:import(java.util.ArrayList,java.util.List,java.util.Map)}
 
 
 
-* foreachList,for mybatis foreach,All XML
+* foreachlist,mybatis if foreach tag,All XML
 
   ```xml
   <if test="query.${ids} != null and query.${ids}.size() > 0">
@@ -434,34 +495,73 @@ ${imp:import(java.util.ArrayList,java.util.List,java.util.Map)}
   </if>
   ```
 
-* ifStr,for mybatis if tag,All XML
+* ifstr,mybatis if string query tag,All XML
 
   ```xml
-  <if test="query.${idStr} != null and query.${idStr} != '' ">
-  	AND ${id} = #{query.${idStr}}
+  <if test="query.${name} != null and query.${name} != '' ">
+  	AND a.${column} = #{query.${name}}
   </if>
   ```
 
-  
+* ifstrlike,mybatis if string like query tag,All XML
+
+  ```xml
+  <if test="query.${name} != null and query.${name} != '' ">
+  	<bind name="${name}Like" value=" '%'+ query.${name} + '%' " />
+  	AND a.${column} = #{${name}Like}
+  </if>
+  ```
+
+* ifobj,mybatis if object query tag,All XML
+
+  ```xml
+  <if test="query.${name} != null ">
+  	AND a.${column} = #{query.${name}}
+  </if>
+  ```
+
+
+
+## XML(Wild Web Developer)
+
+
+
+### Formatting
+
+
+
+* Max line width:120
 
 
 
 # 快捷键
 
-* ctrl+shift+r:打开资源,只能打开自己写的文件,不能打开JAR包内的文件
-* ctrl+shift+t:打开任何文件,包括资源文件,但不包括class
-* ctrl+o:快速outline,查看当前文件的方法以及变量等
-* ctrl+2,L:为变量赋值.先按ctrl+2,右下角会出现选项,选择L给变量赋值
-* alt+shift+r:重命名文件或方法,需要先选中,会自动修改使用该文件的其他文件,连续按2次会弹出对话框
-* alt+shift+m:方法重构
-* shift+enter/ctrl+shift+enter:在当前行下/上新增一行空白行
-* ctrl+.:将光标移动至当前文件中的下一个报错处或警告处
-* ctrl+1:修改建议的快捷键
-* ctrl+t:列出接口的实现类列表,再按一次则显示自底层向上的结构
-* alt+left:在导航历史记录中后退
-* alt+right:在导航历史记录中前进
-* ctrl+q:回到最后一次编辑的地方
-* ctrl+shift+0:自动导包
+
+
+* `ALT+CLICK`:多编辑点选中,可同时编辑多行
+* `ALT+LEFT`:在导航历史记录中后退
+* `ALT+RIGHT`:在导航历史记录中前进
+* `ALT+SHIFT+R`:重命名文件或方法,需要先选中,会自动修改使用该文件的其他文件,连续按2次会弹出对话框
+* `ALT+SHIFT+M`:方法重构
+* `CTRL+1`:
+  * 选中有错误或警告的变量,会修改建议的快捷键
+  * 选中类名,可快捷显示`getter/setter,tostring(),hashcode()/equals()`
+* `CTRL+2,L`:为变量赋值.先按ctrl+2,右下角会出现选项,选择L给变量赋值
+* `CTRL+6`:按1次查询整个WorkSpace,按2次查询当前Project,按3次查询当前文件
+  * `@+`:查找所有bean定义
+  * `@/`:查找所有Controller中的RequestMapping
+  * `@>` :查找所有方法(prototype implementation)
+  * `@`:查找所有Spring注解
+  * `//` :查找所有http请求地址
+* `CTRL+.`:将光标移动至当前文件中的下一个报错处或警告处
+* `CTRL+O`:快速outline,查看当前文件的方法以及变量等
+* `CTRL+Q`:回到最后一次编辑的地方
+* `CTRL+T`:列出接口的实现类列表,再按一次则显示自底层向上的结构
+* `CTRL+SHIFT+C`: 如果该快捷键无效,可以修改Toggle Line Comment,将When修改为In Windows
+* `CTRL+SHIFT+O`:自动导包
+* `CTRL+SHIFT+R`:打开资源,只能打开自己写的文件,不能打开JAR包内的文件
+* `CTRL+SHIFT+T`:打开任何文件,包括资源文件,但不包括class
+* `SHIFT+ENTER/CTRL+SHIFT+ENTER`:在当前行下/上新增一行空白行
 
 
 

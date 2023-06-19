@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><templates><template autoinsert="true" context="xml_all" deleted="false" description="mybatis if string query tag" enabled="true" name="ifstr">&lt;if test="query.${idStr} != null and query.${idStr} != '' "&gt;
+	AND a.${id} = #{query.${idStr}}
+&lt;/if&gt;</template></templates>

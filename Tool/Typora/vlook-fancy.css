@@ -4284,7 +4284,7 @@ p[d-blockquote-folded]:active .v-blockquote-folder > svg > use {
 code,
 tt {
   color: var(--code-t);
-  font: var(--v-f-w-text) 0.875em/1.5 var(--v-f-fm-code);
+  font: var(--v-f-w-text) 0.9em/1.5 var(--v-f-fm-code);
   background: var(--code-bg);
   border-radius: var(--v-r-s);
   padding: 1px 5px;

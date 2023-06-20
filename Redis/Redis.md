@@ -18,11 +18,25 @@
 
 
 
-## 单线程工作
+## 单线程
 
 
 
-![](REDIS01.PNG)
+![](001.PNG)
+
+
+
+* Redis是单线程+多路IO复用技术.多路复用是指使用一个线程来检查多个文件描述符(Socket)的就绪状态,比如调用select和poll函数,传入多个文件描述符,如果有一个文件描述符就绪,则返回,否则阻塞直到超时.得到就绪状态后进行真正的操作可以在同一个线程里执行,也可以启动线程执行(比如使用线程池)
+
+
+
+## 多线程
+
+
+
+* Redis6之后支持多线程,但是只是客户端和Redis服务之间链接的多线程,实际处理命令的仍然是单线程
+* `io-threads-do-reads no/yes`:多线程IO默认不开启,需要再配置文件中配置
+* `io-threads`:多线程数量
 
 
 
@@ -117,6 +131,9 @@
 * GEO:地理信息位置
 * debug reload:服务器运行中重启
 * shotdown save:关闭服务器时指定保存数据
+* dbsize:查看当前数据库的key的数量
+* flushdb:清空当前数据库
+* flush
 
 
 
@@ -130,6 +147,7 @@
 * exists key:查看当前数据库是否有指定key.存在返回1,不存在返回0
 * move key db:将当前数据库中指定key移动到指定数据库中.若当前数据库没有该key或目的数据库已经存在该key,则移动失败,返回0.移动成功返回1
 * del key1 key2...:从当前数据库中删除指定key
+* unlink key:根据value选择非阻塞删除,仅将keys从keyspace元数据中删除,真正的删除会在后续异步操作
 * randomkey:从当前数据库中随机返回一个key,但不会删除该key
 * type key:查看指定key所存储的值的类型,是值,不是key
 * rename key nkey:将key改名为新key.当key和nkey相同或key不存在时,返回一个错误;当nkey已经存在时,RENAME命令相当于将原key的value覆盖nkey的value
@@ -231,6 +249,15 @@
 
 
 
+* String:简单动态字符串
+* List:数据量小时使用ziplist,数据量大时使用ziplist组成的双向链表
+* Set:数据量小时使用ziplist或intset,视数据结构而定.数据量大时使用字典,底层是HashTable
+* ZSet:Hash和跳表构成ZSet.跳表排序,Hash保存权重(score)
+* Hash:数据量小时使用ziplist,数据量大时使用HashTable
+* Bitmaps:类似于Hash,但是值只能是0或1,常用于统计
+
+
+
 ## 编码数据结构
 
 
@@ -276,7 +303,7 @@
 
 
 
-* SDS, simple dynamic string
+* SDS, simple dynamic string,String使用该数据结构,最大值为512M
 * 可以储存位数组(实现BITOP和HyperLogLog),字符串,整数和浮点数,其中超过64位的整数和超过 IEEE 754 标准的浮点数使用字符串来表示
 * 有int,embstr和raw三种表示形式:int 用于储存小于等于 64 位的整数,embstr 用来储存比较短的位数组和字符串,而其他格式的值则由 raw 格式储存
 * 比起 C 语言的字符串格式,SDS 具有以下四个优点:
@@ -291,8 +318,8 @@
 
 
 
-* 双向、无环、带有表头和表尾指针
-* 一个链表包含多个项,每个项都是一个字符串对象,即一个链表对象可以包含多个字符串对象
+* 双向、无环、带有表头和表尾指针,当List数据较多时使用该模式
+* 一个链表包含多个项,每个项都是一个zip list,即一个链表对象可以包含多个字符串对象
 * 可以从表头或者表尾遍历整个链表,复杂度为 O(N)
 * 定位特定索引上的项,复杂度为 O(N)
 * 链表带有长度记录属性,获取链表的当前长度的复杂度为 O(1)
@@ -315,6 +342,7 @@
 
 
 * 支持平均 O(log N) 最坏 O(N) 复杂度的节点查找操作,并且可以通过执行范围性(range)操作来批量地获取有序的节点
+* 跳表类似于加了前指针的双向链表,同时具有层级(level),该层级类似于二叉树,从最顶层向下查找,但是n层的数据在n-1层都存在,这和二叉树不同
 * 跳表节点除了实现跳表所需的层(level)之外,还具有 score 属性和 obj 属性:
   * score:是一个浮点数,用于记录成员的分值
   * obj:是一个字符串对象,用来记录成员本身
@@ -333,7 +361,7 @@
 * 算法给出的基数并不是精确的,误差范围是一个带有 0.81% 标准错误的近似值
 * 耗空间极小,每个hyperloglog key占用了12K的内存用于标记基数
 * pfadd命令不是一次性分配12K内存使用,会随着基数的增加内存逐渐增大
-* Pfmerge命令合并后占用的存储空间为12K,无论合并之前数据量多少  
+* Pfmerge命令合并后占用的存储空间为12K,无论合并之前数据量多少
 
 
 
@@ -347,10 +375,9 @@
 * port:监听端口
 * daemonize:是否以守护进程运行,默认no.通常修改为yes
 * pidfile:存储redis pid的文件,redis启动后创建,退出后删除
-* tcp-backlog:tcp监听队列长度.
-  * backlog是一个连接队列,队列总和等于未完成的三次握手队列加上已经完成三次握手的队列
-  * 在高并发环境下需要搞的backlog来避免慢客户端连接问题
-  * linux内核会将这个值减小到/proc/sys/net/core/somaxconn的值,所以调高此值时应同时关注/proc/sys/net/ipv4/tcp_max_syn_backlog和/proc/sys/net/core/somaxconn的值
+* tcp-backlog:tcp监听队列长度
+  * backlog是一个连接队列,队列总和等于未完成三次握手队列加上已经完成三次握手的队列
+  * linux内核会将这个值减小到`/proc/sys/net/core/somaxconn`的值,所以调高此值时应同时调高`/proc/sys/net/ipv4/tcp_max_syn_backlog`和`/proc/sys/net/core/somaxconn`的值
 * bind:绑定网络ip,默认接受来自所有网络接口的连接,可以绑定多个,最多同时绑定16个
 * unixsocket:指定用于监听连接的unix socket的路径
 * unixsocketperm:unixsocket path的权限,不能大于777
@@ -755,6 +782,7 @@ save  60  1000
 * 手动调用save或bgsave进行快照备份
   * save:冷备时只管备份,不管其他,全部阻塞
   * bgsave:异步备份,不阻塞redis的读写操作,可用lastsave获得最近一次备份的时间
+* `redis-check-dump`:修复有问题的dump.rdb文件
 
 
 
@@ -777,7 +805,7 @@ save  60  1000
 
 * 生成一份修改记录日志文件(appendonly.aof),每次执行操作都会将命令先写入os cache,然后每隔一定时间再fsync写到AOF文件中
 * 同时开启了RDB和AOF时,redis重启之后,**仍然优先读取AOF中的数据**,但是AOF数据恢复比较慢
-* AOF文件只有一份,当文件增加到一定大小时,AOF会进行rewrite,会基于当前redis内存中的数据,重新构造一个更小的AOF文件,然后将大的文件删除
+* AOF文件只有一份,当文件增加到一定大小时,AOF会进行rewrite
 * rewrite是另外一线程来写,对redis本身的性能影响不大
   
   * auto-aof-rewrite-percentage:redis每次rewrite都会记住上次rewrite时文件大小,下次达到上次rewrite多少时会再次进行rewrite,默认100,可不改
@@ -790,6 +818,19 @@ save  60  1000
 
 
 
+### bgrewriteaof
+
+
+
+* bgrewriteaof触发重写,判断当前是否有bgsave或bgrewriteaof在运行,如果有,则等待该命令结束后再继续执行
+* 主进程fork出子进程执行重写操作,保证主进程不会阻塞
+* 子进程基于当前redis内存中的数据写入临时文件,客户端的写请求同时写入aof_buf和aof_rewrite_buf,保证原AOF文件以及新AOF文件生成期间的新数据修改动作不会丢失
+* 子进程写完新的AOF文件后,向主进程发信号,父进程更新统计信息
+* 主进程把aof_rewrite_buf中的数据写入到新的AOF文件
+* 使用新的AOF文件覆盖旧的AOF文件
+
+
+
 ## Mixed
 
 
@@ -798,6 +839,65 @@ save  60  1000
 * 如果开启了混合持久化,AOF在重写时,不再是单纯将内存数据转换为RESP命令写入AOF文件,而是将重写这一刻之前的内存做RDB快照处理,并将RDB快照内容和增量的AOF修改内存数据的命令存在一起写入新的AOF文件,新文件一开始不叫appendonly.aof,重写完新的AOF文件才会进行改名,覆盖原有的AOF文件
 * 在Redis重启的时候,可以先加载RDB的内容,然后再加载增量AOF日志就可以完全替代之前的AOF全量文件
 * `aof-use-rdb-preamble yes`:开启混合持久化,同时要开启RDB和AOF
+
+
+
+# ACL
+
+
+
+* [官网文档](https://redis.io/topics/acl)
+* Access Control List(访问控制列表),该功能允许根据可以执行的命令和可以访问的键来限制某些连接.Redis6新功能
+
+ 
+
+## 命令
+
+
+
+* `acl list`:查询用户权限列表
+* `acl cat`:查看添加权限指令类别,加参数类型名可以查看类型下具体命令
+* `acl whoami`:查看当前用户
+* `aclsetuser`:创建和编辑用户ACL
+
+（1）ACL规则
+
+下面是有效ACL规则的列表。某些规则只是用于激活或删除标志，或对用户ACL执行给定更改的单个单词。其他规则是字符前缀，它们与命令或类别名称、键模式等连接在一起。
+
+| ACL规则              |                                                              |                                                    |
+| -------------------- | ------------------------------------------------------------ | -------------------------------------------------- |
+| 类型                 | 参数                                                         | 说明                                               |
+| 启动和禁用用户       | **on**                                                       | 激活某用户账号                                     |
+| **off**              | 禁用某用户账号。注意，已验证的连接仍然可以工作。如果默认用户被标记为off，则新连接将在未进行身份验证的情况下启动，并要求用户使用AUTH选项发送AUTH或HELLO，以便以某种方式进行身份验证。 |                                                    |
+| 权限的添加删除       | **+<command>**                                               | 将指令添加到用户可以调用的指令列表中               |
+| **-<command>**       | 从用户可执行指令列表移除指令                                 |                                                    |
+| **+@<category>**     | 添加该类别中用户要调用的所有指令，有效类别为@admin、@set、@sortedset…等，通过调用ACL CAT命令查看完整列表。特殊类别@all表示所有命令，包括当前存在于服务器中的命令，以及将来将通过模块加载的命令。 |                                                    |
+| -@<actegory>         | 从用户可调用指令中移除类别                                   |                                                    |
+| **allcommands**      | +@all的别名                                                  |                                                    |
+| **nocommand**        | -@all的别名                                                  |                                                    |
+| 可操作键的添加或删除 | **~<pattern>**                                               | 添加可作为用户可操作的键的模式。例如~*允许所有的键 |
+
+ 
+
+（2）通过命令创建新用户默认权限
+
+acl setuser user1
+
+ 
+
+在上面的示例中，我根本没有指定任何规则。如果用户不存在，这将使用just created的默认属性来创建用户。如果用户已经存在，则上面的命令将不执行任何操作。
+
+ 
+
+（3）设置有用户名、密码、ACL权限、并启用的用户
+
+acl setuser user2 on >password ~cached:* +get
+
+ 
+
+ 
+
+(4)切换用户，验证权限
 
 
 
@@ -932,83 +1032,6 @@ save  60  1000
   cat /proc/sys/net/core/somaxconn
   echo 511 > /proc/sys/net/core/somaxconn
   ```
-
-
-
-# 其他
-
-
-
-## 自启动
-
-
-
-* 在redis目录里的utils目录下有个redis_init_script脚本,将该脚本拷贝到/etc/init.d中,并改名,将后缀改为redis的端口号:cp redis_init_script /etc/init.d/redis_6379
-* REDISPORT:redis_6379中的变量指定redis运行时的端口号,默认为6379
-* EXEC:redis-server的地址,需要指向redis-server所在的目录
-* CLIEXEC:redis-cli的地址,需要指向redis-cli所在目录
-* PIDFILE:pidfile地址,需要和redis安装目录中的redis.conf中的pidfile地址相同,可不修改,默认都为/var/run/redis_${REDISPORT}.pid
-* CONF:redis安装目录中的redis.conf的地址,实际上是redis运行时的具体配置文件地址
-* 在redis_6379最上面添加# chkconfig:2345 90 10,另起一行chkconfig  redis_6379 on
-
-
-
-## 内置管理工具
-
-
-
-### redis-benchmark
-
-
-
-* 性能测试工具,测试Redis在你的系统及配置下的读写性能
-
-
-
-### redis-check-aof
-
-
-
-* 用于修复出问题的AOF文件
-
-
-
-### redis-check-dump
-
-
-
-* 用于修复出问题的dump.rdb文件
-
-
-
-### redis-cli
-
-
-
-* 在redis安装目录的src下,执行./redis-cli,可进入redis控制台
-* redis-cli -h ip -p port:连接指定ip地址的redis控制台
-
-
-
-### redis-sentinel
-
-
-
-* Redis集群的管理工具
-
-
-
-## 第三方管理工具
-
-
-
-
-
-### CacheCloud
-
-
-
-* 一个管理Redis主从,哨兵,集群的平台
 
 
 

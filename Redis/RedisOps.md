@@ -175,11 +175,11 @@
 
 
 * master执行bgsave,在本地生成一份rdb快照文件
-* master node将rdb快照文件发送给salve node,如果rdb复制时间超过60秒(repl-timeout),那么slave就会认为复制失败,可以适当调节大这个参数
+* master将rdb快照文件发送给salve,如果rdb复制时间超过60秒(repl-timeout),那么slave就会认为复制失败,可以适当调节大这个参数
 * 对于千兆网卡的机器,一般每秒传输100MB,6G文件,很可能超过60s
-* master在生成rdb时,会将所有新的写命令缓存在内存中,在salve保存了rdb之后,再将新的写命令复制给salve node
-* client-output-buffer-limit slave 256MB 64MB 60,如果在复制期间,内存缓冲区持续消耗超过64MB,或者一次性超过256MB,那么停止复制,复制失败
-* slave接收到rdb之后,清空自己的旧数据,然后重新加载rdb到自己的内存中,同时基于旧的数据版本对外提供服务
+* master在生成rdb时,会将所有新的写命令缓存在内存中,在salve保存了rdb之后,再将新的写命令复制给salve
+* `client-output-buffer-limit slave 256MB 64MB 60`,如果在复制期间,内存缓冲区持续消耗超过64M,或者一次性超过256M,那么停止复制,复制失败
+* slave接收到rdb之后,清空自己的旧数据,然后重新加载rdb到自己的内存中,同时基于旧的数据版本对外提供服务,替换旧数据时暂停查询服务
 * 如果slave开启了AOF,那么会立即执行BGREWRITEAOF,重写AOF
 * rdb生成,rdb通过网络拷贝,slave旧数据的清理,slave aof rewrite,很耗费时间
 * 如果复制的数据量在4G~6G之间,那么很可能全量复制时间消耗到1分半到2分钟
@@ -203,7 +203,7 @@
 * 又名复制积压缓冲区,是一个先进先出(FIFO)的队列,用于存储服务器执行过的命令, 每次传播命令, master都会将传播的命令记录下来, 并存储在复制缓冲区
 * 复制缓冲区默认数据存储空间大小是1M,由于存储空间大小是固定的,当入队元素的数量大于队列长度时,最先入队的元素会被弹出,而新元素会被放入队列
 * 由来:每台服务器启动时,如果开启有AOF或被连接成为master节点, 即创建复制缓冲区
-* 作用:用于保存master收到的所有指令(仅影响数据变更的指令,例如set, select)
+* 作用:用于保存master收到的所有指令(仅影响数据变更的指令,例如set)
 * 数据来源:当master接收到主客户端的指令时,除了将指令执行,会将该指令存储到缓冲区中
 
 
@@ -231,7 +231,7 @@
 
 * info replication:查看复制节点的相关信息
 * slaveof ip:port:将当前从Redis的主Redis地址切换成另外一个Redis地址,重新同步数据
-* slaveof on one:使当前Redis停止和其他Redis的同步,同时将当前Redis转为主Redis
+* slaveof on one:使当前Redis停止和其他Redis的同步,同时将当前Redis转为master
 
 
 
@@ -243,7 +243,7 @@
 
 
 
-* 伴随着系统的运行, master的数据量会越来越大,一旦master重启, runid将发生变化,会导致全部slave的全量复制操作
+* 伴随着系统的运行, master的数据量会越来越大,一旦master重启,runid将发生变化,会导致全部slave的全量复制操作
 * 优化调整方案:
   * master内部创建master_replid变量,使用runid相同的策略生成,长度41位,并发送给所有slave
   * 在master关闭时执行命令 shutdown save,进行RDB持久化,将runid与offset保存到RDB文件中
@@ -716,10 +716,6 @@
 
 
 
-## docker中使用
-
-
-
 * -p localport:dockerport:将docker中的端口映射到本地端口
 * --restart=always:总是随着docker的启动而启动
 * --requirepass:使用密码进入redis-cli
@@ -739,3 +735,76 @@ docker run -d -p 6379:6379 --restart=always \
  redis-server /etc/redis/redis.conf --appendonly yes
 ```
 
+
+
+# 自启动
+
+
+
+* 在redis目录里的utils目录下有个redis_init_script脚本,将该脚本拷贝到/etc/init.d中,并改名,将后缀改为redis的端口号:cp redis_init_script /etc/init.d/redis_6379
+* REDISPORT:redis_6379中的变量指定redis运行时的端口号,默认为6379
+* EXEC:redis-server的地址,需要指向redis-server所在的目录
+* CLIEXEC:redis-cli的地址,需要指向redis-cli所在目录
+* PIDFILE:pidfile地址,需要和redis安装目录中的redis.conf中的pidfile地址相同,可不修改,默认都为/var/run/redis_${REDISPORT}.pid
+* CONF:redis安装目录中的redis.conf的地址,实际上是redis运行时的具体配置文件地址
+* 在redis_6379最上面添加# chkconfig:2345 90 10,另起一行chkconfig  redis_6379 on
+
+
+
+# 内置管理工具
+
+
+
+## redis-benchmark
+
+
+
+* 性能测试工具,测试Redis在系统及配置下的读写性能
+* Redis5之后该命令支持集群模式,通过多线程的方式对多个分片进行压测
+
+
+
+## redis-check-aof
+
+
+
+* 用于修复出问题的AOF文件
+
+
+
+## redis-check-dump
+
+
+
+* 用于修复出问题的dump.rdb文件
+
+
+
+## redis-cli
+
+
+
+* 在redis安装目录的src下,执行./redis-cli,可进入redis控制台
+* redis-cli -h ip -p port:连接指定ip地址的redis控制台
+
+
+
+## redis-sentinel
+
+
+
+* Redis集群的管理工具
+
+
+
+# 第三方管理工具
+
+
+
+
+
+## CacheCloud
+
+
+
+* 一个管理Redis主从,哨兵,集群的平台

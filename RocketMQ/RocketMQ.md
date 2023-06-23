@@ -9,7 +9,7 @@
 * Producer:生产者.会和NameServer集群中的随机一台建立长连接,获取当前要发送的Topic存在哪台Broker Master上,然后再与其建立长连接,支持多种负载均衡
 * Producer Group:生产者组,是一类Producer的集合,这类Producer通常发送一类消息,且发送逻辑一致
 * Consumer:消费者.同Producer,只不过会同时获取Slave的地址
-* Consumer Group:同Producer Group
+* Consumer Group:同Producer Group,只能消费相同的Topic,且同时只能消费一个Topic
 * Broker:类似于服务器,队列存储在Broker中,负责消息的存储,查询消费.一个Master可对应多个Slave ,Master支持读写,Slave只负责读.Broker会向集群中的每一台NameServer注册自己的路由信息
 * NameServer:一个很简单的Topic路由注册中心,支持Broker的动态注册和发现,保存Topic和Broker之间的关系.集群中的NameServer不会进行相互通讯,各NameServer都有完整的路由信息
 * Topic:区分消息的种类,一个发送者可以发送消息给一个或多个Topic,一个消费者可以接收一个或多个Topic
@@ -40,7 +40,7 @@
 
 
 
-* 磁盘如果使用得当,磁盘的速度完全可以匹配上网络的数据传输速度,但是磁盘随机写的速度只有大概100KB/s,和顺序写的性能相差6000倍.RocketMQ的消息用顺序写,保证了消息存储的速度
+* 磁盘如果使用得当,磁盘的速度完全可以匹配上网络的数据传输速度,但是磁盘随机写的速度只有大概100K/s,和顺序写的性能相差6000倍.RocketMQ的消息用顺序写,保证了消息存储的速度
 
 
 
@@ -52,11 +52,11 @@
 * 一台服务器 把本机磁盘文件的内容发送到客户端,一般分为两个步骤:
 * read: 读取本地文件内容
 * write: 将读取的内容通过网络发送出去
-* 这两个看似简单的操作,实际进行了4 次数据复制,分别是:
+* 这两个看似简单的操作,实际进行了4次数据复制,分别是:
   * 从磁盘复制数据到内核态内存
-  * 从内核态内存复 制到用户态内存
-  * 然后从用户态 内存复制到网络驱动的内核态内存
-  * 最后是从网络驱动的内核态内存复 制到网卡中进行传输
+  * 从内核态内存复制到用户态内存
+  * 然后从用户态内存复制到网络驱动的内核态内存
+  * 最后是从网络驱动的内核态内存复制到网卡中进行传输
 
 
 
@@ -66,6 +66,11 @@
 
 * 通过使用mmap的方式,可以省去向用户态的内存复制,提高速度.这种机制在Java中是通过MappedByteBuffer实现.但是采用MappedByteBuffer这种内存映射的方式有几个限制,其中之一是一次只能映射1.5~2G 的文件至用户态的虚拟内存,这也是为何RocketMQ默认设置单个CommitLog日志数据文件为1G的原因
 * RocketMQ充分利用了上述特性,也就是所谓的“零拷贝”技术,提高消息存盘和网络发送的速度
+* RocketMQ中每个消息拥有唯一的MessageId,且可以携带具有业务标识的Key,以方便对消息的查询.不过MessageId有两个:在生产者send()消息时会自动生成一个MessageId(msgId),当消息到达Broker后,Broker也会自动生成一个MessageId(offsetMsgId).msgId,offsetMsgId与key都称为消息标识
+  * msgId:由producer端生成,其生成规则为:producerIp + 进程pid + MessageClientIDSetter类的ClassLoader的hashCode + 当前时间 + AutomicInteger自增计数器
+  * offsetMsgId:由broker端生成,其生成规则为:brokerIp+物理分区的offset(Queue中的偏移量)
+  * key:由用户指定的业务相关的唯一标识
+
 
 
 

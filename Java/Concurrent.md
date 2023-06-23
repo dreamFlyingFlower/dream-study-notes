@@ -584,9 +584,8 @@ public class Singleton {
 
 
 * 这里只探讨为了实现volatile关键字的语义的一种参考做法: 
-  * 在volatile写操作的前面插入一个StoreStore屏障,保证volatile写操作不会和之前的写操作重排序
-  * 在volatile写操作的后面插入一个StoreLoad屏障,保证volatile写操作不会和之后的读操作重排序
-  * 在volatile读操作的后面插入一个LoadLoad屏障+LoadStore屏障,保证volatile读操作不会和之后的读操作、写操作重排序
+  * 在volatile写操作的前后分别插入一个StoreStore屏障+StoreLoad屏障,保证volatile写操作不会和前后的写,读操作重排
+  * 在volatile读操作的前后分别插入一个LoadLoad屏障+LoadStore屏障,保证volatile读操作不会和前后的读,写操作重排序
 * 具体到x86平台上,其实不会有LoadLoad、LoadStore和StoreStore,只有StoreLoad一种重排序(内存屏障),也就是只需要在volatile写操作后面加上StoreLoad屏障
 
 

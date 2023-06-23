@@ -289,9 +289,10 @@
   * 在初次调用java.lang.invoke.MethodHandle实例时,它的执行结果为通过Java虚拟机解析出类型是2(REF_getStatic),4(REF_putStatic)或者6(REF_invokeStatic)的方法句柄
   * 在调用JDK核心类库中的反射方法时,例如Class类或java.lang.reflect包
   * 在对于类的某个子类的初始化时,需要先初始化父类(如果父类没有被初始化).如果子类引用父类的静态字段,子类不会被初始化
-  * 在它被选定为Java虚拟机启动时的初始类时
+  * 在它被选定为Java虚拟机启动时的初始类时(包含main())
   * 通过数组定义引用类型时,不会初始化类
   * 调用类的常量时不会初始化类
+  * 当接口中定义了default(),且被子类调用时,接口会被初始化
 * 在类或接口被初始化之前,它必须被链接过,也就是经过验证,准备阶段,且有可能已经被解析完成了
 * 因为Java虚拟机是支持多线程的,所以在初始化类或接口的时候要特别注意线程同步问题,可能其它一些线程也想要初始化相同名称的类或接口.也有可能在初始化一些类或接口时,初始的请求被递归要求初始化它自己.Java虚拟机实现需要负责处理好线程同步和递归初始化,具体可以使用下面的步骤来处理,这些处理步骤假定Class对象已经被验证和准备过,并且处于下面所述的四种状态之一:
   * Class 对象已经被验证和准备过,但还没有被初始化
@@ -683,7 +684,8 @@ invokespecial #5 // Invoke myClass.<init>
 | method_info    | methods             | methods_count         | 字节长度不定,由方法数量决定                      |
 | u2             | attributes_count    | 1                     | 属性数量                                         |
 | attribute_info | attributes          | attributes_count      | 字节长度不定,由属性数量决定                      |
-|                |                     |                       |                                                  |
+
+
 
 ## magic
 
@@ -1120,7 +1122,7 @@ exception_index_table[number_of_exceptions] u2:指向Constant_Class的索引
 
 
 
-![对象头](F:/repository/dream-study-notes/Jvm/img/021.png)
+![对象头](img/021.png)
 
 
 
@@ -1130,6 +1132,9 @@ exception_index_table[number_of_exceptions] u2:指向Constant_Class的索引
   * `Class Pointer`:是对象指向它的类元数据的指针,虚拟机通过这个指针来确定这个对象是哪个类的实例
   * `Array Length`: 如果当前对象是一个数组,那么此处存储的就是数组的大小,占用4字节,如果不是数组就不占用
   * 一般占有2个机器码(在32位虚拟机中,1个机器码等于4字节,也就是32bit;在64位虚拟机中,1个机器码是8个字节,也就是64bit),`Mark Word`和`Class Pointer`各占一个机器码,但是如果对象是数组类型,则需要3个机器码,因为JVM虚拟机可以通过Java对象的元数据信息确定Java对象的大小,但是无法从数组的元数据来确认数组的大小,所以用一块来记录数组长度
+  * `MarkWord`中的信息和字节数根据对象的锁状态不同而不同.是否偏向锁和锁标志位是根据synchronized来决定的
+    * 上图为32位OS,64位OS无锁状态下hash占31字节,有25位没有使用,其他一样
+    * 64位OS的偏向锁状态下线程ID占54位,epoch还是2位,其他和32位一样
 * InstanceData:实例数据,存放类的属性数据信息,包括父类的属性信息
   * 相同宽度的字段总是被分配在一起
   * 父类中定义的变量会出现在子类之前
@@ -1152,6 +1157,16 @@ exception_index_table[number_of_exceptions] u2:指向Constant_Class的索引
 
 
 
+### HashCode
+
+
+
+* hashcode由`System.identityHashCode()`按原始内容计算,重写的hashcode并不会存储到对象头中
+* hashcode只会在调用未重写的`hashcode()`以及`System.identityHashCode()`时才会生成,并且记录到对象头中
+* 当对象处于加锁状态时,hashcode并不存储在对象头中.如果对象此时必须生成hashcode,则锁会升级成重量级锁,因为重量级锁的hashcode是存放在monitor中的
+
+
+
 ## 创建
 
 
@@ -1162,6 +1177,39 @@ exception_index_table[number_of_exceptions] u2:指向Constant_Class的索引
 * 虚拟机在堆中为对象分配内存
 * 将分配的内存初始化为零值,不包含对象头
 * 调用对象的初始化方法
+* 总的创建过程:
+  * 加载
+  * 链接:验证->准备->解析
+  * 初始化:有用`<clinit>()`则调用
+  * 申请对象内存
+  * 给对象的成员变量赋默认值
+  * 调用构造`<init>()`
+    * 成员变量顺序赋初始值
+    * 执行构造方法
+
+
+
+
+## 对象大小
+
+
+
+### 普通对象
+
+
+
+* MarkWord:对象头占8字节
+* Class Pointer:对象指针,根据JVM参数`-XX:+UseCompressedClassPointers`是否开启决定:开启为4字节,不开启为8字节
+* InstanceData:根据对象中实际成员变量的类型占字节数决定,引用类型根据JVM参数`-XX:+UseCompressedOops`是否开启决定:开启占4字节,不开启占8字节
+* Padding:对齐,8的倍数
+
+
+
+### 数组对象
+
+
+
+* 数据对象比普通对象多了个数组长度,占4字节.实例数据则换成了数组数据
 
 
 

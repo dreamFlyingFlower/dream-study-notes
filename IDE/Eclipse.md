@@ -488,36 +488,36 @@ ${imp:import(java.util.ArrayList,java.util.List,java.util.Map)}
 
   ```xml
   <if test="query.${ids} != null and query.${ids}.size() > 0">
-  	AND ${id} IN
-  	<foreach collection="query.${ids}" item="item" open="(" separator="," close=")">
-  		#{item}
-  	</foreach>
-  </if>
+  				AND a.${id} IN
+  				<foreach collection="query.${ids}" item="item" open="(" separator="," close=")">
+  					#{item}
+  				</foreach>
+  			</if>
   ```
 
 * ifstr,mybatis if string query tag,All XML
 
   ```xml
   <if test="query.${name} != null and query.${name} != '' ">
-  	AND a.${column} = #{query.${name}}
-  </if>
+  				AND a.${column} = #{query.${name}}
+  			</if>
   ```
 
 * ifstrlike,mybatis if string like query tag,All XML
 
   ```xml
   <if test="query.${name} != null and query.${name} != '' ">
-  	<bind name="${name}Like" value=" '%'+ query.${name} + '%' " />
-  	AND a.${column} = #{${name}Like}
-  </if>
+  				<bind name="${name}Like" value=" '%'+ query.${name} + '%' " />
+  				AND a.${column} LIKE #{${name}Like}
+  			</if>
   ```
 
 * ifobj,mybatis if object query tag,All XML
 
   ```xml
   <if test="query.${name} != null ">
-  	AND a.${column} = #{query.${name}}
-  </if>
+  				AND a.${column} = #{query.${name}}
+  			</if>
   ```
 
 

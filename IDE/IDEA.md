@@ -567,6 +567,14 @@
 
 
 
+## HighlightBracketPair
+
+
+
+* 括号开始结尾高亮显示
+
+
+
 ## Rainbow Brackets
 
 

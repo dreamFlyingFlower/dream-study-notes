@@ -412,7 +412,7 @@ ${imp:import(java.util.ArrayList,java.util.List,java.util.Map)}
 
 
 
-* Enablement:可古纳比,SpringBoot3.x一些优化
+* Enablement:可关闭,SpringBoot3.x一些优化
 
 
 

@@ -277,7 +277,7 @@ public void spin() {
   * 结束位置
   * 程序计数器记录的代码处理的偏移地址
   * 被捕获的异常类在常量池甫的索引
-* finally在字节码中会复制2份,如果抛出异常会走异常的一部分;如果有return,则finally中的字节码会复制一份到return之前,见17.案例2
+* finally在字节码中会复制2份,如果抛出异常会走异常的一部分;如果有return,则finally中的字节码会复制一份到return之前,见18.案例2
 
 
 
@@ -496,6 +496,7 @@ public void test(){
 
 
 ```java
+// 结果为heiheihei
 public static String test(){
     String sss = "heiheihei";
     try{
@@ -531,6 +532,39 @@ start pc				end pc					handler pc					catchType
 13 astore_0
 14 aload_2					   // 抛出异常
 15 athrow
+```
+
+
+
+```java
+// 结果为lalala
+public static String test1() {
+    String sss = "heiheihei";
+    try {
+        return sss;
+    } finally {
+        sss = "lalala";
+        return sss;
+    }
+}
+```
+
+
+
+```
+ 0 ldc #7 <heiheihei>
+ 2 astore_0
+ 3 aload_0
+ 4 astore_1
+ 5 ldc #8 <lalala>
+ 7 astore_0
+ 8 aload_0
+ 9 areturn
+10 astore_2
+11 ldc #8 <lalala>
+13 astore_0
+14 aload_0
+15 areturn
 ```
 
 

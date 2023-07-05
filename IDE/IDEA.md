@@ -548,6 +548,7 @@
 
 
 * 查看class的字节码文件
+* view->show bytecode with jclasslib
 
 
 

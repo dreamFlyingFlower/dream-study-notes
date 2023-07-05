@@ -8,6 +8,8 @@
 
 ## 卸载MySQL
 
+
+
 * 所有操作都是以linux的centos7版本为基础进行的,其他操作系统可百度
 * 查询linux中是否安装了mysql
 
@@ -32,6 +34,8 @@ find / -name mysql # 查找系统中所有关于mysql的文件夹,之后通过�
 
 
 ## rpm安装
+
+
 
 * 进入https://dev.mysql.com/downloads/repo/yum/,下载mysql的rpm包
 * 根据linux版本选择mysql版本,点击download

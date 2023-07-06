@@ -59,7 +59,7 @@
 * 方法区中类静态属性引用的对象(JDK8在堆中).比如: Java类的引用类型静态变量
 * 方法区中常量引用的对象.比如:字符串常量池 (string Table)里的引用
 * 所有被同步锁synchronized持有的对象
-* Java虚拟机内部的引用.基本数据类型对应的class对象,一些常驻的异常对象(如:NullPointerException,OutOfMemoryError),系统加载器
+* Java虚拟机内部的引用.基本数据类型对应的class对象,一些常驻的异常对象(如:NullPointerException,OutOfMemoryError),系统类加载器
 * 反映Java虚拟机内部情况的JMXBean、JVMTI中注册的回调,本地代码缓存等
 * 除了这些固定的GC Roots集合以外,根据用户所选用的垃圾收集器以及当前回收的内存区域不同,还可以有其他对象临时性地加入,共同构成完整GC Roots集合.比如: 分代收集和局部回收 (Partial GC)
 
@@ -321,8 +321,9 @@
 
 
 
-* 在JDK8中废弃了Serial GC+CMS,ParNew GC+Serial Old GC,不建议使用这些组合;在JDK9中彻底移除了这2种组合
-* 在JDK14种废弃了Parallel Scavenge GC+Serial Old GC,不建议使用,彻底移除了CMS
+* JDK8中废弃了Serial GC+CMS,ParNew GC+Serial Old GC,不建议使用这些组合;在JDK9中彻底移除了这2种组合
+* JDK9之后默认使用G1
+* JDK14种废弃了Parallel Scavenge GC+Serial Old GC,不建议使用,彻底移除了CMS
 * Parallel Scavenge GC和CMS之所以不能组合使用,是因为Parallel Scavenge GC底层框架和CMS不兼容,无法使用
 * CMS能和MSC使用是一种备用方案,因为CMS可能回收失败,失败后利用MSC进行垃圾回收
 
@@ -859,7 +860,7 @@ S0     S1     E      O      M     CCS    YGC   YGCT    FGC    FGCT     GCT
 
 
 
-### Arthas
+## Arthas
 
 
 
@@ -885,6 +886,22 @@ S0     S1     E      O      M     CCS    YGC   YGCT    FGC    FGCT     GCT
   * profiler stop [filepath]:将火焰图保存到指定目录指定文件,之后可以在Web中访问:`http://localhost:3658/arthas-boot`
 * 也可以在Web界面查看信息:`http://localhost:8563`
 * 查看arthas的日志:`cat ~/logs/arthas/arthas.log`
+
+
+
+## GCViewer
+
+
+
+* 免费开源,执行解压目录中的jar包即可启动
+
+
+
+## GCEasy
+
+
+
+* 在线GC分析工具
 
 
 

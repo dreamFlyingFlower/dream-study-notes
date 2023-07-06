@@ -6,14 +6,72 @@
 
 
 
-* Producer:生产者.会和NameServer集群中的随机一台建立长连接,获取当前要发送的Topic存在哪台Broker Master上,然后再与其建立长连接,支持多种负载均衡
-* Producer Group:生产者组,是一类Producer的集合,这类Producer通常发送一类消息,且发送逻辑一致
-* Consumer:消费者.同Producer,只不过会同时获取Slave的地址
-* Consumer Group:同Producer Group,只能消费相同的Topic,且同时只能消费一个Topic
-* Broker:类似于服务器,队列存储在Broker中,负责消息的存储,查询消费.一个Master可对应多个Slave ,Master支持读写,Slave只负责读.Broker会向集群中的每一台NameServer注册自己的路由信息
-* NameServer:一个很简单的Topic路由注册中心,支持Broker的动态注册和发现,保存Topic和Broker之间的关系.集群中的NameServer不会进行相互通讯,各NameServer都有完整的路由信息
-* Topic:区分消息的种类,一个发送者可以发送消息给一个或多个Topic,一个消费者可以接收一个或多个Topic
-* Message Queue:相当于Topic的分区,用于并行发送和接收消息
+## Producer
+
+
+
+* 生产者.会和NameServer集群中的随机一台建立长连接,获取当前要发送的Topic存在哪台Broker Master上,然后再与其建立长连接,支持多种负载均衡
+
+
+
+## Producer Group
+
+
+
+* 生产者组,是一类Producer的集合,这类Producer通常发送一类消息,且发送逻辑一致
+
+  
+
+## Consumer
+
+
+
+* 消费者.同Producer,只不过会同时获取Slave的地址
+
+
+
+## Consumer Group
+
+
+
+* 同Producer Group,只能消费相同的Topic,且同时只能消费一个Topic
+
+
+
+## Broker
+
+
+
+* 类似于服务器,队列存储在Broker中,负责消息的存储,查询消费.一个Master可对应多个Slave ,Master支持读写,Slave只负责读.Broker会向集群中的每一台NameServer注册自己的路由信息
+
+
+
+## NameServer
+
+
+
+* 一个很简单的Topic路由注册中心,支持Broker的动态注册和发现,保存Topic和Broker之间的关系.集群中的NameServer不会进行相互通讯,各NameServer都有完整的路由信息
+* 客户端连接NameServer时,会先产生一个随机数,然后再与NameServer节点数量取模,进行连接.如果失败,再使用轮询算法
+
+
+
+## Topic
+
+
+
+* 区分消息的种类,一个发送者可以发送消息给一个或多个Topic,一个消费者可以接收一个或多个Topic
+* 手动创建Topic时,有2种模式:
+  * 集群模式:该模式下的Topic在集群中,所有Broker中的Queue数量是相同的
+  * Broker模式:该模式下的每个Broker中的Queue数量可以不同
+  * 自动创建时,默认是Broker模式,会为每个Broker默认创建4个Queue
+
+
+
+## Message Queue
+
+
+
+* 相当于Topic的分区,用于并行发送和接收消息
 
 
 
@@ -21,13 +79,14 @@
 
 
 
-* 先启动NameServer集群,各NameServer之间无任何数据交互,Broker启动之后会向所有NameServer定期(30s)发送心跳包,包括IP,Port,TopicInfo,NameServer会定期扫描Broker存活列表,如果超过120S没有心跳则移除此Broker信息,代表下线
-* Producer上线从NameServer获取它要发送的某Topic消息在哪个Broker上,并与其建立长连接,发送消息
-* Consumer上线同Producer
+* 先启动NameServer集群,各NameServer之间无任何数据交互
+* Broker启动之后会向所有NameServer定期(30s)发送心跳包,包括IP,Port,TopicInfo.NameServer会定期(10S)扫描Broker存活列表,如果超过120S没有心跳则移除此Broker信息,代表下线
+* Producer上线和NameServer中某一台建立长连接,并从中获取要发送的消息在那个Topic的Queue上以及Broker地址.之后根据算法选择一个Queue,与Queue所在的Broker建立长连接并向该Broker发消息.在获取到路信息后,Producer会首先将路由信息缓存到本地,再每30S从NameServer更新一次路由信息
+* Consumer上线同Producer,但是会定时向Broker发心跳,确保Broker存活
 * Topic:主题.不同类型的消息以不同的Topic进行区分,相当于消息的一级分类
-* Push:服务端(Broker)向消费者主动推送消息.实际上底层仍然是pull模式.Consumer把轮询过程封装并注册MessageListener监听器,取到消息后,唤醒MessageListener的consumeMessage()来消费,对用户来说,感觉像是消息被推送的
+* Push:服务端(Broker)向消费者主动推送消息.实际上底层仍然是pull模式.Consumer把轮询过程封装并注册MessageListener监听器,取到消息后,唤醒MessageListener的`consumeMessage()`来消费,对用户来说,感觉像是消息被推送的
 * Pull:消费者向服务器(Broker)定时拉取消息.取消息的过程需要用户实现.先通过打算消费的Topic拿到MessageQueue的集合,遍历该集合,然后针对每个MessageQueue批量取消息,一次取完后,记录该队列下一次要取的开始offset,直到取完,再换另一个MessageQueue
-* 长轮询:为保持消息的实时性,Consumer和Broker之间建立了长轮询.如果Broker没有消息更新,则将连接挂起,直到Broker推送新的数据.客户端象传统轮询一样从Broker请求数据,Broker会阻塞请求不会立刻返回,直到有数据或超市才返回给Consumer,然后关闭连接,Consumer处理完响应信息后再想Broker发送新的请求
+* 长轮询:为保持消息的实时性,Consumer和Broker之间建立了长轮询.如果Broker没有消息更新,则将连接挂起,直到Broker推送新的数据.客户端像传统轮询一样从Broker请求数据,Broker会阻塞请求不会立刻返回,直到有数据或超时才返回给Consumer,然后关闭连接,Consumer处理完响应信息后再想Broker发送新的请求
 * RocketMQ消息存储是由ConsumeQueue和CommitLog共同完成,CommitLog是真正存储数据的文件,ConsumeQueue是索引文件
 
 

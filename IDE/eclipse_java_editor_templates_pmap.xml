@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><templates><template autoinsert="true" context="java" deleted="false" description="declare a private Map&lt;String,Object&gt;" enabled="true" name="pmap">private Map&lt;${String},${Object}&gt; ${map};${cursor}&#13;
+${imp:import(java.util.Map)}</template></templates>

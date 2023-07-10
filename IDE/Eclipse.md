@@ -33,7 +33,7 @@
 
 
 
-* SHIFT+`:关闭项目,需自定义
+* `Close Project`:SHIFT+`,关闭项目
 * `Multi caret down`:`CTRL+SHIFT+Q`,从鼠标选中的当前行一直往下选择多行进行编辑
 * `Add all matches to multi-selection`:CTRL+SHIFT+`,先选一个字符串,按快捷键后选中所有相同字符串,可进行同时编辑
 
@@ -63,6 +63,14 @@
 
 
 * `java.awt.*`:勾选,会在导入或自动提示时不导入awt包
+
+
+
+### Bytecode Outline
+
+
+
+* 全部勾选
 
 
 
@@ -167,6 +175,8 @@ ${type_declaration}
 
 ### Editor
 
+
+
 #### Content Assist
 
 
@@ -205,7 +215,7 @@ ${type_declaration}
 * pfsstr,Java,new a final static String
 
 ```java
-private final static ${String} ${NAME} = ${null};${cursor}
+private final static ${String} ${NAME} = ${VALUE};${cursor}
 ```
 
 * pfsmap,Java,new a final static HashMap<String,Object>
@@ -385,6 +395,15 @@ ${imp:import(java.util.ArrayList,java.util.List,java.util.Map)}
 
 
 * 需要先安装Spring插件才有
+* Start Language Server at...:不勾选
+
+
+
+## Boot Launch Support
+
+
+
+* Show warning message ...:不勾选
 
 
 

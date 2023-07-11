@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?><templates><template autoinsert="true" context="java" deleted="false" description="add a @ApiModel to a class po,dto,vo,do" enabled="true" name="apim">/**&#13;
- * ${comment}&#13;
- * &#13;
- * @auther 飞花梦影&#13;
- * @date ${currentDate:date('yyyy-MM-dd HH:mm:ss')}&#13;
- * @git {@link https://gitee.com/dreamFlyingFlower}&#13;
- */&#13;
-@ApiModel(description = "${comment}")${imp:import(io.swagger.annotations.ApiModel)}</template></templates>

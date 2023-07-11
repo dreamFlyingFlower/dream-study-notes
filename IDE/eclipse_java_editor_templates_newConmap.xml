@@ -1,2 +1,0 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?><templates><template autoinsert="true" context="java" deleted="false" description="new a ConcurrentHashMap&lt;String,Object&gt;" enabled="true" name="newConmap">Map&lt;${String},${Object}&gt; ${concurrentHashMap} = new ConcurrentHashMap&lt;&gt;();${cursor}&#13;
-${imp:import(java.util.concurrent.ConcurrentHashMap,java.util.Map)}</template></templates>

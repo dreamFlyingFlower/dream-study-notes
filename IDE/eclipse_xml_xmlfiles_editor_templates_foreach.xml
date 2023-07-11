@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?><templates><template autoinsert="true" context="xml_all" deleted="false" description="mybatis if foreach tag" enabled="true" name="foreachlist">&lt;if test="query.${ids} != null and query.${ids}.size() &gt; 0"&gt;
-	AND ${id} IN
-	&lt;foreach collection="query.${ids}" item="item" open="(" separator="," close=")"&gt;
-		#{item}
-	&lt;/foreach&gt;
-&lt;/if&gt;</template></templates>

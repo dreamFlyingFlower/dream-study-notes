@@ -1,4 +1,0 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?><templates><template autoinsert="true" context="java" deleted="false" description="add lombok data,builder,noarg,allarg,builder annotation" enabled="true" name="lomData">@Data&#13;
-@Builder&#13;
-@NoArgsConstructor&#13;
-@AllArgsConstructor${imp:import(lombok.AllArgsConstructor,lombok.Builder,lombok.Data,lombok.NoArgsConstructor)}</template></templates>

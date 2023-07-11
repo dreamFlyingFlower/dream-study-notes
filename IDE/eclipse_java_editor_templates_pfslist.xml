@@ -1,2 +1,0 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?><templates><template autoinsert="true" context="java" deleted="false" description="new a final static ArrayList" enabled="true" name="pfslist">private final static List&lt;${String}&gt; ${ARRAY_LIST} = new ArrayList&lt;&gt;();${cursor}&#13;
-${imp:import(java.util.ArrayList,java.util.List)}</template></templates>

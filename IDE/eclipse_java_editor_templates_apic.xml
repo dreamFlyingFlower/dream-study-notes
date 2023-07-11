@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?><templates><template autoinsert="true" context="java" deleted="false" description="add a @Api to a class controller" enabled="true" name="apic">/**&#13;
- * ${comment} API&#13;
- * &#13;
- * @auther 飞花梦影&#13;
- * @date ${currentDate:date('yyyy-MM-dd HH:mm:ss')}&#13;
- * @git {@link https://gitee.com/dreamFlyingFlower}&#13;
- */&#13;
-@Api(tags = "${comment} API")${imp:import(io.swagger.annotations.Api)}</template></templates>

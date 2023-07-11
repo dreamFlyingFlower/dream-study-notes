@@ -1,4 +1,0 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?><templates><template autoinsert="true" context="xml_all" deleted="false" description="mybatis if string like query tag" enabled="true" name="iflike">&lt;if test="query.${name} != null and query.${name} != '' "&gt;
-				&lt;bind name="${name}Like" value=" '%'+ query.${name} + '%' " /&gt;
-				AND a.${column} = #{${name}Like}
-			&lt;/if&gt;</template></templates>

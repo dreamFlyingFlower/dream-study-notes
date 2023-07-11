@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?><templates><template autoinsert="true" context="java" deleted="false" description="add lombok getter,setter,builder,tostring,noarg,allarg annotation" enabled="true" name="lomAll">@Getter&#13;
-@Setter&#13;
-@Builder&#13;
-@ToString&#13;
-@NoArgsConstructor&#13;
-@AllArgsConstructor${imp:import(lombok.AllArgsConstructor,lombok.Builder,lombok.Getter,lombok.NoArgsConstructor,lombok.Setter,lombok.ToString)}</template></templates>

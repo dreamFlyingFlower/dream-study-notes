@@ -6,21 +6,38 @@
 
 
 
+* 高吞吐量:单机每秒处理几十上百万的消息量,即使存储了TB级别的消息,也能保持稳定的性能
+* 高性能:单节点支持上千个客户端,并保证零停机和零数据丢失
+* 持久化数据存储:将消息持久化到磁盘,通过将数据持久化到硬盘以及replication,防止数据丢失
+  * 零拷贝
+  * 顺序读,顺序写
+  * 利用Linux的页缓存
+* 分布式系统,易于向外扩展,无需停机即可扩展机器
+* 可靠性.Kafka是分布式,分区,复制和容错的
+* 客户端状态维护:消息被处理的状态是在Consumer端维护,而不是由server端维护,当失败时能自动平衡
+* 支持online和offline的场景
+* 支持多种客户端语言
+
+
+
+# 核心
+
+
+
 * Kafka由多个broker组成,每个broker是一个节点,可以认为是一台服务器
-* 创建一个Topic,这个Topic可以划分为多个分区(Partition),每个Partition可以存在于不同的broker上,每个Partition就放一部分数据,数据是均匀地放在多个分区中的
+* 每个Topic可以划分为多个分区(Partition),每个Partition可以存在于不同的broker上,每个Partition放一部分数据,数据均匀地放在多个Partition中
 * 每个分区中数据是严格按照顺序排列的,但多个分区中的顺序并不是严格的按照生产者放入消息的顺序排列
 * 分区中的每条消息都会有一个唯一的offset做标识,只在当前分区中唯一
 * 消费者可以以任意顺序消费分区中的消息,不需要按照消息在分区中的顺序进行消费.只要消息没有过期,可以重复消费消息
 * 消费者消费消息之后,并不会立刻从队列中删除,而是指定时间后删除,默认7天,可配置
-* 这就是天然的分布式消息队列,一个Topic的数据,是分散放在多个机器上的,每个机器就放一部分数据
-* Kafka提供了HA机制,就是replica副本机制
-* 每个Partition的数据都会同步到其他机器上,形成自己的多个replica副本
-* 然后所有replica会选举一个leader出来,那么生产和消费都跟这个leader打交道,然后其他replica就是follower
-* 写数据的时候,leader会负责把数据同步到所有follower上去,读的时候就直接读leader上数据即可
+* 提供了HA机制,即replica副本机制,每个Partition的数据都会同步到其他机器上,形成自己的多个replica副本
+* 所有replica会选举一个leader出来,那么生产和消费都跟这个leader打交道,然后其他replica就是follower
+* 写数据时,leader会负责把数据同步到所有follower上去,读的时候就直接读leader上数据即可
 * 写数据时,生产者就写leader,其他follower主动从leader来pull数据,一旦所有follower同步好数据了,就会发送ack给leader,leader收到所有follower的ack之后,就会返回写成功的消息给生产者
 * Kafka会均匀的将一个Partition的所有replica分布在不同的机器上,这样才可以提高容错性
 * 消费者组:Kafka会把一条消息路由到组中的某一个服务,这样有助于消息的负载均衡,也方便扩展消费者
 * 如果消费者组中有多个消费者,则同组中只会有一个收费消息.如果消费者在不同组中,则都会受到消息
+* Kafka只有消息的拉取,没有推送,可以通过长轮询实现消息的推送
 
 
 
@@ -64,7 +81,7 @@
 
 
 
-* 消息,由key和value组成,本质上是字节数组
+* 消息,由key,value和时间戳组成,本质上是字节数组
 * key的作用主要是根据指定的策略,将消息发送到指定的分区中.若对消息的消费策略没有要求,可不写
 
 
@@ -76,6 +93,62 @@
 * 控制器,也是一台Broker,主要是控制这台Broker之外的其他Broker
 * 负责整个集群分区的状态,管理每个分区的副本状态,监听Zookeeper中数据变化并做出处理等
 * 所有Broker也会监听控制器的状态,若控制器发生故障,会重新进行选举
+
+
+
+## Producer
+
+
+
+![](img/005.png)
+
+
+
+![](img/006.png)
+
+
+
+* Producer创建时,会创建一个Sender线程并设置为守护线程
+* 生产消息时,内部其实是异步流程;生产的消息先经过拦截器->序列化器->分区器,然后将消息缓存在缓冲区(该缓冲区也是在Producer创建时创建)
+* 批次发送的条件为:缓冲区数据大小达到batch.size或者linger.ms达到上限,哪个先达到就算哪个
+* 批次发送后,发往指定分区,然后落盘到broker;如果生产者配置了retrires参数大于0并且失败原因允许重试,那么客户端内部会对该消息进行重试.重试的消息会重新排序,并非立刻再次发送
+* 落盘到broker成功,返回生产元数据给生产者
+* 元数据返回有两种方式:一种是通过阻塞直接返回,另一种是通过回调返回
+
+
+
+### 序列化器
+
+
+
+* 由于Kafka中的数据都是字节数组,在将消息发送到Kafka之前需要先将数据序列化为字节数组,序列化器的作用就是用于序列化要发送的消息
+* Kafka使用`org.apache.kafka.common.serialization.Serializer`接口用于定义序列化器,将泛型指定类型的数据转换为字节数组
+
+
+
+### 分区器
+
+
+
+* DefaultPartitioner:默认分区计算
+  * 如果record提供了分区号,则使用record提供的分区号
+  * 如果record没有提供分区号,则使用key的序列化后的值的hash值对分区数量取模
+  * 如果record没有提供分区号,也没有提供key,则使用轮询的方式分配分区号
+    * 首先在可用的分区中分配分区号
+    * 如果没有可用的分区,则在该主题所有分区中分配分区号
+* 如果要自定义分区器,则需要实现Partitioner接口,之后在KafkaProducer中进行设置: `configs.put("partitioner.class", "xxx.xx.Xxx.class")`
+
+
+
+### 拦截器
+
+
+
+* Producer拦截器Interceptor和Consumer端Interceptor主要用于实现Client端的定制化控制逻辑
+* Producer允许用户指定多个Interceptor按顺序作用于同一条消息从而形成一个拦截链(interceptor chain),该拦截链的进出顺序都是一样的,和通常的不一样
+* Intercetpor的实现接口是`org.apache.kafka.clients.producer.ProducerInterceptor`
+* Interceptor可能被运行在多个线程中,因此在具体实现时需要确保线程安全
+* 若指定了多个Interceptor,则Producer将按照指定顺序调用它们,并仅仅是捕获每个Interceptor可能抛出的异常记录到错误日志中而非在向上传递
 
 
 
@@ -167,6 +240,31 @@
 
 
 
+* 不同版本的安装可能不一样,此处为1.X版本安装
+* 先安装JDK,配置好环境变量
+* 再安装ZK,配置好环境变量
+* 安装Kafka,将压缩包上传或下载到自定义目录,如/opt.之后解压缩,配置环境变量
+* 修改kafka解压目录中的config/server.properties,配置ZK地址以及节点
+
+```properties
+zookeeper.connect=localhost:2181/kafka
+# 修改持久化地址
+log.dir=/app/kafka/logs
+```
+
+* 启动ZK后启动Kafka
+
+```shell
+zkServer.sh start
+zkServer.sh status
+# 前台启动
+kafka-server-start.sh config/server.properties
+# 后台启动
+kafka-server-start.sh -daemon config/server.properties
+```
+
+
+
 # 配置文件
 
 
@@ -176,9 +274,9 @@
 
 
 * broker.id: brokerId,只能是数字,集群中唯一
-* listeners: Kafka监听地址
+* listeners: Kafka服务地址,默认9092
 * log.dirs: kafka存放数据的路径,可以是多个,逗号分割.每当创建新的partition时,都会选择在包含最少partitions的路径下选择
-* zookeeper.connect: zookeeper集群地址,多个用逗号分割
+* zookeeper.connect: zookeeper集群地址,多个用逗号分割.最好在连接后面加上自定义的Kafka根节点,否则节点会全部新建到zk根节点下
 * zookeeper.connection.timeout.ms: zookeeper连接超时时间
 * message.max.bytes: server可以接收的消息最大尺寸.producer和consumer的该属性必须相同
 * num.network.threads: server用来处理网络请求的网络线程数
@@ -320,7 +418,9 @@
   * 其他的设置,例如acks=2也是可以的,这将需要给定的acks数量,但是这种策略一般很少用
 * buffer.memory = 33554432: producer可以用来缓存数据的内存大小.如果数据产生速度大于向broker发送的速度,producer会阻塞或者抛出异常,以block.on.buffer.full来表明.这项设置将和producer能够使用的总内存相关,但并不是一个硬性的限制,因为不是producer使用的所有内存都是用于缓存.一些额外的内存会用于压缩(如果引入压缩机制),同样还有一些用于维护请求
 * compression.type: producer用于压缩数据的压缩类型,默认无压缩.正确的选项值是none、gzip、snappy.压缩最好用于批量处理,批量处理消息越多,压缩性能越好
-* retries = 0: 设置大于0的值将使客户端重新发送任何数据,一旦这些数据发送失败.这些重试与客户端接收到发送错误时的重试没有什么不同.允许重试将潜在的改变数据的顺序,如果这两个消息记录都是发送到同一个partition,则第一个消息失败第二个发送成功,则第二条消息会比第一条消息出现要早
+* retries: 消息发送失败的重试次数,默认0.允许重试将潜在的改变数据的顺序,如果这两个消息记录都是发送到同一个partition,则第一个消息失败第二个发送成功,则第二条消息会比第一条消息出现要早.如果要保证重试的消息的有序性,则需要设置max_in_flight_requests_per_connection=1
+* retry.backoff.ms = 100: 在试图重试失败的produce请求之前的等待时间,避免陷入发送-失败的死循环中
+* max.in.flight.requests.per.connection:单个连接上未确认的最大数量,达到该数后客户端将阻塞
 * batch.size = 16384: producer将试图批处理消息记录,以减少请求次数.这将改善client与server之间的性能.这项配置控制默认的批量处理消息字节数,不会试图处理大于这个字节数的消息字节数.发送到brokers的请求将包含多个批量处理,其中会包含对每个partition的一个请求.较小的批量处理数值比较少用,并且可能降低吞吐量(0则会仅用批量处理);较大的批量处理数值将会浪费更多内存空间,这样就需要分配特定批量处理数值的内存大小
 * client.id: 当向server发出请求时,这个字符串会发送给server,目的是能够追踪请求源头,以此来允许ip/port许可列表之外的一些应用可以发送信息.这项应用可以设置任意字符串,因为没有任何功能性的目的,除了记录和跟踪
 * linger.ms = 0: producer组将会汇总任何在请求与发送之间到达的消息记录一个单独批量的请求,通常这只有在记录产生速度大于发送速度的时候才能发生.在某些条件下,客户端将希望降低请求的数量,甚至降低到中等负载一下,这项设置将通过增加小的延迟来完成,即不是立即发送一条记录,producer将会等待给定的延迟时间以允许其他消息记录发送,这些消息记录可以批量处理.这可以认为是TCP种Nagle的算法类似.这项设置设定了批量处理的更高的延迟边界: 一旦获得某个partition的batch.size,他将会立即发送而不顾这项设置,然而如果获得消息字节数比这项设置要小的多,需要linger特定的时间以获取更多的消息.这个设置默认为0,即没有延迟.设定linger.ms=5,将会减少请求数目,但是同时会增加5ms的延迟
@@ -335,7 +435,25 @@
 * metrics.num.samples = 2: 用于维护metrics的样本数
 * metrics.sample.window.ms = 30000: metrics系统维护可配置的样本数量,在一个可修正的window  size.配置窗口大小,例如,可能在30s的期间维护两个样本.当一个窗口推出后,会擦除并重写最老的窗口
 * recoonect.backoff.ms = 10: 连接失败时,重新连接时的等待时间.这避免了客户端反复重连
-* retry.backoff.ms = 100: 在试图重试失败的produce请求之前的等待时间.避免陷入发送-失败的死循环中
+
+## 内网隔离配置
+
+
+
+* listener.security.protocol.map:监听器名称和安全协议的映射配置. 比如,可以将内外网隔离,即使它们都使用SSL
+
+> listener.security.protocol.map=INTERNAL:SSL,EXTERNAL:SSL 每个监听器的名称只能在map中出现一次
+
+* inter.broker.listener.name:用于配置broker之间通信使用的监听器名称,该名称必须在advertised.listeners列表中
+* listeners:用于配置broker监听的URI以及监听器名称列表,使用逗号隔开多个URI及监听器名称;如果监听器名称代表的不是安全协议,必须配置listener.security.protocol.map.每个监听器必须使用不同的网络端口
+* advertised.listeners:需要将该地址发布到zookeeper供客户端使用,如果客户端使用的地址与listeners配置不同,可以在zk的`get /myKafka/brokers/ids/`中找到.在IaaS环境,该条目的网络接口得与broker绑定的网络接口不同. 如果不设置此条目,就使用listeners的配置.跟listeners不同,该条目不能使用0.0.0.0网络端口. advertised.listeners的地址必须是listeners中配置的或配置的一部分
+
+```properties
+listener.security.protocol.map=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+listeners=INTERNAL://192.168.1.150:9092,EXTERNAL://192.168.1.151:9093
+inter.broker.listener.name=EXTERNAL
+advertised.listeners=EXTERNAL://192.168.1.151:9093
+```
 
 
 
@@ -412,6 +530,7 @@
 
 * 将需要进行顺序消费的数据都放在一个queue中,而不是放在多个queue中,即放在单个partition中
 * 使用key+offset可以做到业务有序
+* 逐条发送消息,防止消息发送失败重试时放到队列末尾
 
 
 

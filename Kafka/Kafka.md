@@ -162,6 +162,7 @@
 * 一个消费者组能确保其订阅的Topic的每个分区只被组内的一个消费者消费
 * 如果不同的消费者组订阅了同一个Topic,他们之间是互不影响的
 * Consumer从Partition中消费消息是顺序的,默认从头开始消费
+* Consumer采用 pull 模式从 broker 中读取数据,可以控制消费消息的速率,控制消费方式(批量/逐条),还可以选择不同的提交方式从而实现不同的传输语义
 
 
 
@@ -200,6 +201,38 @@
 
 
 ![](img/004.png)
+
+
+
+* Consumer需要向Kafka记录自己的位移数据,这个汇报过程称为提交位移(Committing Offsets)
+* Consumer需要为分配给它的每个分区提交各自的位移数据
+* 位移提交由Consumer端负责的,Kafka只负责保管`__consumer_offsets`
+* 位移提交分为自动提交和手动提交,同步提交和异步提交
+
+
+
+#### 自动提交
+
+
+
+* 开启自动提交:`enable.auto.commit=true`,配置自动提交间隔:`auto.commit.interval.ms`,默认5s
+* Kafka会保证在开始调用poll方法时,提交上次poll返回的所有消息,因此自动提交不会出现消息丢失,但可能会重复消费
+  * Consumer 每 5s 提交offset,假设提交 offset 后的 3s 发生了 Rebalance
+  * Rebalance 之后的所有 Consumer 从上一次提交的 offset 处继续消费,因此 Rebalance 发生前 3s 的消息会被重复消费
+
+
+
+#### 异步提交
+
+
+
+* 使用`KafkaConsumer#commitSync()`,会提交`KafkaConsumer#poll()`返回的最新 offset.该方法为同步操作,等待直到 offset 被成功提交才返回
+* commitSync 在处理完所有消息之后手动同步提交可以控制offset提交的时机和频率
+* 手动同步提交调用 commitSync 时,Consumer 处于阻塞状态,直到 Broker 返回结果,会影响 TPS
+* 可以选择拉长提交间隔,但有以下问题:
+  * 会导致 Consumer 的提交频率下降
+  * Consumer 重启后,会有更多的消息被消费
+* `KafkaConsumer#commitAsync()`:异步提交,出现问题不会自动重试,而是进行一次同步提交
 
 
 

@@ -148,6 +148,32 @@
 
 
 
+### commitlog
+
+
+
+* 在很多资料中commitlog目录中的文件简单就称为commitlog文件,但在源码中,该文件 被命名为mappedFile
+* commitlog目录中存放着很多的mappedFile文件,当前Broker中的所有消息都是落盘到这些 mappedFile文件中
+* mappedFile文件大小不超过1G,文件名由20位十进制数构成,表示当前文件的第一条消息的起始位移偏移量,第一个文件名一定是20位0构成的
+* 当前一个文件放满时,则会自动生成下一个文件继续存放消息.第n个文件名应该是前n-1个文件大小之和
+* 一个Broker中所有mappedFile文件的commitlog offset是连续的,一个Broker中仅包含一个commitlog目录,所有的mappedFile文件都是存放在该目录中 的
+* 无论当前Broker中存放着多少Topic的消息,这些消息都是被顺序写入到了mappedFile文件中的.即这些消息在Broker中存放时并没有被按照Topic进行分类存放
+* mappedFile文件内容由一个个的消息单元构成,每个消息单元中包含消息总长度MsgLen、消息的物理位置physicalOffset、消息体内容Body、消息体长度BodyLength、消息主题Topic、Topic长度TopicLength、消息生产者BornHost、消息发送时间戳BornTimestamp、消息所在的队列QueueId、消息在Queue中存储的偏移量QueueOffset等近20余项消息相关属性
+
+
+
+### consumequeue
+
+
+
+* 为了提高效率,会为每个Topic在~/store/consumequeue中创建一个目录,目录名为Topic名称
+* 在该Topic目录下,会再为每个该Topic的Queue建立一个目录,目录名为queueId,每个目录中存放着若干consumequeue文件
+* consumequeue文件是commitlog的索引文件,可以根据consumequeue定位到具体的消息
+* consumequeue文件名由20位数字构成,表示当前文件的第一个索引条目的起始位移偏移量.与mappedFile文件名不同的是,其后续文件名是固定的,因为consumequeue文件大小是固定不变的
+* 每个consumequeue文件可以包含30w个索引条目,每个索引条目包含了三个消息重要属性:消息在 mappedFile文件中的偏移量CommitLog Offset、消息长度、消息Tag的hashcode值.这三个属性占20 个字节,所以每个文件的大小是固定的30w * 20字节.一个consumequeue文件中所有消息的Topic一定是相同的,但每条消息的Tag可能是不同的
+
+
+
 ## 刷盘机制
 
 
@@ -156,9 +182,9 @@
 
 
 
-* RocketMQ的消息是存储到磁盘上的,这样既能保证断电后恢复, 又可以让存储的消息量超出内存的限制.消息在通过Producer写入RocketMQ的时候,有两种写磁盘方式,分布式同步刷盘和异步刷盘
-* 同步刷盘:在返回写成功状态时,消息已经被写入磁盘.具体流程是,消息写入内存的PAGECACHE后,立刻通知刷盘线程刷盘, 然后等待刷盘完成,刷盘线程执行完成后唤醒等待的线程,返回消息写成功的状态
-* 异步刷盘:在返回写成功状态时,消息可能只是被写入了内存的PAGECACHE,写操作的返回快,吞吐量大;当内存里的消息量积累到一定程度时,统一触发写磁盘动作,快速写入
+* RocketMQ的消息是存储到磁盘上的,有两种写磁盘方式:同步刷盘和异步刷盘
+* 同步刷盘:在Broker返回写成功状态时,消息已经被写入磁盘.消息写入内存的PAGECACHE后,立刻通知刷盘线程刷盘,然后等待刷盘完成,刷盘线程执行完成后唤醒等待线程,返回消息写成功的状态
+* 异步刷盘:在返回写成功状态时,消息可能只是被写入了内存的PAGECACHE,当内存里的消息量积累到一定程度时,统一触发写磁盘动作
 * 配置:同步还是异步刷盘,都是通过Broker配置文件里的flushDiskType 设置,该参数可配置为SYNC_FLUSH/ASYNC_FLUSH
 
 
@@ -616,6 +642,20 @@ set "JAVA_OPT=%JAVA_OPT% -server -Drocketmq.broker.diskSpaceWarningLevelRatio=0.
 * 修改application.properties中的rocketmq.config.namesrvAddr为RocketMQ服务的端口
 * 打包成Jar:mvn clean package -Dmaven.test.skip=true
 * 运行Jar包,访问ip:port
+
+
+
+## 目录文件
+
+
+
+* abort:该文件在Broker启动后会自动创建,正常关闭Broker,该文件消失.若没有启动Broker该文件就存在,说明Broker是非正常关闭,可能存在数据丢失
+* checkpoint:存储commitlog,consumequeue,index文件的最后刷盘时间
+* commitlot:存储commitlot文件,消息就写在commitlog文件中
+* config:存储Broker运行期间的配置数据
+* consumequeue:存储consumequeue文件,队列存储在该目录中
+* index:消息索引文件indexFile
+* lock:运行期间使用到的全局锁资源
 
 
 

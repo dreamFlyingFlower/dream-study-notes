@@ -75,7 +75,7 @@
 
 
 
-# 核心
+# 核心流程
 
 
 
@@ -91,19 +91,22 @@
 
 
 
-## 消息的存储和发送
+# 消息的存储和发送
 
 
 
-### 消息存储
+## 消息存储
 
 
 
-* 磁盘如果使用得当,磁盘的速度完全可以匹配上网络的数据传输速度,但是磁盘随机写的速度只有大概100K/s,和顺序写的性能相差6000倍.RocketMQ的消息用顺序写,保证了消息存储的速度
+* Broker根据queueId,获取到该消息对应索引条目要在consumequeue目录中的写入偏移量,即 QueueOffset
+* 将queueId、queueOffset等数据,与消息一起封装为消息单元
+* 将消息单元写入到commitlog,同时,形成消息索引条目
+* 将消息索引条目分发到相应的consumequeue
 
 
 
-### 消息发送
+## 消息发送
 
 
 
@@ -124,16 +127,37 @@
 
 
 * 通过使用mmap的方式,可以省去向用户态的内存复制,提高速度.这种机制在Java中是通过MappedByteBuffer实现.但是采用MappedByteBuffer这种内存映射的方式有几个限制,其中之一是一次只能映射1.5~2G 的文件至用户态的虚拟内存,这也是为何RocketMQ默认设置单个CommitLog日志数据文件为1G的原因
-* RocketMQ充分利用了上述特性,也就是所谓的“零拷贝”技术,提高消息存盘和网络发送的速度
+* RocketMQ充分利用了上述特性,也就是所谓的零拷贝技术,提高消息存盘和网络发送的速度
 * RocketMQ中每个消息拥有唯一的MessageId,且可以携带具有业务标识的Key,以方便对消息的查询.不过MessageId有两个:在生产者send()消息时会自动生成一个MessageId(msgId),当消息到达Broker后,Broker也会自动生成一个MessageId(offsetMsgId).msgId,offsetMsgId与key都称为消息标识
   * msgId:由producer端生成,其生成规则为:producerIp + 进程pid + MessageClientIDSetter类的ClassLoader的hashCode + 当前时间 + AutomicInteger自增计数器
   * offsetMsgId:由broker端生成,其生成规则为:brokerIp+物理分区的offset(Queue中的偏移量)
   * key:由用户指定的业务相关的唯一标识
+* consumequeue中的数据是顺序存放的,还引入了PageCache的预读取机制,使得对consumequeue文件的读取几乎接近于内存读取
+* PageCache机制,页缓存机制,是OS对文件的缓存机制,用于加速对文件的读写操作.一般来 说,程序对文件进行顺序读写的速度几乎接近于内存读写速度,主要原因是由于OS使用 PageCache机制对读写访问操作进行性能优化,将一部分的内存用作PageCache
+  * 写操作:OS会先将数据写入到PageCache中,随后会以异步方式由pdflush(page dirty flush)内核线程将Cache中的数据刷盘到物理磁盘
+  * 读操作:若用户要读取数据,其首先会从PageCache中读取,若没有命中,则OS在从物理磁盘上加载该数据到PageCache的同时,也会顺序对其相邻数据块中的数据进行预读取
+
+
+* RocketMQ中可能会影响性能的是对commitlog文件的读取.因为对commitlog文件来说,读取消息时会产生大量的随机访问,而随机访问会严重影响性能.不过,如果选择合适的系统IO调度算法,比如设置调度算法为Deadline(采用SSD固态硬盘的话),随机读的性能也会有所提升
+
+
+
+## 消息拉取
+
+
+
+* Consumer获取到其要消费消息所在Queue的消费偏移量offset,计算出其要消费消息的offset
+  * Consumer对某个Queue的消费offset,即消费到了该Queue的第几条消息
+* Consumer向Broker发送拉取请求,其中会包含其要拉取消息的Queue、消息offset及消息Tag
+* Broker计算在该consumequeue中的queueOffset
+* 从该queueOffset处开始向后查找第一个指定Tag的索引条目
+* 解析该索引条目的前8个字节,即可定位到该消息在commitlog中的commitlog offset
+* 从对应commitlog offset中读取消息单元,并发送给Consumer
 
 
 
 
-### 消息存储结构
+## 消息存储结构
 
 
 
@@ -148,7 +172,7 @@
 
 
 
-### commitlog
+## commitlog
 
 
 
@@ -162,7 +186,7 @@
 
 
 
-### consumequeue
+## consumequeue
 
 
 
@@ -174,7 +198,60 @@
 
 
 
-## 刷盘机制
+## indexFile
+
+
+
+* 除了通过指定Topic进行消费外,RocketMQ还提供了根据key进行消息查询的功能,该查询是通过store目录中的index子目录中的indexFile进行索引实现的快速查询
+* 这个indexFile中的索引数据是在包含了key的消息被发送到Broker时写入的,如果消息中没有包含key,则不会写入
+* 每个Broker中会包含一组indexFile,每个indexFile都是以文件创建时的时间戳命名,每个indexFile文件由三部分构成:indexHeader,slots,indexes索引数据
+
+* 每个indexFile文件中包含500w个slot槽,而每个slot槽又可能会挂载很多的index索引单元
+
+
+
+![](img/043.png)
+
+
+
+* indexHeader固定40个字节,其中存放着如下数据:
+
+  * beginTimestamp:该indexFile中第一条消息的存储时间
+  * endTimestamp:该indexFile中最后一条消息存储时间
+  * beginPhyoffset:该indexFile中第一条消息在commitlog中的偏移量commitlog offset
+  * endPhyoffset:该indexFile中最后一条消息在commitlog中的偏移量commitlog offset
+  * hashSlotCount:已经填充有index的slot数量(并不是每个slot槽下都挂载有index索引单元,这里统计的是所有挂载了index索引单元的slot槽的数量)
+  * indexCount:该indexFile中包含的索引单元个数(统计出当前indexFile中所有slot槽下挂载的所 有index索引单元的数量之和)
+
+* indexFile中最复杂的是Slots与Indexes间的关系,在实际存储时,Indexes是在Slots后面的,但为了便于理解,将它们的关系展示为如下形式
+
+  ![](img/044.png)
+
+* key的hash值 % 500w的结果即为slot槽位,然后将该slot值修改为该index索引单元的indexNo,根 据这个indexNo可以计算出该index单元在indexFile中的位置.但是该取模结果的重复率很高,为了解决该问题,在每个index索引单元中增加了preIndexNo,用于指定该slot中当前index索引单元的前一个index索引单元.而slot中始终存放的是其下最新的index索引单元的indexNo,这样只要找到了slot就可以找到其最新的index索引单元,而通过这个index索引单元就可以找到其之前的所有index索引
+
+* indexNo是一个在indexFile中的流水号,从0开始依次递增.indexNo在index索引单元中是没有体现的,是通过indexes中依次数出来的
+
+* index索引单元默写20个字节,其中存放着以下四个属性:
+
+  * keyHash:消息中指定的业务key的hash值
+  * phyOffset:当前key对应的消息在commitlog中的偏移量commitlog offset
+  * timeDiff:当前key对应消息的存储时间与当前indexFile创建时间的时间差
+  * preIndexNo:当前slot下当前index索引单元的前一个index索引单元的indexNo
+
+* 当消费者通过业务key来查询相应的消息时,要清楚几个定位计算式子:
+
+  * 计算指定消息key的slot槽位序号:`slot槽位序号 = key的hash % 500w`
+  * 计算槽位序号为n的slot在indexFile中的起始位置:`slot(n)位置 = 40 + (n - 1) * 4`
+  * 计算indexNo为m的index在indexFile中的位置:`index(m)位置 = 40 + 500w * 4 + (m - 1) * 20`
+    * 40为indexFile中indexHeader的字节数;500w * 4是所有slots所占的字节数
+
+* 具体查询如下图
+
+  ![](img/045.png)
+
+
+
+# 刷盘机制
 
 
 
@@ -189,7 +266,7 @@
 
 
 
-## 消息发送读取高可用
+# 消息发送读取高可用
 
 
 
@@ -203,11 +280,231 @@
 
 
 
-## 负载均衡
+# 消息的消费
 
 
 
-### Producer负载均衡
+* 消费者从Broker中获取消息的方式有两种:pull拉取方式和push推动方式;消费者组对于消息消费的模式又分为两种:集群消费Clustering和广播消费Broadcasting
+
+
+
+## 消费类型
+
+
+
+### 拉取
+
+
+
+* Consumer主动从Broker中拉取消息,该方式的实时性较弱
+* 由于拉取时间间隔是由用户指定的,所以在设置该间隔时需要注意平稳:间隔太短,空请求比例会增加;间隔太长,消息的实时性太差
+
+
+
+### 推送
+
+
+
+* Broker收到数据后会主动推送给Consumer,该获取方式实时性较高
+* 典型的发布-订阅模式,即Consumer向其关联的Queue注册监听器,一旦有新消息就会触发回调,Consumer就去Queue中拉取消息.这些都是基于Consumer与Broker间的长连接,长连接的维护需要消耗系统资源
+
+
+
+### 对比
+
+
+
+* pull:需要应用去实现对关联Queue的遍历,实时性差,但便于应用控制消息的拉取
+* push:封装了对关联Queue的遍历,实时性强,但会占用较多的系统资源
+
+
+
+## 消费模式
+
+
+
+### 广播消费
+
+
+
+* 相同Consumer Group的每个Consumer都接收同一个Topic的全量消息,即每条消息都会被发送到Consumer Group中的每个Consumer取消费
+
+
+
+### 集群消费
+
+
+
+* 相同Consumer Group的所有Consumer实例只会有一个取消费Topic的消息
+
+
+
+### 消息进度保存
+
+
+
+* 广播模式:消费进度保存在Consumer端.因为consumer group中每个consumer都会消费所有消息,但它们的消费进度不同
+* 集群模式:消费进度保存在Broker中.consumer group中的所有consumer共同消费同一个Topic中的消息,同一条消息只会被消费一次.消费进度会参与到消费的负载均衡中,故消费进度是需要共享的
+* Broker中存放的各个Topic的各个Queue的消费进度在config/consumerOffset.json中
+
+
+
+## Rebalance
+
+
+
+* Rebalance机制讨论的前提是:集群消费
+* Rebalance即再均衡,将一个Topic下的多个Queue在一个Consumer Group中的多个Consumer间进行重新分配的过程
+* Rebalance的本意是为了提升消息的并行消费能力.例如,一个Topic下5个队列,在只有1个消费者的情况下,这个消费者将负责消费这5个队列的消息.如果此时增加一个消费者,那么就可以给其中一个消费者分配2个队列,给另一个分配3个队列,从而提升消息的并行消费能力
+
+
+
+### 限制
+
+
+
+* 由于一个队列最多分配给一个消费者,因此当某个消费者组下的消费者实例数量大于队列的数量时,多余的消费者实例将分配不到任何队列
+
+
+
+### 危害
+
+
+
+* 消费暂停:在只有一个Consumer时,其负责消费所有队列,在新增了一个Consumer后会触发Rebalance的发生.此时原Consumer就需要暂停部分队列的消费,等到这些队列分配给新的Consumer 后,这些暂停消费的队列才能继续被消费
+* 消费重复:Consumer在消费新分配给自己的队列时,必须接着之前Consumer提交的消费进度的offset 继续消费.然而默认情况下,offset是异步提交的,这个异步导致提交到Broker的offset与Consumer实际消费的消息并不一致,这个不一致的差值就是可能会重复消费的消息
+  * 同步提交:Consumer提交了消费完毕的一批offset给broker后,需要等待broker的成功ACK,才会继续消费下一批消息.在等待ACK期间,Consumer是阻塞的
+  * 异步提交:Consumer提交了消费完毕的一批offset给broker后,无需等待broker的成功ACK,可以直接获取并消费下一批消息.因为数量过大,系统性能提升了,但产生重复消费的消息数量可能会增加;数量过小,系统性能会下降,但被重复消费的消息数量可能会减少
+* 消费突刺:由于Rebalance可能导致重复消费,如果需要重复消费的消息过多,或者因为Rebalance暂停时间过长而导致积压了部分消息,有可能会导致在Rebalance结束之后瞬间需要消费很多消息
+
+
+
+### 产生的原因
+
+
+
+* 消费者所订阅Topic的Queue数量发生变化,或消费者组中消费者的数量发生变化
+* Queue数量发生变化的场景:
+  * Broker扩容或缩容
+  * Broker升级运维
+  * Broker与NameServer间的网络异常
+  * Queue扩容或缩容
+* 消费者数量发生变化的场景:
+  * Consumer Group扩容或缩容
+  * Consumer升级运维
+  * Consumer与NameServer间网络异常
+
+
+
+### Rebalance过程
+
+
+
+* 在Broker中维护着多个Map集合,这些集合中动态存放着当前Topic中Queue的信息、Consumer Group中Consumer实例的信息,一旦发现消费者所订阅的Queue数量发生变化,或消费者组中消费者的数量发生变化,立即向Consumer Group中的每个实例发出Rebalance通知
+  * TopicConfigManager:key是topic名称,value是TopicConfig.TopicConfig中维护着该Topic中所有Queue的数据
+  * ConsumerManager:key是Consumser Group Id,value是ConsumerGroupInfo.ConsumerGroupInfo中维护着该Group中所有Consumer实例数据
+  * ConsumerOffsetManager:key为Topic与订阅该Topic的Group的组合,即topic@group,value是一个内层Map:key为QueueId,value为该Queue的消费进度offset
+* Consumer实例在接收到通知后会采用Queue分配算法自己获取到相应的Queue,即由Consumer实例自主进行Rebalance
+
+
+
+### 与Kafka对比
+
+
+
+* 在Kafka中,一旦发现出现了Rebalance条件,Broker会调用Group Coordinator来完成Rebalance.Coordinator是Broker中的一个进程
+* Coordinator会在Consumer Group中选出一个Group Leader,由这个Leader根据自己本身组情况完成Partition分区的再分配,这个再分配结果会上报给Coordinator, 并由Coordinator同步给Group中的所有Consumer实例
+* Kafka中的Rebalance是由Consumer Leader完成的,而RocketMQ中的Rebalance是由每个Consumer自身完成的,Group中不存在Leader
+
+
+
+## Queue分配算法
+
+
+
+* 常见的有四种策略,这些策略是通过在创建Consumer时的构造器传进去的
+
+
+
+### 平均分配策略
+
+
+
+![](img/046.png)
+
+
+
+* 该算法是要根据`avg = QueueCount / ConsumerCount`的计算结果进行分配的
+* 如果能够整除,则按顺序将avg个Queue逐个分配Consumer;如果不能整除,则将多余出的Queue按照Consumer顺序逐个分配
+* 该算法先计算好每个Consumer应该分得几个Queue,然后再依次将这些数量的Queue逐个分配个Consumer
+
+
+
+### 环形平均策略
+
+
+
+![](img/047.png)
+
+
+
+* 根据消费者的顺序,依次在由queue队列组成的环形图中逐个分配
+* 该算法不用事先计算每个Consumer需要分配几个Queue,直接一个一个分即可
+
+
+
+### 一致性hash策略
+
+
+
+![](img/048.png)
+
+
+
+* 该算法会将consumer和queue的hash值作为节点存放到环上,通过顺时针方向,距离queue最近的那个consumer就是该queue要分配的consumer
+* 该算法存在的问题:分配不均
+
+
+
+### 同机房策略
+
+
+
+![](img/049.png)
+
+
+
+* 该算法会根据queue的部署机房位置和consumer的位置,过滤出当前consumer相同机房的queue,然后按照平均分配策略或环形平均策略对同机房queue进行分配
+* 如果没有同机房queue,则按照平均分配策略或环形平均策略对所有queue进行分配
+
+
+
+### 对比
+
+
+
+* 一致性hash算法存在的问题:两种平均分配策略的分配效率较高,一致性hash策略的较低.因为一致性hash算法较复杂
+* 一 致性hash策略分配的结果也很大可能上存在不平均的情况.一致性hash算法存在的意义:其可以有效减少由于消费者组扩容或缩容所带来的大量的Rebalance
+* 一致性hash算法的应用场景:Consumer数量变化较频繁的场景
+
+
+
+## 至少一次原则
+
+
+
+* RocketMQ有一个原则:每条消息必须要被成功消费一次
+* Consumer在消费完消息后会向其消费进度记录器提交其消费消息的offset,offset被成功记录到记录器中,那么这条消费就被成功消费了
+
+* 对于广播消费模式来说,Consumer本身就是消费进度记录器;对于集群消费模式来说,Broker是消费进度记录器
+
+
+
+# 负载均衡
+
+
+
+## Producer负载均衡
 
 
 
@@ -215,11 +512,11 @@
 
 
 
-### Consumer负载均衡
+## Consumer负载均衡
 
 
 
-#### 集群模式
+### 集群模式
 
 
 
@@ -248,7 +545,7 @@
 
 
 
-#### 广播模式
+### 广播模式
 
 
 
@@ -258,6 +555,186 @@
 
 
 ![](img/007.png)
+
+
+
+# 订阅关系的一致性
+
+
+
+* 指同一个消费者组下所有Consumer实例所订阅的Topic与Tag及对消息的处理逻辑必须完全一致;否则,消息消费的逻辑就会混乱,甚至导致消息丢失
+* 正确订阅关系:多个消费者组订阅了多个Topic,并且每个消费者组里的多个消费者实例的订阅关系保持了一致
+* 错误订阅关系:一个消费者组订阅了多个Topic,但是该消费者组里的多个Consumer实例的订阅关系并没有保持一致
+
+
+
+## 订阅了不同Topic
+
+
+
+* 同一个消费者组中的两个Consumer实例订阅了不同的Topic
+
+```java
+// 订阅了topic为test_A,tag为所有的消息
+Properties properties = new Properties();
+properties.put(PropertyKeyConst.GROUP_ID, "test_1");
+Consumer consumer = ONSFactory.createConsumer(properties);
+consumer.subscribe("test_A", "*", new MessageListener() {
+    public Action consume(Message message, ConsumeContext context) {
+        System.out.println(message.getMsgID());
+        return Action.CommitMessage;
+    }
+});
+```
+
+```java
+// 订阅了topic为test_B,tag为所有的消息
+Properties properties = new Properties();
+properties.put(PropertyKeyConst.GROUP_ID, "test_1");
+Consumer consumer = ONSFactory.createConsumer(properties);
+consumer.subscribe("test_B", "*", new MessageListener() {
+    public Action consume(Message message, ConsumeContext context) {
+        System.out.println(message.getMsgID());
+        return Action.CommitMessage;
+    }
+});
+```
+
+
+
+## 订阅了不同Tag
+
+
+
+* 同一个消费者组中的两个Consumer订阅了相同Topic的不同Tag
+
+```java
+// 订阅了topic为test_A,tag为TagA的消息
+Properties properties = new Properties();
+properties.put(PropertyKeyConst.GROUP_ID, "test_2");
+Consumer consumer = ONSFactory.createConsumer(properties);
+consumer.subscribe("test_A", "TagA", new MessageListener() {
+    public Action consume(Message message, ConsumeContext context) {
+        System.out.println(message.getMsgID());
+        return Action.CommitMessage;
+    }
+});
+```
+
+```java
+// 订阅了topic为test_A,tag为所有的消息
+Properties properties = new Properties();
+properties.put(PropertyKeyConst.GROUP_ID, "test_2");
+Consumer consumer = ONSFactory.createConsumer(properties);
+consumer.subscribe("test_A", "*", new MessageListener() {
+    public Action consume(Message message, ConsumeContext context) {
+        System.out.println(message.getMsgID());
+        return Action.CommitMessage;
+    }
+});
+```
+
+
+
+## 订阅了不同数量的Topic
+
+
+
+* 同一个消费者组中的两个Consumer订阅了不同数量的Topic
+
+```java
+// 该Consumer订阅了两个Topic
+Properties properties = new Properties();
+properties.put(PropertyKeyConst.GROUP_ID, "test_3");
+Consumer consumer = ONSFactory.createConsumer(properties);
+consumer.subscribe("test_A", "TagA", new MessageListener() {
+    public Action consume(Message message, ConsumeContext context) {
+        System.out.println(message.getMsgID());
+        return Action.CommitMessage;
+    }
+});
+consumer.subscribe("test_B", "TagB", new MessageListener() {
+    public Action consume(Message message, ConsumeContext context) {
+        System.out.println(message.getMsgID());
+        return Action.CommitMessage;
+    }
+});
+```
+
+```java
+// 该Consumer订阅了一个Topic
+Properties properties = new Properties();
+properties.put(PropertyKeyConst.GROUP_ID, "test_3");
+Consumer consumer = ONSFactory.createConsumer(properties);
+consumer.subscribe("test_A", "TagB", new MessageListener() {
+    public Action consume(Message message, ConsumeContext context) {
+        System.out.println(message.getMsgID());
+        return Action.CommitMessage;
+    }
+});
+```
+
+
+
+# offset管理
+
+
+
+* 这里的offset指的是Consumer的消费进度offset,是用来记录每个Queue的不同消费组的消费进度的,根据消费进度记录器的不同,可以本地模式和远程模式
+
+
+
+## 本地管理
+
+
+
+* 当消费模式为广播时,offset使用本地模式存储,因为每条消息会被所有的消费者消费,每个消费者管理自己的消费进度,各个消费者之间不存在消费进度的交集
+* 广播模式下Consumer的offset数据以json的形式持久化到Consumer本地文件,默认文件路径为当前用户目录下的`.rocketmq_offsets/${clientId}/${group}/Offsets.json`
+  * ${clientId}为当前消费者id,默认为`ip@DEFAULT`
+  * ${group}为消费者组名称
+
+
+
+## 远程管理
+
+
+
+* 当消费模式为集群时,offset使用远程模式管理,因为所有Cosnumer实例对消息采用的是均衡消费,所有Consumer共享Queue的消费进度
+* 集群模式下Consumer的offset数据以json的形式持久化到Broker磁盘文件中,文件路径为当前用户目录下的`store/config/consumerOffset.json`
+* Broker启动时会加载这个文件,并写入到一个双层Map(ConsumerOffsetManager):外层map的key为topic@group,value为内层map;内层map的key为queueId,value为offset.当发生Rebalance时,新的Consumer会从该Map中获取到相应的数据来继续消费
+
+
+
+## offset用途
+
+
+
+* 消费者要消费的第一条消息的起始位置是用户自己通过 consumer.setConsumeFromWhere()方法指定的.在Consumer启动后,其要消费的第一条消息的起始位置常用的有三种,这三种位置可以通过枚举类型常量设置,这个枚举类型为ConsumeFromWhere:
+  * CONSUME_FROM_LAST_OFFSET:从queue的当前最后一条消息开始消费
+  * CONSUME_FROM_FIRST_OFFSET:从queue的第一条消息开始消费
+  * CONSUME_FROM_TIMESTAMP:从指定的具体时间戳位置的消息开始消费,这个具体时间戳是通过`consumer.setConsumeTimestamp("20210701080000") `指定
+* 当消费完一批消息后,Consumer会提交其offset给Broker,Broker在收到消费进度后会将其更新到那个双层ConsumerOffsetManager及consumerOffset.json文件中,然后向该Consumer进行ACK,而ACK内容中包含三项数据:
+  * 当前消费队列的最小offset(minOffset)
+  * 最大offset(maxOffset)
+  * 下次消费的起始offset(nextBeginOffset)
+
+
+
+## 重试队列
+
+
+
+* 当RocketMQ对消息的消费出现异常时,会将发生异常的消息的offset提交到Broker中的重试队列.系统在发生消息消费异常时会为当前的topic@group创建一个重试队列,该队列以%RETRY%开头,到达重试时间后进行消费重试
+
+
+
+## 同步与异步提交
+
+
+
+* 集群消费模式下,Consumer消费完消息后会向Broker提交消费进度offset
+* 同步提交:消费者在消费完一批消息后会向broker提交这些消息的offset,然后等待broker的成功响应.若在等待超时之前收到了成功响应,则继续读取下一批消息进行消费(从ACK中获取 nextBeginOffset);若没有收到响应,则会重新提交,直到获取到响应.在这个等待过程中,消费者是阻塞的.其严重影响了消费者的吞吐量
+* 异步提交:消费者在消费完一批消息后向broker提交offset,但无需等待Broker的成功响应,可以继续读取并消费下一批消息.这种方式增加了消费者的吞吐量,且broker在收到提交的offset后,还是会向消费者进行响应.可能还没有收到ACK,此时Consumer会从Broker中直接获取 nextBeginOffset
 
 
 
@@ -330,11 +807,11 @@ public class MessageListenerImpl implements MessageListener {
     public Action consume(Message message, ConsumeContext context) {
         //处理消息
         doConsumeMessage(message);
-        //方式1：返回 Action.ReconsumeLater,消息将重试
+        //方式1:返回 Action.ReconsumeLater,消息将重试
         return Action.ReconsumeLater;
-        //方式2：返回 null,消息将重试
+        //方式2:返回 null,消息将重试
         return null;
-        //方式3：直接抛出异常, 消息将重试
+        //方式3:直接抛出异常, 消息将重试
         throw new RuntimeException("Consumer Message exceotion");
     }
 }
@@ -442,21 +919,21 @@ public class MessageListenerImpl implements MessageListener {
 
 
 
-* 消息队列 RocketMQ 消费者在接收到消息以后,有必要根据业务上的唯一 Key 对消息做幂等处理的必要性
+* 消息队列RocketMQ消费者在接收到消息以后,有必要根据业务上的唯一 Key 对消息做幂等处理的必要性
 
 
 
-## 必要性
+## 产生原因
 
 
 
-* 尤其在网络不稳定的情况下,消息队列 RocketMQ 的消息有可能会出现重复,这个重复简单可以概括为以下情况:
+* 在网络不稳定的情况下,消息队列 RocketMQ 的消息有可能会出现重复,这个重复可能为以下情况:
 
 - 发送时消息重复.当一条消息已被成功发送到服务端并完成持久化,此时出现了网络闪断或者客户端宕机,导致服务端对客户端应答失败.此时生产者意识到消息发送失败并尝试再次发送消息,消费者后续会收到两条内容相同并且 Message ID 也相同的消息
 
-- 投递时消息重复.消息消费的场景下,消息已投递到消费者并完成业务处理,当客户端给服务端反馈应答的时候网络闪断.为了保证消息至少被消费一次,消息队列 RocketMQ 的服务端将在网络恢复后再次尝试投递之前已被处理过的消息,消费者后续会收到两条内容相同并且 Message ID 也相同的消息
+- 投递时消息重复.消息已投递到消费者并完成业务处理,当Consumer给Broker反馈时网络闪断.为了保证消息至少被消费一次,Broker将在网络恢复后再次尝试投递之前已被处理过的消息,Consumer会收到两条内容相同并且 Message ID 也相同的消息
 
-- 负载均衡时消息重复(包括但不限于网络抖动、Broker 重启以及订阅方应用重启).当消息队列 RocketMQ 的 Broker 或客户端重启、扩容或缩容时,会触发 Rebalance,此时消费者可能会收到重复消息
+- 负载均衡时消息重复(包括网络抖动,Broker 重启以及订阅方应用重启登).当Broker或客户端重启,扩容或缩容时,会触发Rebalance,此时消费者可能会收到重复消息
 
 
 
@@ -465,7 +942,7 @@ public class MessageListenerImpl implements MessageListener {
 
 
 
-* 因为 Message ID 有可能出现冲突（重复）的情况,所以真正安全的幂等处理,不建议以 Message ID 作为处理依据。 最好的方式是以业务唯一标识作为幂等处理的关键依据,而业务的唯一标识可以通过消息 Key 进行设置
+* 因为Message ID有可能出现冲突(重复)的情况,所以最好的方式是以业务唯一标识作为幂等处理的关键依据,而业务的唯一标识可以通过消息 Key 进行设置
 
 ```java
 Message message = new Message();
@@ -476,9 +953,9 @@ SendResult sendResult = producer.send(message);
 * 订阅方收到消息时可以根据消息的 Key 进行幂等处理
 
 ```java
-consumer.subscribe("ons_test", "*", new MessageListener() {
+consumer.subscribe("test", "*", new MessageListener() {
     public Action consume(Message message, ConsumeContext context) {
-        String key = message.getKey()
+        String key = message.getKey();
         // 根据业务唯一标识的 key 做幂等处理
     }
 });
@@ -519,6 +996,48 @@ consumer.subscribe("ons_test", "*", new MessageListener() {
 ```java
 public void subscribe(finalString topic, final MessageSelector messageSelector)
 ```
+
+
+
+# 消息堆积与消费延迟
+
+
+
+* 消息处理流程中,如果Consumer的消费速度跟不上Producer的发送速度,MQ中未处理的消息会越来越多,这部分消息就被称为堆积消息,进而会造成消息的消费延迟
+* 以下场景需要重点关注消息堆积和消费延迟问题:
+  * 业务系统上下游能力不匹配造成的持续堆积,且无法自行恢复
+  * 业务系统对消息的消费实时性要求较高,即使是短暂的堆积造成的消费延迟也无法接受
+
+
+
+## 产生原因
+
+
+
+* Consumer使用长轮询Pull模式消费消息时,分为消息拉取和消息消费两个阶段
+
+
+
+### 消息拉取
+
+
+
+* Consumer通过长轮询Pull模式批量拉取的方式从服务端获取消息,将拉取到的消息缓存到本地缓冲队列中,在内网下会有很高的吞吐量,所以这一阶段一般不会成为消息堆积的瓶颈
+* 一个单线程单分区的低规格主机(Consumer,4C8G),其可达到几万的TPS.如果是多个分区多个线程,则可以轻松达到几十万的TPS
+
+
+
+### 消息消费
+
+
+
+* Consumer将本地缓存的消息提交到消费线程中,使用业务消费逻辑对消息进行处理,处理完毕后获取到一个结果
+* 此时Consumer的消费能力完全依赖于消息的消费耗时和消费并发.如果由于业务处理复杂等原因,导致处理单条消息的耗时较长,则整体的消息吞吐量不会高,此时就会导致Consumer本地缓冲队列达到上限,停止从服务端拉取消息。 结论 消息堆积的主要瓶颈在于客户端的消费能力,而消费能力由消费耗时和消费并发度决定。注意,消费 耗时的优先级要高于消费并发度。即在保证了消费耗时的合理性前提下,再考虑消费并发度问题
+* 3 消费耗时 影响消息处理时长的主要因素是代码逻辑。而代码逻辑中可能会影响处理时长代码主要有两种类型： CPU内部计算型代码和外部I/O操作型代码。 通常情况下代码中如果没有复杂的递归和循环的话,内部计算耗时相对外部I/O操作来说几乎可以忽 略。所以外部IO型代码是影响消息处理时长的主要症结所在。 外部IO操作型代码举例： 读写外部数据库,例如对远程MySQL的访问 读写外部缓存系统,例如对远程Redis的访问 下游系统调用,例如Dubbo的RPC远程调用,Spring Cloud的对下游系统的Http接口调用 关于下游系统调用逻辑需要进行提前梳理,掌握每个调用操作预期的耗时,这样做是为了能够 判断消费逻辑中IO操作的耗时是否合理。通常消息堆积是由于下游系统出现了服务异常或达到 了DBMS容量限制,导致消费耗时增加。 服务异常,并不仅仅是系统中出现的类似500这样的代码错误,而可能是更加隐蔽的问题。例 如,网络带宽问题。 达到了DBMS容量限制,其也会引发消息的消费耗时增加。 4 消费并发度 一般情况下,消费者端的消费并发度由单节点线程数和节点数量共同决定,其值为单节点线程数*节点 数量。不过,通常需要优先调整单节点的线程数,若单机硬件资源达到了上限,则需要通过横向扩展 来提高消费并发度。 单节点线程数,即单个Consumer所包含的线程数量 节点数量,即Consumer Group所包含的Consumer数量 对于普通消息、延时消息及事务消息,并发度计算都是单节点线程数*节点数量。但对于顺序 消息则是不同的。顺序消息的消费并发度等于Topic的Queue分区数量。 1）全局顺序消息：该类型消息的Topic只有一个Queue分区。其可以保证该Topic的所有消息被 顺序消费。为了保证这个全局顺序性,Consumer Group中在同一时刻只能有一个Consumer的一 个线程进行消费。所以其并发度为1。 2）分区顺序消息：该类型消息的Topic有多个Queue分区。其仅可以保证该Topic的每个Queue 分区中的消息被顺序消费,不能保证整个Topic中消息的顺序消费。为了保证这个分区顺序性, 每个Queue分区中的消息在Consumer Group中的同一时刻只能有一个Consumer的一个线程进行 消费。即,在同一时刻最多会出现多个Queue分蘖有多个Consumer的多个线程并行消费。所以 其并发度为Topic的分区数量。 5 单机线程数计算 对于一台主机中线程池中线程数的设置需要谨慎,不能盲目直接调大线程数,设置过大的线程数反而会 带来大量的线程切换的开销。理想环境下单节点的最优线程数计算模型为：C *（T1 + T2）/ T1。 C：CPU内核数 T1：CPU内部逻辑计算耗时 T2：外部IO操作耗时 最优线程数 = C *（T1 + T2）/ T1 = C * T1/T1 + C * T2/T1 = C + C * T2/T1 注意,该计算出的数值是理想状态下的理论数据,在生产环境中,不建议直接使用。而是根据 当前环境,先设置一个比该值小的数值然后观察其压测效果,然后再根据效果逐步调大线程 数,直至找到在该环境中性能最佳时的值。 6 如何避免 为了避免在业务使用时出现非预期的消息堆积和消费延迟问题,需要在前期设计阶段对整个业务逻辑进 行完善的排查和梳理。其中最重要的就是梳理消息的消费耗时和设置消息消费的并发度。 梳理消息的消费耗时 通过压测获取消息的消费耗时,并对耗时较高的操作的代码逻辑进行分析。梳理消息的消费耗时需要关 注以下信息： 消息消费逻辑的计算复杂度是否过高,代码是否存在无限循环和递归等缺陷。 消息消费逻辑中的I/O操作是否是必须的,能否用本地缓存等方案规避。 消费逻辑中的复杂耗时的操作是否可以做异步化处理。如果可以,是否会造成逻辑错乱。 设置消费并发度 对于消息消费并发度的计算,可以通过以下两步实施： 逐步调大单个Consumer节点的线程数,并观测节点的系统指标,得到单个节点最优的消费线程数 和消息吞吐量。 根据上下游链路的流量峰值计算出需要设置的节点数 节点数 = 流量峰值 / 单个节点消息吞吐量
+
+
+
+九、消息的清理 消息被消费过后会被清理掉吗？不会的。 消息是被顺序存储在commitlog文件的,且消息大小不定长,所以消息的清理是不可能以消息为单位进 行清理的,而是以commitlog文件为单位进行清理的。否则会急剧下降清理效率,并实现逻辑复杂。 commitlog文件存在一个过期时间,默认为72小时,即三天。除了用户手动清理外,在以下情况下也 会被自动清理,无论文件中的消息是否被消费过： 文件过期,且到达清理时间点（默认为凌晨4点）后,自动清理过期文件 文件过期,且磁盘空间占用率已达过期清理警戒线（默认75%）后,无论是否达到清理时间点, 都会自动清理过期文件 磁盘占用率达到清理警戒线（默认85%）后,开始按照设定好的规则清理文件,无论是否过期。 默认会从最老的文件开始清理 磁盘占用率达到系统危险警戒线（默认90%）后,Broker将拒绝消息写入 需要注意以下几点： 1）对于RocketMQ系统来说,删除一个1G大小的文件,是一个压力巨大的IO操作。在删除过程 中,系统性能会骤然下降。所以,其默认清理时间点为凌晨4点,访问量最小的时间。也正因如 果,我们要保障磁盘空间的空闲率,不要使系统出现在其它时间点删除commitlog文件的情况。 2）官方建议RocketMQ服务的Linux文件系统采用ext4。因为对于文件删除操作,ext4要比ext3性 能更好
 
 
 

@@ -650,6 +650,97 @@ set "JAVA_OPT=%JAVA_OPT% -server -Drocketmq.broker.diskSpaceWarningLevelRatio=0.
 
 
 
+# 系统配置
+
+
+
+## JVM选项
+
+
+
+* 设置Xms和Xmx一样大,防止JVM重新调整堆空间大小影响性能
+
+  ```shell
+  -server -Xms8g -Xmx8g -Xmn4g
+  ```
+
+* 设置DirectByteBuffer内存大小,当DirectByteBuffer占用达到这个值,就会触发Full GC
+
+  ```shell
+  -XX:MaxDirectMemorySize=15g
+  ```
+
+* 如果不太关心RocketMQ的启动时间,可以设置pre-touch,这样在JVM启动的时候就会分配完整的页空间
+
+  ```shell
+  -XX:+AlwaysPreTouch
+  ```
+
+* 禁用偏向锁,因为偏向锁在获取锁之前会判断当前线程是否拥有锁,如果有,就不再获取锁.在并发小时使用有利于提升JVM效率,在高并发场合禁用掉
+
+  ```java
+  -XX:-UseBiasedLocking
+  ```
+
+* 如果分配给RocketMQ的内存超过4G,推荐使用G1回收器.当在GC日志中看到 to-space overflow 或者 to-space exhausted 时,表示G1没有足够的内存使用,这时候表示Java堆已经达到了最大值.为了解决这个问题,可以做以下调整:
+
+  * 增加预留内存:增大参数 -XX:G1ReservePercent 的值(相应的增加堆内存)来增加预留内存
+  * 更早的开始标记周期:减小 -XX:InitiatingHeapOccupancyPercent 参数的值,以更早的开 始标记周期
+  * 增加并发收集线程数:增大 -XX:ConcGCThreads 参数值,以增加并行标记线程数
+
+* 对G1而言,大小超过region大小50%的对象将被认为是大对象,这种大对象将直接被分配到老年代的humongous regions中,humongous regions是连续的region集合,StartsHumongous表记集合从那里开始,ContinuesHumongous标记连续集合
+
+  * 在分配大对象之前,将会检查标记阈值,如果有必要的话,还会启动并发周期
+
+  * 死亡的大对象会在标记周期的清理阶段和发生Full GC的时候被清理
+
+  * 为了减少复制开销,任何转移阶段都不包含大对象的复制,在Full GC时,G1在原地压缩大对象
+
+  * 因为每个独立的humongous regions只包含一个大对象,因此从大对象的结尾到它占用的最后一个region的结尾的那部分空间是没有被使用的,对于那些大小略大于region整数倍的对象,这些没有被使用的内存将导致内存碎片化
+
+  * 如果因为大对象的分配导致不断的启动并发收集,并且这种分配使得老年代碎片化不断加剧,那么增加-XX:G1HeapRegionSize的值,这样大对象将不再被G1认为是大对象,它会走普通对象的分配流程
+
+    ```shell
+    # G1回收器将堆空间划分为1024个region,此选项指定堆空间region的大小
+    -XX:+UseG1GC -XX:G1HeapRegionSize=16m -XX:G1ReservePercent=25 -XX:InitiatingHeapOccupancyPercent=30
+    ```
+
+  * 上述设置可能有点儿激进,但是对于生产环境,性能很好
+
+* -XX:MaxGCPauseMillis不要设置的太小,否则JVM会使用小的年轻代空间以达到此设置的值,同时引起很频繁的minor GC
+
+
+
+## Linux内核参数
+
+
+
+* os.sh脚本在bin文件夹中列出了许多内核参数,可以进行微小的更改然后用于生产用途
+
+* 下面的参数需要注意,更多细节请参考/proc/sys/vm/*的文档 
+
+  * vm.extra_free_kbytes:告诉VM在后台回收(kswapd)启动的阈值与直接回收(通过分配进程)的阈值之间保留额外的可用内存.RocketMQ使用此参数来避免内存分配中的长延迟
+
+  * vm.min_free_kbytes:如果将其设置为低于1024KB,将会巧妙的将系统破坏,并且系统在高负载下容易出现死锁
+
+  * vm.max_map_count:限制一个进程可能具有的最大内存映射区域数.RocketMQ将使用mmap加载CommitLog和ConsumeQueue,因此建议将为此参数设置较大
+
+  * vm.swappiness:定义内核交换内存页面的积极程度.较高的值会增加攻击性,较低的值会减少交换量.建议将值设置为10来避免交换延迟
+
+  * File descriptor limits:RocketMQ需要为文件和网络连接打开文件描述符.建议设置文件描述符的值为655350
+
+    ```shell
+    echo '* hard nofile 655350' >> /etc/security/limits.conf
+    ```
+
+  * Disk scheduler:RocketMQ建议使用I/O截止时间调度器,它试图为请求提供有保证的延迟
+
+    ```
+    echo 'deadline' > /sys/block/${DISK}/queue/scheduler
+    ```
+
+
+
 # 集群
 
 

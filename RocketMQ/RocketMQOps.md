@@ -282,7 +282,8 @@ set "JAVA_OPT=%JAVA_OPT% -server -Drocketmq.broker.diskSpaceWarningLevelRatio=0.
   * -t:topic 名称
 * mqadmin topicList []:查看Topic列表信息
   * -c:不配置-c只返回topic列表,增加-c返回clusterName,topic,consumerGroup信息,即topic的所属集群和订阅关系,没有参数
-  * -n:NameServer服务地址
+  * -c clustername:查看指定集群名下的主题
+  * -n NameServer服务地址:查看指定NameServer下的主题
 * mqadmin topicRoute []:查看Topic路由信息
   * -n:NameServer服务地址
   * -t:topic 名称

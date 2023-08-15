@@ -10,8 +10,6 @@
   <!-- Maven是否需要和用户交互以获得输入.如果Maven需要和用户交互以获得输入,则设置成true,反之则应为false.默认为true -->
   <!-- <interactiveMode>true</interactiveMode> -->
 
-
-
   <!-- offline
    | Determines whether maven should attempt to connect to the network when executing a build.
    | This will have an effect on artifact downloads, artifact deployment, and others.

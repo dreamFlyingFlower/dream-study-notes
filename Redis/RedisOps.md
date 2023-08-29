@@ -320,9 +320,9 @@
   * bind:默认绑定127.0.0.1,根据需求可写多个访问地址,中间用空格隔开
   * appendonly:改为yes,开启AOF持久化功能
 * 版本6以前需要安装redis-trib.rb,该脚本为启动redis集群的脚本
-  * `redis-trib.rb add-node redisip1:port1  redisip2:port2`:添加集群的master节点
-  * `redis-trib.rb check redisip1:port1`:检查集群状态,可以查看master,slave等节点的id
-  * `redis-trib.rb reshard redisip1:port`:将redis集群的slot部分迁移到redisip1上,redis总共有16384个slot,可以平均分布到每个master上
+  * `redis-trib.rb add-node ip1:port1  ip2:port2`:添加master节点
+  * `redis-trib.rb check ip:port`:检查集群状态,可以查看master,slave等节点的id
+  * `redis-trib.rb reshard ip:port`:将集群的slot部分迁移到指定的节点上
   * `redis-trib.rb add-node --slave --master-id master的id  slaveip1:port1 slaveip2:port2`:添加slave节点
   * 节点删除
     * `redis-trib.rb reshard 需要删除的节点ip:port --> 其他master节点`:清空节点上的slot
@@ -331,16 +331,22 @@
 * 启动集群:`redis-trib.rb create --replicas 1 ip1:port1 ip2:port2.....`
   * `--replicas num`:每个master有num个slave
 * 版本6以后,直接使用redis-cli即可安装集群
-  * `redis-cli --cluster create --cluster-replicas 1 ip1:port1 ip2:port2...`:创建并启动集群,ip需要真实ip,不能使用127和localhost,且单个redis已经启动
+  * `redis-cli --cluster create --cluster-replicas 1 ip1:port1 ip2:port2...`:创建并启动集群,ip需要真实ip,不能使用127和localhost,且redis需要已经启动
     * `--cluster-replicas num`:每个master有num个slave
-
-* 集群启动之后在,若是在某个master上做写入操作时,根据CRC16算法,若是得到的slot值在当前master,就会直接写入,若是在其他master上,则会报错moved error,使用JAVA API操作不会有这个问题
+  * `redis-cli --cluster add-node ip1:port1 ip2:port2....`:增加master节点
+  * `redis-cli --cluster reshard ip:port`:将集群的slot部分迁移到指定的节点上
+  * `redis-cli --cluster add-node sip1:sport1 sip2:sport2 --cluster-slave --cluster-master-id master的id`:
+    * 当masterId的值不在前面添加的节点中时,新增节点并作为masterId的从节点
+    * 当masterId的值存在于前面添加的节点时,该节点作为master节点存在,其他节点作为该master节点的从节点
+  * `redis-cli --cluster del-node 需要删除的节点ip:port 需要删除的节点id`:删除节点.若该节点上有slot,需要先将slot先分配出去
+  
+* 集群启动后,在某个master上做写入操作时,根据CRC16算法,若得到的slot值在当前master,就会直接写入,若在其他master上,则会报错moved error,使用JAVA API操作不会有这个问题
 * 在cluster上读取数据时,需要先readonly,否则报错,每次读取都要readonly,最好是redis-cli -c启动
 * cluster模式下,不要手动做读写分离,cluster默认的读写都是在master上
 * cluster扩容:先用redis-trib.rb的add-node命令添加新的redis节点,之后用reshard命令将部分slot迁移到新的节点上,添加slave节点同样,但是不需要reshard slot
-* 查看`redis:./redis01/redis-cli -h 127.0.0.1 -p 6381 -c`,c必须要加.若是在其中增加了key,会随机存到redis中,而不是一定会存到当前测试的redis中
-* 关闭redis,./redis-cli shutdown
-* 若是修改了配置文件中的端口,则需要先删除各个集群中的.rdb,nodes.conf,.aof文件,否则启动集群报错
+* 查看redis:`./redis-cli -h 127.0.0.1 -p 6381 -c`,c表示集群模式.若是在其中增加了key,会随机存到redis中,而不是一定会存到当前测试的redis中
+* 关闭redis:`./redis-cli shutdown`
+* 若修改了配置文件中的端口,则需要先删除各个集群中的.rdb,nodes.conf,.aof文件,否则启动集群报错
 * `cluster-require-full-coverage`:如果某段slot的主从都挂了,如果该值为yes,整个集群挂掉;如果为false,只有该段slot不可用,集群仍可用
 
 
@@ -351,7 +357,7 @@
 
 * cluster info:获取集群的信息
 * cluster slots:查看集群信息
-* cluster nodes:获取集群当前已知的所有节点,以及这些节点的相关信息
+* cluster nodes:获取集群当前已知的所有节点,以及这些节点的相关信息,节点id等
 * cluster meet ip port:将ip和port所指定的节点添加到集群中
 * cluster forget <node_id>:将指定node_id的节点从集群中移除
 * cluster replicate <node_id>:将当前节点设置为node_id节点的从节点

@@ -1,5 +1,7 @@
 #!/bin/bash
+
 # 清除/var/log/messages日志
+
 LOG_DIR=/var/log
 ROOT_UID=0
 # 要使用root权限运行

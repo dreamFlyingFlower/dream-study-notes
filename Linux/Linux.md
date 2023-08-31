@@ -159,6 +159,8 @@ init num:控制台中直接修改运行级别
 
 ## 硬件信息
 
+
+
 * hostname:显示主机名字
 * hostname xxx:设置主机的名字,但是下次登录仍然会还原
 * hostnamectl set-hostname xxx:将linux的主机名设置成xxx,该设置为永久设置
@@ -179,8 +181,6 @@ init num:控制台中直接修改运行级别
   * linux磁盘分为IDE硬盘和SCSI硬盘
   * 对于IDE硬盘,驱动标识符为hdx~,其中hd表明分区所在设备的类型,此处指IDE硬盘;x为盘号,a为基本盘,b为基本盘从属盘,c为辅助主盘,d为辅助从属盘;~代表分区,前4个分区用1到4表示,它们是主分区或扩展分区,从5开始就是逻辑分区
   * 对于SCSI硬盘,驱动标识符为sdx~,sd表示为SCSI硬盘,其他和IDE硬盘一样
-* mount /u/u1 /mnt/foldername:将u盘或其他外置设备分区挂载到linux系统的mnt目录的foldername下.挂载的分区名可以通过lsblk查看,每次挂载可能名字都不一样.挂载的linux文件目录可自定义
-* umount /mnt/foldername:将挂载的u盘等卸载
 * du [] filename/foldername:显示指定文件或目录已使用的空间总量
   * -a:递归显示指定目录中各文件和子目录中文件占用的数据块
   * -s:显示指定文件或目录占用的数据块
@@ -424,6 +424,7 @@ init num:控制台中直接修改运行级别
 * yum remove xxx:卸载软件
 * yum search xxx:搜索软件
 * yum clean packages:清理软件缓存
+* yum localinstall package_name.rpm:安装一个rpm包,使用自己的软件仓库解决所有依赖关系
 * rpm -qa | grep jdk: 检查已安装软件版本
 
 
@@ -477,6 +478,8 @@ init num:控制台中直接修改运行级别
 
 ### 指向内网中的yum
 
+
+
 * 修改/etc/yum.repos.d中的仓库文件,删除mirrors,新增baseurl,baseurl的值指向内网中的yum源
 
   ```shell
@@ -489,22 +492,41 @@ init num:控制台中直接修改运行级别
 
 ### rpm
 
-* rpm -qa:查看已经安装的rpm包列表
+
+
 * rpm [] 软件包名:查看软件包信息
+  * -a:所有的
   * -q:查看指定的软件包是否安装
   * -q --scripts:查询安装包中包含的脚本
+  * -q --whatrequires:显示与一个rpm包存在依赖关系的列表
+  * -q --whatprovides:显示一个rpm包所占的体积
+  * -q --changelog:显示一个rpm包的修改历史
   * -i:查看软件包的信息
   * -l:查看软件安装后的文件列表
   * -c:查看软件安装的配置文件
   * -d:查询软件的帮助文档
   * -f:查看某个文件是那一个软件包中的
+  * -F:更新一个确定已经安装的rpm包
+  * -v:提示
+  * -V:检查文件尺寸,许可,类型,所有者,群组,MD5检查以及最后修改时间
+  * -h:进度条
+  * -U:更新软件
   * -e:删除软件包
   * -e --nodeps:强制删除,可能会对其他软件造成影响
-* rpm -ivh 软件包名:安装软件包
-  * -i:安装软件包
-  * -v:提示
-  * -h:进度条
-* rpm -Uvh 软件包名:升级软件
+  * --nodeps:忽略警告
+
+* `rpm -ivh 软件包名`:安装软件
+* `rpm -Uvh 软件包名`:升级软件
+* `rpm -qa`:查看已经安装的rpm包列表
+* `rpm -qg "System Environment/Daemons"`:显示一个组件的rpm包
+* `rpm -qf /etc/httpd/conf/httpd.conf`:确认所给的文件由哪个rpm包所提供
+* `rpm -qp package.rpm -l`:显示由一个尚未安装的rpm包提供的文件列表
+* `rpm --import /media/cdrom/RPM-GPG-KEY`:导入公钥数字证书
+* `rpm --checksig package.rpm`:确认一个rpm包的完整性
+* `rpm -qa gpg-pubkey`:确认已安装的所有rpm包的完整性
+* `rpm -Vp package.rpm`:确认一个rpm包还未安装
+* `rpm2cpio package.rpm | cpio --extract --make-directories bin`:从一个rpm包运行可执行文件
+* `rpmbuild --rebuild package_name.src.rpm`:从一个rpm源码构建一个 rpm 包
 
 
 
@@ -910,7 +932,25 @@ init num:控制台中直接修改运行级别
 
 
 
+## Mount
+
+
+
+* `mount [] /u/u1 /mnt/folder`:将u盘或其他外置设备分区挂载到linux指定目录.挂载的分区名可以通过lsblk查看,每次挂载可能名字都不一样
+  * `/u/u1`: 外置设备分区
+  * `/mnt/folder`:linux目录,必须存在
+  * -o:挂在一个文件或IOS镜像文件
+  * -t vfat:挂载一个Windows FAT32文件系统
+* `mount -t smbfs -o username=user,password=pass //WinClient/share /mnt/share`:挂载一个windows网络共享
+* `umount [] /mnt/folder`:将挂载的u盘等卸载
+  * -n:运行卸载操作而不写入 /etc/mtab 文件- 当文件为只读或当磁盘写满时非常有用
+* `fuser -km /mnt/folder`:当设备繁忙时强制卸载
+
+
+
 ## SED
+
+
 
 * sed [] "cmd" file/input:查找或替换文件中的内容.默认情况下,并不会对源文件进行修改,只显示结果
 * -n:取消默认输出,只显示匹配的行
@@ -1038,6 +1078,8 @@ sed "2,$d;s#11#22#" file # 先删除第2行后的内容,得到的结果再将11�
 
 ## AWK
 
+
+
 * 一个文本分析工具,可以将文件中的内容逐行读入,空格和制表符为默认分隔符将每行进行切分,切分的部分再进行各种额外的处理.也可以和sed一样查找符合条件的行
 * 支持自定义分隔符,支持正则,支持自定义变量,数组,a[1],a[tom],map(key),支持内置变量
 * argc:命令行参数个数
@@ -1099,7 +1141,31 @@ sort -t " " -k2.1,2.3 # 按空格分隔文件行,用第2列的第一个字符到
 
 
 
+## 文件系统分析
+
+
+
+* `badblocks -v /dev/hda1`:检查磁盘hda1上的坏磁块
+* `fsck /dev/hda1`:修复/检查hda1磁盘上linux文件系统的完整性
+* `fsck.ext2 /dev/hda1`:修复/检查hda1磁盘上ext2文件系统的完整性
+* `e2fsck /dev/hda1`:修复/检查hda1磁盘上ext2文件系统的完整性
+* `e2fsck -j /dev/hda1`:修复/检查hda1磁盘上ext3文件系统的完整性
+* `fsck.ext3 /dev/hda1`:修复/检查hda1磁盘上ext3文件系统的完整性
+* `fsck.vfat /dev/hda1`:修复/检查hda1磁盘上fat文件系统的完整性
+* `fsck.msdos /dev/hda1`:修复/检查hda1磁盘上dos文件系统的完整性
+* `dosfsck /dev/hda1`:修复/检查hda1磁盘上dos文件系统的完整性
+* `mkfs /dev/hda1`:在hda1分区创建一个文件系统
+* `mke2fs /dev/hda1`:在hda1分区创建一个linux ext2的文件系统
+* `mke2fs -j /dev/hda1`:在hda1分区创建一个linux ext3(日志型)的文件系统
+* `mkfs -t vfat 32 -F /dev/hda1`:创建一个 FAT32 文件系统
+* `fdformat -n /dev/fd0`:格式化一个软盘
+* `mkswap /dev/hda3`:创建一个swap文件系统
+
+
+
 ## 关机命令
+
+
 
 * sync:将内存中的数据保存到磁盘上,在关机之前最好执行一下
 * shutdown []:系统关机
@@ -1115,7 +1181,11 @@ sort -t " " -k2.1,2.3 # 按空格分隔文件行,用第2列的第一个字符到
 
 ## 用户,组
 
+
+
 ### 用户操作
+
+
 
 * useradd/adduser [] username:添加用户相关信息
   * -u uid:指定uid,root用户的uid固定为0

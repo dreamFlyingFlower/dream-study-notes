@@ -171,6 +171,8 @@
 
 ### Tabs and Indents
 
+
+
 * Use tab character,Smart tabs:使用制表符代替空格进行格式化
 
 
@@ -283,6 +285,18 @@
 
 
 
+## XML
+
+
+
+### Tabs and Indents
+
+
+
+* Use tab character,Smart tabs:使用制表符代替空格进行格式化,勾选
+
+
+
 # Editor->Inspections
 
 
@@ -334,7 +348,17 @@
 
 #### Code
 
+
+
 * Field injection waring:不勾选
+
+
+
+### Proofreading
+
+
+
+* Typo:不勾选
 
 
 
@@ -435,7 +459,9 @@
 
 ## 隐藏文件
 
-* 在ignore files and folders中添加
+
+
+* ignore files and folders:添加如下.apt_generated,.apt_generated_test,.mvn,.classpath,.project,.settings,.factorypath
 
 
 
@@ -522,7 +548,7 @@
 
 
 
-## Eclipse Code Formatter
+## Adapter Eclipse Code Formatter
 
 
 

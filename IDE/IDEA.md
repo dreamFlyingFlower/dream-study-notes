@@ -14,6 +14,8 @@
 
 ## Updates
 
+
+
 * Check IDE updates for:不勾选,关闭检查IDEA更新
 * Check for plugin updates:不勾选,关闭检查插件更新
 
@@ -155,11 +157,15 @@
 
 ## Console Font
 
+
+
 * Use console font instead of the default:可勾选,使用不用于通用字体的其他字体
 
 
 
 # Editor->Code Style
+
+
 
 * General->Line separator:选择使用哪种换行符
 
@@ -285,6 +291,18 @@
 
 
 
+## HTML
+
+
+
+### Tabs and Indents
+
+
+
+* Use tab character,Smart tabs:使用制表符代替空格进行格式化,勾选
+
+
+
 ## XML
 
 
@@ -302,6 +320,8 @@
 
 
 ## General
+
+
 
 * Duplicated code fragment:改为黄色警告,重复代码提醒
 
@@ -461,7 +481,7 @@
 
 
 
-* ignore files and folders:添加如下.apt_generated,.apt_generated_test,.mvn,.classpath,.project,.settings,.factorypath
+* ignore files and folders:添加如下.apt_generated,.apt_generated_test,.mvn,.classpath,.project,.settings,.factorypath,.idea,*.iml,target
 
 
 
@@ -693,7 +713,7 @@
 
 
 
-* 驼峰,下划线相互转换,默认快捷键ALT+SHIFT+U
+* 驼峰,下划线相互转换,默认快捷键`ALT+SHIFT+U`
 * File->Editor->Camel Case可设置相关配置
 
 
@@ -731,12 +751,38 @@
 
 
 
-## Free MyBatis plugin
+## MyBatisX
 
 
 
 * 从dao跳到Mybatis的xml文件
 * 没有Eclipse的好用,只能从dao层条,service中不能跳
+
+
+
+## MyBatisCodeHelperPro
+
+
+
+* 收费
+* 可以识别mybatis动态标签,使用mybatis动态标签的sql可以正常提示,检测
+* mybatis几乎所有地方的sql都有代码提示,可以写出安全的sql
+* 从java类生成建表语句
+* 从表上生成增删查改代码,在表上加字段后重新生成不会覆盖自己写的方法
+* 使用方法名生成完整的sql,只要一个方法名就可以生成大部分单表操作的sql
+* 使用方法名生成mybatisplus QueryWrapper
+* resultMap column和property代码提示,检测,支持associaction,collection,columnPrefix
+* #{}自动提示,检测
+* #{},if test等可重构参数名称
+* 最好的ognl支持,if test自动提示检测,bind,foreach等
+* 解析select语句中查询的字段,一键从sql生成java类和resultMap
+* 从接口方法一键生成testcase,可快速测试sql
+* mybatis代码格式化,兼容mybatis的动态标签
+* 检测项目配置的mapperscan,识别@Mapper注解,将mybatis的类注入到spring中,注入不再报错
+* mybatis sql log支持,从控制台打印出完整的sql,点击直接执行sql
+* 最好的泛型支持,接口方法或者参数使用泛型在#{} if test等也可以正常解析
+* 支持mybatis简单的注解,代码提示,检测,可以一键把注解sql挪到xml
+* 兼容mybatisplus,tkmapper框架,兼容kotlin
 
 
 

@@ -306,6 +306,43 @@ List<Map<${String},${Object}>> ${listMap} = new ArrayList<>();${cursor}
 ${imp:import(java.util.ArrayList,java.util.List,java.util.Map)}
 ```
 
+* streamGroupBy,Java,list transfer throuth  group by
+
+```java
+stream().collect(Collectors.groupingBy(k -> ${k}));${cursor}
+${imp:import(java.util.stream.Collectors)}
+```
+
+* streamMapGroupBy,Java,list through map and then groupby
+
+```java
+stream().map(t -> ${t}).collect(Collectors.groupingBy(k -> ${k}));${cursor}
+${imp:import(java.util.stream.Collectors)}
+```
+
+* streamMapToList,Java,a list throuth map to other list
+
+```java
+stream().map(t -> ${t}).collect(Collectors.toList());${cursor}
+${imp:import(java.util.stream.Collectors)}
+```
+
+* streamMapToMap,Java,list through map transfer to a map
+
+```java
+stream().map(t -> ${t}).collect(Collectors.toMap(k -> ${k}, v -> ${v}, (o, n) -> null == n ? o : n));${cursor}
+${imp:import(java.util.stream.Collectors)}
+```
+
+* streamToMap
+
+```java
+stream().collect(Collectors.toMap(k -> ${k}, v -> ${v}, (o, n) -> null == n ? o : n));${cursor}
+${imp:import(java.util.stream.Collectors)}
+```
+
+
+
 * apic,Java,add a @Api to a class controller
 
 ```java

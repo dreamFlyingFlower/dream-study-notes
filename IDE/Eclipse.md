@@ -8,6 +8,8 @@
 
 ## General
 
+
+
 * 勾选
   * Always run in background
   * Show heap status
@@ -23,6 +25,8 @@
 
 
 ##### Spelling
+
+
 
 * 不勾选
   * Enable spell checking
@@ -96,7 +100,7 @@
  *
  * @author 飞花梦影
  * @date ${currentDate:date('yyyy-MM-dd HH:mm:ss')}
- * @git {@link https://gitee.com/dreamFlyingFlower}
+ * @git {@link https://github.com/dreamFlyingFlower}
  */
 ```
 
@@ -107,7 +111,7 @@
  * 
  * @author 飞花梦影
  * @date ${currentDate:date('yyyy-MM-dd HH:mm:ss')}
- * @git {@link https://gitee.com/dreamFlyingFlower}
+ * @git {@link https://github.com/dreamFlyingFlower}
  */
 ```
 
@@ -133,7 +137,7 @@ ${package_declaration}
  *
  * @author 飞花梦影
  * @date ${currentDate:date('yyyy-MM-dd HH:mm:ss')}
- * @git {@link https://gitee.com/dreamFlyingFlower}
+ * @git {@link https://github.com/dreamFlyingFlower}
  */
 ${typecomment}
 ${type_declaration}
@@ -314,7 +318,7 @@ ${imp:import(java.util.ArrayList,java.util.List,java.util.Map)}
  * 
  * @auther 飞花梦影
  * @date ${currentDate:date('yyyy-MM-dd HH:mm:ss')}
- * @git {@link https://gitee.com/dreamFlyingFlower}
+ * @git {@link https://github.com/dreamFlyingFlower}
  */
 @Api(tags = "${comment} API")${imp:import(io.swagger.annotations.Api)}
 ```
@@ -327,7 +331,7 @@ ${imp:import(java.util.ArrayList,java.util.List,java.util.Map)}
  * 
  * @auther 飞花梦影
  * @date ${currentDate:date('yyyy-MM-dd HH:mm:ss')}
- * @git {@link https://gitee.com/dreamFlyingFlower}
+ * @git {@link https://github.com/dreamFlyingFlower}
  */
 @ApiModel(description = "${comment}")${imp:import(io.swagger.annotations.ApiModel)}
 ```
@@ -390,6 +394,39 @@ ${imp:import(java.util.ArrayList,java.util.List,java.util.Map)}
 
 
 
+## Language Servers
+
+
+
+* 如果有文件无法进行自动提示或跳转,可查看该配置中的相关文件类型是否未勾选
+
+
+
+## Maven
+
+
+
+* Do not automatically...:勾选
+* Download Artifact sources:不勾选
+
+
+
+### Installations
+
+
+
+* add->选择自己的maven插件
+
+
+
+### UserSettings
+
+
+
+* 选择自己的Maven插件,使用自己的Maven配置文件,修改默认的仓库地址,不要放C盘
+
+
+
 ## Spring
 
 
@@ -448,29 +485,6 @@ ${imp:import(java.util.ArrayList,java.util.List,java.util.Map)}
 
 
 * Enablement:OFF,关闭版本提示
-
-
-
-## Maven
-
-* Do not automatically...:勾选
-* Download Artifact sources:不勾选
-
-
-
-### Installations
-
-
-
-* add->选择自己的maven插件
-
-
-
-### UserSettings
-
-
-
-* 选择自己的Maven插件,使用自己的Maven配置文件,修改默认的仓库地址,不要放C盘
 
 
 

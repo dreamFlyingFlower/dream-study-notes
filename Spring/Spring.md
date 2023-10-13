@@ -747,3 +747,17 @@ public class ClassPathXmlApplicationContext extends AbstractApplicationContext{
 
 
 
+# 事务失效
+
+
+
+* 事务方法未被Spring管理
+* 方法被final修饰
+* 方法非public
+* 无事务的方法调用了有事务的方法,有事务的方法不会触发事务回滚
+* 未开启事务
+* 方法不支持事务
+* 异常被catch
+* 数据库不支持事务
+* 多线程调用
+

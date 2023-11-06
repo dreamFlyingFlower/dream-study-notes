@@ -200,28 +200,38 @@ source /etc/profile
 
 
 
-- `$args`:这个变量等于请求行中的参数,即请求中`?`后的部分,如arg1=value1&arg2=value2,同`$query_string`
+- `$args`:请求URL中的参数,即请求中`?`后的部分,如arg1=value1&arg2=value2,同`$query_string`
+- `$binary_remote_addr`:客户端ip(二进制)
+- `$body_bytes_sent`:响应时送出的body字节数数量.即使连接中断,这个数据也是精确的,如:40
 - `$content_length`:请求头中的Content-length字段
 - `$content_type`:请求头中的Content-Type字段
-- `$uri`:不带请求参数的当前URI,`$uri`不包含主机名,如`/foo/bar.html`
+- `$cookie_COOKIE`:cookie COOKIE变量的值
 - `$document_uri`:与`$uri`相同
 - `$document_root`:变量存储的是当前请求对应location的root值,如果未设置,默认指向Nginx自带html目录所在位置
 - `$host`:请求访问服务器的server_name值,否则为服务器名称
-- `$http_user_agent`:客户端agent信息
+- `$hostname`:域名
+- `$http_user_agent`:客户端agent信息,如:Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/29.0.1547.76
 - `$http_cookie`:客户端cookie信息,可以通过add_header Set-Cookie 'cookieName=cookieValue'来添加cookie数据
+- `$http_referer`:引用地址
+- `$is_args`:如果有$args参数,这个变量等于”?”,否则等于"",空值,如?
 - `$limit_rate`:这个变量可以限制连接速率,也就是Nginx配置中对limit_rate指令设置的值,默认是0,不限制
-- `$remote_addr`:客户端的IP地址
-- `$remote_port`:客户端的端口
+- `$remote_addr`:客户端IP地址
+- `$remote_port`:客户端端口
 - `$remote_user`:经过Auth Basic Module验证的用户名,需要有认证模块才能获取
-- `$request_method`:客户端请求方式,通常为GET或POST
+- `$request`:用户请求信息,如:`GET ?a=1&b=2 HTTP/1.1`
+- `$request_body`:记录POST过来的数据信息
 - `$request_body_file`: 变量中存储了发给后端服务器的本地文件资源的名称
+- `$request_completion`:如果请求结束,设置为OK.当请求未结束或如果该请求不是请求链串的最后一个时,为空(Empty),如:OK
 - `$request_filename`:当前请求的资源文件路径,由root或alias指令与URI请求生成
+- `$request_method`:客户端请求方式,通常为GET或POST
 - `$request_uri`:存储了当前请求的URI,并且携带请求参数,比如ip:port/server?id=10&name=zhangsan中的/server?id=10&name=zhangsan
 - `$scheme`:HTTP协议,如http,https
 - `$server_protocol`:请求使用的协议,通常是HTTP/1.0或HTTP/1.1
 - `$server_addr`:服务器地址,在完成一次系统调用后可以确定这个值
 - `$server_name`:服务器名称
 - `$server_port`:请求到达服务器的端口号
+- `$status`:请求的响应状态码,如:200
+- `$uri`:不带请求参数的当前URI,`$uri`不包含主机名,如`/foo/bar.html`
 
 
 
@@ -308,17 +318,9 @@ events {
 
 * default_type: 配置Nginx响应前端请求默认的MIME类型,默认使用 IO 流实现请求/应答,出现在http,server,location
 
-* log_format main:在ngxin.conf.default中可以看到该参数,表示日志的输出格式,可以根据默认配置文件中的说明进行配置.main是一个标识,在access_log中要用到.更多参数参考nginx官网
+* log_format main:日志的输出格式.main是一个标识,可自定义,在access_log中要用到
 
-  ```nginx
-  # 打印输出post请求参数
-  log_format  main escape=json '$remote_addr - $remote_user [$time_local] "$request" '
-                        '$status $body_bytes_sent "$http_referer" '
-                        '"$http_user_agent" "$http_x_forwarded_for"'
-  		      '"$request_body"';
-  ```
-
-* access_log foldername main:将nginx的日志以main格式输入到指定目录的文件中
+* access_log foldername main:将nginx的日志以main格式输入到指定目录的文件中,默认在`/usr/local/nginx/log`
 
 * sendfile on|off:是否支持文件传输,该属性可以大大提高Nginx处理静态资源的性能
 
@@ -342,6 +344,66 @@ events {
   	limit_req zone=mylit burst=20 nodelay;
   }
   ```
+
+
+
+### log_format
+
+
+
+```shell
+# 打印输出post请求参数
+log_format  main escape=json '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status "$http_referer" ' '"$http_user_agent" "$http_x_forwarded_for"'
+                      # 请求体
+		      '"$request_body"';
+```
+
+
+
+```shell
+# 输出json格式日志,较全的参数
+log_format main escape=json '{'
+  '"msec": "$msec", ' # request unixtime in seconds with a milliseconds resolution
+  '"connection": "$connection", ' # connection serial number
+  '"connection_requests": "$connection_requests", ' # number of requests made in connection
+  '"pid": "$pid", ' # process pid
+  '"request": "$request", ' # full path no arguments if the request
+  '"request_uri": "$request_uri", ' # full path and arguments if the request
+  '"request_time": "$request_time", ' # request processing time in seconds with msec resolution
+  '"request_method": "$request_method", ' # request method
+  '"request_body": "$request_body",' # POST请求体
+  '"request_id": "$request_id", ' # the unique request id
+  '"request_length": "$request_length", ' # request length (including headers and body)
+  '"remote_addr": "$remote_addr", ' # client IP
+  '"remote_user": "$remote_user", ' # client HTTP username
+  '"remote_port": "$remote_port", ' # client port
+  '"time_local": "$time_local", '
+  '"time_iso8601": "$time_iso8601", ' # local time in the ISO 8601 standard format
+  '"args": "$args", ' # args
+  '"status": "$status", ' # response status code
+  '"body_bytes_sent": "$body_bytes_sent", ' # the number of body bytes exclude headers sent to a client
+  '"bytes_sent": "$bytes_sent", ' # the number of bytes sent to a client
+  '"http_referer": "$http_referer", ' # HTTP referer
+  '"http_user_agent": "$http_user_agent", ' # user agent
+  '"http_x_forwarded_for": "$http_x_forwarded_for", ' # http_x_forwarded_for
+  '"http_host": "$http_host", ' # the request Host: header
+  '"server_name": "$server_name", ' # the name of the vhost serving the request
+  '"upstream": "$upstream_addr", ' # upstream backend server for proxied requests
+  '"upstream_connect_time": "$upstream_connect_time", ' # upstream handshake time incl. TLS
+  '"upstream_header_time": "$upstream_header_time", ' # time spent receiving upstream headers
+  '"upstream_response_time": "$upstream_response_time", ' # time spend receiving upstream body
+  '"upstream_response_length": "$upstream_response_length", ' # upstream response length
+  '"upstream_cache_status": "$upstream_cache_status", ' # cache HIT/MISS where applicable
+  '"ssl_protocol": "$ssl_protocol", ' # TLS protocol
+  '"ssl_cipher": "$ssl_cipher", ' # TLS cipher
+  '"scheme": "$scheme", ' # http or https
+  '"server_protocol": "$server_protocol", ' # request protocol, like HTTP/1.1 or HTTP/2.0
+  '"pipe": "$pipe", ' # "p" if request was pipelined, "." otherwise
+  '"gzip_ratio": "$gzip_ratio", '
+  '"http_cf_ray": "$http_cf_ray",'
+  '}';
+```
 
 
 

@@ -23,43 +23,36 @@ Head:指向当前分支,并非指向master.切换到那个分支就是指向那�
 
 
 * git init:将一个目录初始化为git仓库,必须是空目录
-
 * git clone [] url:将git远程仓库中的内容拉去到本地
 
   * -b branchname:拉取指定分支到本地，branchname为要拉取的分支名称
   * --shallow: 克隆仓库,但是不包括版本历史信息
-
 * git status []:查看本地仓库和远程仓库的差异
 
   * -s:查看详情,会出现2个M,后面跟着文件名.第一列M表示版本库和处理中间状态有差异;第二M表示工作区和当前文件有差异.有时候只会有1列
-
 * git pull []:从远程仓库拉取最新的代码到本地仓库中
 
   * version:从远程仓库中拉去指定版本的,该版本号可从git log中获取
-
-* git add -A:将修改的所有文件都添加到本地的预提交程序中
+* git add []:将修改提交到暂存区
+  * -A:将修改的所有文件都添加到本地的预提交程序中
+  * `--ignore-removal .`:将当前目录中的修改或新增的文件列表添加到暂存区,删除的文件不会被添加
 
 * git add filename:将某个文件添加到本地的预提交程序中
-
 * git commit [] :将git add中预提交的文件提交到本地仓库
 
-  * -am comment:提交所有同时提交注释,comment为注释,必须填写,a功能和git add -A相同
+  * -am 'comment':将工作区修改或删除的文件提交到本地版本库,新增的文件不会被提交
   * --amend:编辑提交的内容或信息
-
+  * --amend -m 'comment':修改最新一条提交记录的提交原因
 * git push [] [origin master]:将本地仓库中的修改同步到远程仓库中,默认提交到origin master;若有多个git远程仓库,origin要自定义命名,且和origin不一样,此时必须加上自定义名称和分支,如git push github master.若只是分支不一样,可以是git push origin aa,aa为分支名
 
   * -f:强制推送到远程仓库
-
 * git checkout [<file>/<folder>]:将文件/目录恢复到初始状态,已经被add进暂存区的文件不会被恢复
-
-* git rebase:将分支进行合并
-
+* git rebase:将分支进行合并,功能等同于merge,但是不会在本地新建一个commit
 * git merge aa:将aa分支中的代码合并到当前分支,注意可能需要解决冲突.git merge的3种情况
 
   * allow merge commits:直接合并到当前分支中,同时保留当前分支和被合并分支的commits等信息,但是各自的commits信息保留在各自的分支中.从github的inlights查看
   * allow squash commits:直接合并到当前分支中,但是不保留合并分支的路线,而是直接从2个分支的共同点上开始,直接将被合并分支的结果合并到当前分支中,舍弃被合并分支的commits等信息
   * allow rebase commits:直接合并到当前分支中,但是不保留合并分支的路线,而是直接从2个分支的共同点上开始,将被合并分支的commit都提交到合并分支中
-
 * git mv oldfilename newfilename:将文件改名之后重新添加到暂存区中
 
 
@@ -252,9 +245,11 @@ Head:指向当前分支,并非指向master.切换到那个分支就是指向那�
 
 
 
-* `git reset [file/dir]`: 将已经add的文件从暂存区退回到工作区,但是修改仍然存在.和checkout不同的是:
+* `git reset [file/dir]`: 将当前已经add的文件从暂存区退回到工作区,但是修改仍然存在.和checkout不同的是:
   * reset恢复的是已经add到暂存区的,且恢复之后修改仍然存在,只是重新回到了工作区
   * checkout恢复的是没有add到暂存区的,且将文件直接回退到上一个版本
+* `git reset commtid`:将本地仓库中的数据回滚到指定版本,commtid可从git log中查看
+* `git reset commtid filename`:将指定文件回滚到指定版本
 * `git reset --hard [HEAD^]`: 将本地仓库回滚到上个版本,包括暂存区和工作区
 * `git reset --hard HEAD^^^`:将本地仓库回滚到上3个版本,有几个`^`就回退到上几个版本
 * `git reset --hard HEAD~n`:将本地仓库回滚到上n个版本
@@ -262,8 +257,6 @@ Head:指向当前分支,并非指向master.切换到那个分支就是指向那�
 * `git reset --soft HEAD~n`: 将修改从本地仓库撤销到前n个版本的暂存区,已经在暂存区和工作区的文件不做撤销
 * `git reset --soft commtid`: 将修改从本地仓库撤销到指定版本的暂存区,已经在暂存区和工作区不做撤销
 * `git reset --mixed commitid`:在本地库移动head指针,重置暂存区,但不重置工作区
-* `git reset version`:将本地仓库中的数据回滚到指定版本,version可从git log中查看
-* `git reset version filename`:将指定文件回滚到指定版本
 
 
 

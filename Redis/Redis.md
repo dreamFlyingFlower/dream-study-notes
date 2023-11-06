@@ -1465,20 +1465,28 @@ acl setuser user2 on >password ~cached:* +get
 * 模拟类似于httpsession这种需要设定过期时间的功能
 * 分布式锁:setnx
 * 分布式唯一主键生成:incrby
-* incr:计数器,限流
+* incr:
+  * 计数器:例如文章的阅读量、微博点赞数、允许一定的延迟,先写入Redis再定时同步到数据库
+  * 限流:以访问者的ip和其他信息作为key,访问一次增加一次计数,超过次数则返回false
+
 * 购物车
 * 推荐系统
 * 用户消息时间线timeline,list,双向链表
-* 抽奖:使用spop
-* 商品标签
+* 抽奖:spop
+* 商品标签:sadd
 * 商品筛选:sdiff set1 set20->获取差集;sinter set1 set2->获取交集;sunion set1 set2->获取并集
-* 应用于抢购,限购类,限量发放优惠卷,激活码等业务的数据存储设计
-* 应用于具有操作先后顺序的数据控制
-* 应用于最新消息展示
-* 应用于同类信息的关联搜索,二度关联搜索,深度关联搜索
-* 应用于基于黑名单与白名单设定的服务控制
-* 应用于计数器组合排序功能对应的排名
-* 应用于即时任务/消息队列执行管理
+* 抢购,限购类,限量发放优惠卷,激活码等业务的数据存储设计
+* 具有操作先后顺序的数据控制
+* 同类信息的关联搜索,二度关联搜索,深度关联搜索
+* 基于黑名单与白名单设定的服务控制
+* 计数器组合排序功能对应的排名
+* 即时任务/消息队列执行管理
+  * List提供了两个阻塞的弹出操作:blpop/brpop,可以设置超时时间
+    - blpop:blpop key1 timeout,移除并获取列表的第一个元素,如果列表没有元素会阻塞列表直到等待超时或发现可弹出元素为止
+    - brpop:brpop key1 timeout,移除并获取列表的最后一个元素,如果列表没有元素会阻塞列表直到等待超时或发现可弹出元素为止
+  * 队列:rpush blpop,左头右尾,右边进入队列,左边出队列
+  * 栈:rpush brpop
+
 
 
 
@@ -1507,6 +1515,25 @@ acl setuser user2 on >password ~cached:* +get
 
 
 * 被关注用户的唯一标识作为key,使用集合存储关注用户的唯一标识
+* 相互关注:
+  - sadd 1:follow 2
+  - sadd 2:fans 1
+  - sadd 1:fans 2
+  - sadd 2:follow 1
+* 我关注的人也关注了他(取交集):
+  - sinter 1:follow 2:fans
+* 可能认识的人:
+  - 用户1可能认识的人(差集)：sdiff 2:follow 1:follow
+  - 用户2可能认识的人：sdiff 1:follow 2:follow
+
+
+
+## 排行榜
+
+
+
+* id 为6001 的新闻点击数加1:`zincrby hotNews:20190926 1 n6001`
+* 获取今天点击最多的15条:`zrevrange hotNews:20190926 0 15 withscores`
 
 
 

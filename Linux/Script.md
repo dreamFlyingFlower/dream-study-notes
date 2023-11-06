@@ -89,3 +89,156 @@
 
 
 
+# 简单脚本
+
+
+
+- [ ] ```shell
+  # 删除0字节文件
+  find -type f -size 0 -exec rm -rf {} \;
+  
+  # 查看进程,按内存从大到小排列
+  PS -e -o "%C : %p : %z : %a"|sort -k5 -nr
+  
+  # 按 CPU 利用率从大到小排列
+  ps -e -o "%C : %p : %z : %a"|sort -nr
+  
+  # 打印 cache 里的URL
+  grep -r -a jpg /data/cache/* | strings | grep "http:" | awk -F'http:' '{print "http:"$2;}'
+  
+  # 查看 http 的并发请求数及其 TCP 连接状态
+  netstat -n | awk '/^tcp/ {++S[$NF]} END {for(a in S) print a, S[a]}'
+  
+  # sed 在这个文里 Root 的一行,匹配 Root 一行,将 no 替换成 yes
+  sed -i '/Root/s/no/yes/' /etc/ssh/sshd_config
+  
+  # 如何杀掉 MySQL 进程
+  ps aux |grep mysql |grep -v grep  |awk '{print $2}' |xargs kill -9
+  killall -TERM mysqld
+  kill -9 `cat /usr/local/apache2/logs/httpd.pid`   #试试查杀进程PID
+  
+  # 显示运行 3 级别开启的服务
+  ls /etc/rc3.d/S* |cut -c 15-
+  
+  # 如何在编写 SHELL 显示多个信息,用 EOF
+  cat << EOF
+  +--------------------------------------------------------------+
+  |       === Welcome to Tunoff services ===                  |
+  +--------------------------------------------------------------+
+  EOF
+  
+  # for 的巧用,给 MySQL 建软链接
+  cd /usr/local/mysql/bin
+  for i in *
+  do ln /usr/local/mysql/bin/$i /usr/bin/$i
+  done
+  
+  # 取 IP 地址
+  ifconfig eth0 |grep "inet addr:" |awk '{print $2}'| cut -c 6-
+  # 或者
+  ifconfig | grep 'inet addr:'| grep -v '127.0.0.1' | cut -d: -f2 | awk '{ print $1}'
+  
+  # 内存的大小
+  free -m |grep "Mem" | awk '{print $2}'
+  
+  # 查看指定端口是否正在使用
+  netstat -an -t | grep ":80" | grep ESTABLISHED | awk '{printf "%s %s\n",$5,$6}' | sort
+  
+  # 查看 Apache 的并发请求数及其 TCP 连接状态
+  netstat -n | awk '/^tcp/ {++S[$NF]} END {for(a in S) print a, S[a]}'
+  
+  # 统计服务器所有的 jpg 的文件的大小
+  find / -name *.jpg -exec wc -c {} \;|awk '{print $1}'|awk '{a+=$1}END{print a}'
+  
+  # CPU 的数量,多核算多个CPU
+  cat /proc/cpuinfo |grep -c processor
+  
+  # CPU负载
+  cat /proc/loadavg
+  
+  # CPU负载
+  mpstat 1 1
+  
+  # 内存空间
+  free
+  
+  # 检查 free 值是否过低
+  cat /proc/meminfo
+  
+  # SWAP 空间,观察 si 和 so 值是否较大
+  free
+  # 检查 swap used 值是否过高,如果 swap used 值过高,进一步检查 swap 动作是否频繁
+  vmstat 1 5
+  
+  
+  # 检查是否有分区使用率（Use%）过高（比如超过90%）如发现某个分区空间接近用尽,可以进入该分区的挂载点,用以下命令找出占用空间最多的文件或目
+  df -h
+  du -cks * | sort -rn | head -n 10
+  
+  # 磁盘 I/O 负载,检查I/O使用率（%util）是否超过 100%
+  iostat -x 1 2
+  
+  # 网络负载,检查网络流量（rxbyt/s, txbyt/s）是否过高
+  sar -n DEV
+  
+  # 网络错误,检查是否有网络错误（drop fifo colls carrier）,也可以用命令:# cat /proc/net/dev
+  netstat -i
+  
+  # 网络连接数目
+  netstat -an | grep -E “^(tcp)” | cut -c 68- | sort | uniq -c | sort -n
+  
+  # 进程总数
+  ps aux | wc -l
+  
+  # 可运行进程数目,列给出的是可运行进程的数目,检查其是否超过系统逻辑 CPU 的 4 倍
+  vmwtat 1 5
+  
+  # 网络状态,检查DNS,网关等是否可以正常连通
+  ping traceroute nslookup dig
+  
+  # 用户,检查登录用户是否过多 (比如超过50个)   也可以用命令：# uptime
+  who | wc -l
+  
+  # 系统日志
+  cat /var/log/rflogview/*errors
+  
+  # 检查是否有异常错误记录,也可以搜寻一些异常关键字
+  grep -i error /var/log/messages
+  grep -i fail /var/log/messages
+  
+  # 核心日志
+  dmesg
+  
+  # 打开文件数目
+  lsof | wc -l
+  
+  # 日志
+  # logwatch –print
+  # 配置 /etc/log.d/logwatch.conf,将 Mailto 设置为自己的 email 地址,启动 mail 服务(sendmail或者postfix),这样就可以每天收到日志报告了
+  # 缺省 logwatch 只报告昨天的日志,可以用 # logwatch –print –range all 获得所有的日志分析结果
+  # 可以用 logwatch –print –detail high 获得更具体的日志分析结果(而不仅仅是出错日志)
+  
+  # 杀掉80端口相关的进程
+  lsof -i :80|grep -v “ID”|awk ‘{print “kill -9”,$2}’|sh
+  
+  # 清除僵死进程
+  ps -eal | awk '{ if ($2 == "Z") {print $4}}' | kill -9
+  
+  # tcpdump 抓包,用来防止80端口被人攻击时可以分析数据
+  tcpdump -c 10000 -i eth0 -n dst port 80 > /root/pkts
+  
+  # 然后检查IP的重复数并从小到大排序 注意 “-t\ +0”   中间是两个空格
+  less pkts | awk {'printf $3"\n"'} | cut -d. -f 1-4 | sort | uniq -c | awk {'printf $1" "$2"\n"'} | sort -n -t\ +0
+  
+  # 查看有多少个活动的 php-cgi 进程
+  netstat -anp | grep php-cgi | grep ^tcp | wc -l
+  
+  # 查看系统自启动的服务
+  chkconfig --list | awk '{if ($5=="3:on") print $1}'
+  
+  # kudzu 查看网卡型号
+  kudzu --probe --class=network
+  ```
+
+
+

@@ -54,6 +54,18 @@
 
 
 
+## Install/Update
+
+
+
+### Automatic Updates
+
+
+
+* Automatically find new ...:不勾选
+
+
+
 ## Java
 
 
@@ -282,6 +294,8 @@ private Map<${String},${Object}> ${map};${cursor}
 ${imp:import(java.util.Map)}
 ```
 
+
+
 * newHashMap,Java,new a Hashmap<String,Object>
 
 ```java
@@ -309,6 +323,8 @@ ${imp:import(java.util.List,java.util.ArrayList)}
 List<Map<${String},${Object}>> ${listMap} = new ArrayList<>();${cursor}
 ${imp:import(java.util.ArrayList,java.util.List,java.util.Map)}
 ```
+
+
 
 * streamGroupBy,Java,list transfer throuth  group by
 
@@ -338,7 +354,7 @@ stream().map(t -> ${t}).collect(Collectors.toMap(k -> ${k}, v -> ${v}, (o, n) ->
 ${imp:import(java.util.stream.Collectors)}
 ```
 
-* streamToMap
+* streamToMap,Java,list transfer to map
 
 ```java
 stream().collect(Collectors.toMap(k -> ${k}, v -> ${v}, (o, n) -> null == n ? o : n));${cursor}

@@ -169,6 +169,15 @@ ${type_declaration}
 
 
 
+#### Building
+
+
+
+* General
+  * maximum number of problems...:500
+
+
+
 #### Errors/Warnings
 
 
@@ -177,7 +186,15 @@ ${type_declaration}
 
 
 
-* Forbidden reference (access rules):将error改成Ignore
+* Forbidden reference (access rules):改为Ignore
+
+
+
+##### Potential programing problems
+
+
+
+* Class overrides 'equals()' but not 'hashCode()':改为Warning
 
 
 
@@ -185,7 +202,7 @@ ${type_declaration}
 
 
 
-* Missing @Override annotation:将Ignore改成Warning
+* Missing @Override annotation:改为Warning
 
 
 
@@ -461,6 +478,7 @@ ${imp:import(java.util.stream.Collectors)}
 
 * Do not automatically...:勾选
 * Download Artifact sources:不勾选
+* Automatically update...:不勾选
 
 
 
@@ -562,7 +580,7 @@ ${imp:import(java.util.stream.Collectors)}
 
 
 * Line Width:120
-* Split multiple attributes each on anew line:不勾选
+* Split multiple attributes each on anew line:勾选
 
 
 

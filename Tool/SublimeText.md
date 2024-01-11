@@ -1,0 +1,48 @@
+# SublimeText
+
+
+
+# 移动插件目录
+
+
+
+* 在安装目录下新建Data的目录,必须是Data,否则识别不到
+* 关闭Sublime Text,打开之后的缓存和插件都将安装在Data中
+
+
+
+# 设置
+
+
+
+* 修改字体和大小:首选项->设置
+
+  ```json
+  {
+      "font_size": 12,
+      "font_face": "Comic Sans MS",
+  }
+  ```
+
+
+
+# 快捷键
+
+
+
+
+
+
+
+# 插件
+
+
+
+* ChineseLocalizations:中文语言包,让 Sublime Text 界面显示为中文
+
+* BracketHighlighter:括号高亮
+* ColorPicker:可以在编辑器中方便的选择颜色
+* AutoFileName:可以实现自动补全文件名的功能,从而可以提高代码编写和编辑的效率
+* Emmet:代码自动补全,快捷键为Tab
+* Pretty Json:json格式化,需要自行设置快捷键,在快捷键设置里添加`{"keys": ["ctrl+alt+j"], "command": "pretty_json"}`
+

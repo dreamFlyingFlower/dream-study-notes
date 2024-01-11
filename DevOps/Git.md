@@ -80,8 +80,6 @@ Head:指向当前分支,并非指向master.切换到那个分支就是指向那�
 * --global http.postBuffer 524288000:配置git缓存大小500M或更大,需要拉取的文件比较大时使用
 * --global http.lowSpeedLimit 0:配置git最低速度,git拉取速度较低时使用
 * --global http.lowSpeedTime 99999:配置git最低速度可持续时间,单位秒,git拉取速度较低时使用
-* `git update-index --assue-unchanged config.conf`:设置config.conf文件忽略更新,不提交,但是也不从远程仓库删除
-* `git update-index --no-assume-unchanged config.conf`:取消config.conf的忽略更新
 * `--global --add safe.directory '*'`:当出现`fatal: detected dubious ownership in repository`错误时,可以使用该命令清除文件夹所属用户校验,特别适用于系统重装之后的用户名更改问题
 
 
@@ -194,8 +192,8 @@ Head:指向当前分支,并非指向master.切换到那个分支就是指向那�
 
 
 
-* git update-index --skip-worktree path:将某个已经添加到工作区的文件从工作区忽略,但是有不同的更新出现时,会造成冲突.即本地忽略提交,但是pull到不同内容还是会冲突
-* git update-index --no-skip-worktree path:将已经skip的文件重新添加到工作区
+* --skip-worktree path:将某个已经添加到工作区的文件从工作区忽略,但是有不同的更新出现时,会造成冲突.即本地忽略提交,但是pull到不同内容还是会冲突
+* --no-skip-worktree path:将已经skip的文件重新添加到工作区
 * -q:continue refresh even when index needs update
 * --ignore-submodules:refresh,ignore submodules
 * --add:不忽略新文件
@@ -206,8 +204,8 @@ Head:指向当前分支,并非指向master.切换到那个分支就是指向那�
 * --really-refresh:like --refresh, but ignore assume-unchanged setting
 * --cacheinfo <mode>,<object>,<path>:add the specified entry to the index
 * --chmod (+/-)x:override the executable bit of the listed files
-* --assume-unchanged:mark files as "not changing"
-* --no-assume-unchanged:clear assumed-unchanged bit
+* `--assue-unchanged xxx`:设置xxx文件忽略更新,不提交,但是也不从远程仓库删除
+* `--no-assume-unchanged xxx`:取消xxx的忽略更新
 * --skip-worktree:mark files as "index-only"
 * --no-skip-worktree:clear skip-worktree bit
 * --info-only:add to index only; do not add content to object database

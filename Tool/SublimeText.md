@@ -40,9 +40,14 @@
 
 * ChineseLocalizations:中文语言包,让 Sublime Text 界面显示为中文
 
+* ConvertToUTF8:支持将其他编码类型的文件转换为UTF8打开
+
 * BracketHighlighter:括号高亮
 * ColorPicker:可以在编辑器中方便的选择颜色
 * AutoFileName:可以实现自动补全文件名的功能,从而可以提高代码编写和编辑的效率
 * Emmet:代码自动补全,快捷键为Tab
 * Pretty Json:json格式化,需要自行设置快捷键,在快捷键设置里添加`{"keys": ["ctrl+alt+j"], "command": "pretty_json"}`
+* FileDiffs:文件比较
+* Alignment:自动对齐代码
+* SideBar Enhancements:侧边栏扩展
 

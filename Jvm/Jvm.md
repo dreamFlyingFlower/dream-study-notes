@@ -609,6 +609,8 @@ public class Sample{
 
 * -XX:+TraceClassLoading:监控类的加载
 
+* -XX:+TraceClassUnloading:跟踪类的卸载信息
+
   ```java
   [Loaded java.lang.Object from shared objects file]
   [Loaded java.io.Serializable from shared objects file]
@@ -701,7 +703,7 @@ public class Sample{
 
 * -XX:+UseG1GC: 使用G1收集器
 
-* -XX:ParallelGCThreads:设置用于垃圾回收的线程数
+* -XX:ParallelGCThreads:设置用于垃圾回收的并行线程数,与CPU核心数相同或稍少
 
 * -XX:ParallelCMSThreads:设定CMS的线程数量
 
@@ -732,6 +734,18 @@ public class Sample{
 * -Xcomp:和Xint相反,JVM在第一次使用时会把所有字节码编译成本地代码,带来最大程度的优化
 
 * -Xmixed:混合模式,由JVM决定使用解释模式或编译模式,JVM的默认模式
+
+* -XX:+TieredCompilation:启用分层编译,可以优化启动时间和峰值性能
+
+* -XX:+UseGCLogFileRotation:启用GC日志文件的自动旋转
+
+* -XX:NumberOfGCLogFiles=5:设置GC日志文件数量
+
+* -XX:GCLogFileSize=20M:设置GC日志文件的大小
+
+* -XX:+UseStringDeduplication:开启字符串去重,有助于减少内存占用
+
+  -XX:+OptimizeStringConcat:优化字符串连接操作,提高性能
 
 
 

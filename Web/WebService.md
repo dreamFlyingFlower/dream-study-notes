@@ -4,6 +4,8 @@
 
 # WSDL
 
+
+
 > WebService Description Language,web服务描述语言,通过xml说明服务的地址以及调用方式
 
 * webservice是一种跨编程语言和跨操作系统平台的远程调用技术
@@ -13,11 +15,15 @@
 
 # SOAP
 
+
+
 > Simple Object Access Protocol,简单对象访问协议,基于http+xml的网上传输协议
 
 
 
 ## 组成
+
+
 
 * envelope:必须的部分,是xml的根元素
 * headers:头部信息,可选的
@@ -26,6 +32,8 @@
 
 
 ## 版本
+
+
 
 * 主要有soap1.1和soap1.2,两者的命令空间不一样,在头信息上也存在差异
 * soap1.1存在soapaction的请求头,而1.2没有该请求头
@@ -40,11 +48,15 @@
 
 # UDDI
 
+
+
 > 一种目录服务,通过它,企业可注册并搜索webservice服务
 
 
 
 # Java服务端
+
+
 
 * WebService:javax.jws.WebService,该注解将被修饰的类发布成一个WebService服务
 
@@ -82,17 +94,20 @@
   http://localhost:5502/wsdlService?wsdl
   ```
 
-  
 
 
 
 ## XML组成
+
+
 
 > WebService服务发布后,可以在网页上打开该地址,显示为一个xml文件,从下往上看
 
 
 
 ### service
+
+
 
 * name:属性,表示客户端可调用的服务名,通常会在服务端定义的名称后加上service
 
@@ -104,6 +119,8 @@
 
 
 ### binding
+
+
 
 * name:属性,该标签的名称
 * type:属性,指向某个portType标签,标签name属性的值和type属性tns:后的值相同
@@ -120,6 +137,8 @@
 
 ### portType
 
+
+
 该标签是webservice服务器真正调用的类,子标签是可以调用的方法
 
 * operation
@@ -131,6 +150,8 @@
 
 ### types
 
+
+
 * xsd:schema:在xml中用到的各种类型说明
   * xsd:import:一些重要的说明
     * namespace:属性,服务端的命名空间
@@ -139,6 +160,8 @@
 
 
 # Java客户端
+
+
 
 * 创建服务:根据wsdl文件中service标签的name属性生成实体类,如service
 
@@ -153,6 +176,8 @@
 
 
 # Wsimport
+
+
 
 > wsimport是jdk1.6以上自带的,根据webservice的url生成客户端调用代码的工具,位于jdk/bin下
 

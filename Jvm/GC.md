@@ -688,7 +688,7 @@ S0     S1     E      O      M     CCS    YGC   YGCT    FGC    FGCT     GCT
   * `-histo >f:\his.txt`:查看堆中统计信息,对象数量及大小,并将统计信息输出到指定文件
   * `-histo:live > f:\his.txt`: 只输出存活的对象信息
   * `-dump:format=b,file=f:\heap.hprof`:将内存使用情况输出,使用jhat查看
-  * `-dump:live,format=b,file=f:\heap.hprof`:只保存对内存活的对象
+  * `-dump:live,format=b,file=f:\heap.hprof`:只保存堆内存活的对象
 
 
 

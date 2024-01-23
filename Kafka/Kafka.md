@@ -551,6 +551,120 @@ advertised.listeners=EXTERNAL://192.168.1.151:9093
 
 
 
+## 消息的投递语义
+
+
+
+- 最多一次( at most once):消息只发一次,消息可能会丢失,但绝不会被重复发送。例如:mqtt 中 QoS = 0
+- 至少一次( at least once):消息至少发一次,消息不会丢失,但有可能被重复发送。例如:mqtt 中 QoS = 1
+- 精确一次( exactly once):消息精确发一次,消息不会丢失,也不会被重复发送。例如:mqtt 中 QoS = 2
+
+
+
+## 生产端
+
+
+
+* 遇到异常,基本解决措施都是重试
+
+- 场景一:leader分区不可用了,抛 LeaderNotAvailableException 异常,等待选出新 leader 分区
+- 场景二:Controller 所在 Broker 挂了,抛 NotControllerException 异常,等待 Controller 重新选举
+- 场景三:网络异常、断网、网络分区、丢包等,抛 NetworkException 异常,等待网络恢复
+
+
+
+## 实现精准一次
+
+
+
+* Kafka 幂等性 Producer: 保证生产端发送消息幂等.局限性,是只能保证单分区且单会话(重启后就算新会话)
+* Kafka 事务: 保证生产端发送消息幂等.解决幂等 Producer 的局限性
+* 消费端幂等:保证消费端接收消息幂等.兜底方案
+
+
+
+### Kafka幂等性Producer
+
+
+
+* 在生产端添加对应配置即可
+
+```java
+Properties props = new Properties();
+props.put("enable.idempotence", ture); // 设置幂等
+props.put("acks", "all"); // 当 enable.idempotence 为 true,这里默认为 all
+props.put("max.in.flight.requests.per.connection", 5); // 小于等于5,否则抛OutOfOrderSequenceException异常
+```
+
+* Producer每次启动后,会向Broker申请一个全局唯一的pid.(重启后pid会变化,这也是弊端之一)
+* Sequence Number:针对每个Topic,Partition都对应一个从0开始单调递增的Sequence,同时Broker端会缓存这个seq num
+* 判断是否重复:拿pid, seq num去Broker里对应的队列ProducerStateEntry.Queue(默认队列长度为 5)查询是否存在
+
+- 如果nextSeq == lastSeq + 1,即服务端seq + 1 == 生产传入seq,则接收
+- 如果nextSeq == 0 && lastSeq == Int.MaxValue,即刚初始化,也接收
+- 反之,要么重复,要么丢消息,均拒绝
+- 这种设计针对解决了两个问题:
+  - 消息重复:场景Broker保存消息后还没发送ack就宕机了,这时候Producer就会重试,这就造成消息重复
+  - 消息乱序:避免场景,前一条消息发送失败而其后一条发送成功,前一条消息重试后成功,造成的消息乱序
+
+- 什么时候该使用幂等:
+  - 如果已经使用acks=all,使用幂等也可以
+  - 如果已经使用acks=0或者acks=1,说明你的系统追求高性能,对数据一致性要求不高,不要使用幂等
+
+
+
+
+### Kafka事务
+
+
+
+* 使用Kafka事务解决幂等的弊端:单会话且单分区幂等
+* 事务使用示例:分为生产端 和 消费端
+
+```java
+Properties props = new Properties();
+props.put("enable.idempotence", ture);
+props.put("acks", "all");
+props.put("max.in.flight.requests.per.connection", 5); // 最大等待数
+props.put("transactional.id", "my-transactional-id"); // 设定事务 id
+Producer<String, String> producer = new KafkaProducer<String, String>(props);
+// 初始化事务
+producer.initTransactions();
+try{
+    // 开始事务
+    producer.beginTransaction();
+    // 发送数据
+    producer.send(new ProducerRecord<String, String>("Topic", "Key", "Value"));
+    // 数据发送及 Offset 发送均成功的情况下,提交事务
+    producer.commitTransaction();
+} catch (ProducerFencedException | OutOfOrderSequenceException | AuthorizationException e) {
+    // 数据发送或者 Offset 发送出现异常时,终止事务
+    producer.abortTransaction();
+} finally {
+    // 关闭 Producer 和 Consumer
+    producer.close();
+    consumer.close();
+}
+```
+
+* 这里消费端Consumer需要设置下配置:`isolation.level`
+  * read_uncommitted:这是默认值,表明Consumer能够读取到Kafka写入的任何消息,不论事务型Producer提交事务还是终止事务,其写入的消息都可以读取.如果用了事务型Producer,那么对应的Consumer就不要使用这个值
+  * read_committed:表明Consumer只会读取事务型Producer成功提交事务写入的消息.也能看到非事务型Producer写入的所有消息
+
+
+
+## 消费端幂等
+
+
+
+* poll一批数据,处理完毕还没提交offset ,服务器宕机重启了,又会poll上批数据,再度消费就造成了消息重复
+
+* 典型的方案是使用消息表去重:
+  * 消费端拉取到一条消息后,开启事务,将消息Id新增到本地消息表中,同时更新订单信息
+  * 如果消息重复,则新增操作insert会异常,同时触发事务回滚
+
+
+
 # 消息丢失
 
 
@@ -591,6 +705,14 @@ advertised.listeners=EXTERNAL://192.168.1.151:9093
 
 * kafka集群监控,要根据jdk版本下载
 * 下载完成之后解压,修改application.conf中的zk的地址以及端口,之后即可启动
+
+
+
+# Apache Kafka UI
+
+
+
+* 一个免费的开源 Web UI,用于监控和管理 Apache Kafka 集群,可方便地查看 Kafka Brokers、Topics、消息、Consumer 等情况,支持多集群管理、性能监控、访问控制等功能
 
 
 

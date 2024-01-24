@@ -1,5 +1,6 @@
 ### 将Java程序配置为系统应用
 ### 若只需要自启动,将启动脚本配置到/etc/rc.local中即可,注意脚本中的文件路径
+### 若添加到/etc/rc.local中，自启动时，日志会打印到/tmp/systemd-privateXXX的目录中
 
 ### 进入/etc/systemd/system(用户级别)或/usr/lib/systemd/system(系统级别)目录中,新建一个以.service为后缀的文件,该文件名为服务名
 [Unit]

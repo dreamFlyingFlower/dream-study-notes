@@ -1816,11 +1816,11 @@ ssh admin
 
 
 
-## 第一种
+## rc.local
 
 
 
-* 直接在`/etc/rc.d/rc.local`中添加需要开机时执行的命令,注意命令执行时的目录路径.该文件默认为空,需要添加`#!/bin/bash`
+* 直接在`/etc/rc.local`中添加需要开机时执行的命令,注意命令执行时的目录路径.该文件默认为空,需要添加`#!/bin/bash`
 
 * `systemctl start rc-local`: 启动rc-local服务
 
@@ -1841,7 +1841,7 @@ ssh admin
 
 
 
-## 第二种
+## 定时任务
 
 
 
@@ -1849,11 +1849,50 @@ ssh admin
 
 
 
+## 系统任务
+
+
+
+* 进入/etc/systemd/system(用户级别)或/usr/lib/systemd/system(系统级别)目录中,新建一个以.service为后缀的文件,该文件名为服务名
+
+  ```shell
+  [Unit]
+  # 服务描述
+  Description=test service
+  after=network.target
+  
+  [Service]
+  Type=forking
+  # 启动脚本
+  ExecStart=/data/server/hello-service/deploy.sh
+  # 重启脚本
+  ExecReload=/data/server/hello-service/deploy.sh
+  # 停止脚本
+  ExecStop=/data/server/hello-service/stop.sh
+  PrivateTmp=true
+  Restart=on-failure
+  
+  [Install]
+  WantedBy=multi-user.target
+  ```
+
+* 可使用以下命令对服务进行操作
+
+  * `systemctl daemon-reload`:重新加载某个服务的配置文件,如果新安装了一个服务,归属于 systemctl 管理,要是新服务的服务程序配置文件生效,需重新加载
+  * `systemctl enable hello-service.service`:添加开机启动服务
+  * `systemctl start hello-service.service`:启动服务
+  * `systemctl stop hello-service.service`:关闭服务
+  * `systemctl restart hello-service.service`:重启服务
+  * `systemctl status hello-service.service`:查看服务状态
+  * `systemctl disable hello-service.service`:取消开机启动
+
+
+
 # 开机启动Java程序
 
 
 
-* 如果直接在`/etc/rc.d/rc.local`中添加了Java程序启动脚本之后没有作用,可以在启动脚本中添加JDK环境变量
+* 如果直接在`/etc/rc.local`中添加了Java程序启动脚本之后没有作用,可以在启动脚本中添加JDK环境变量
 
   ```shell
   export JAVA_HOME="/usr/local/java/jdk1.8/"

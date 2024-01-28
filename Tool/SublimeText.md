@@ -6,8 +6,12 @@
 
 
 
-* 在安装目录下新建Data的目录,必须是Data,否则识别不到
-* 关闭Sublime Text,打开之后的缓存和插件都将安装在Data中
+* 若使用安装程序安装,如下步骤可不将插件安装在C盘
+
+  * 打开SublimeText4->Preferences->Browse Packages,此时打开的是Packages文件夹,直接将上2层的SublimeText目录删除
+
+  * 在原SublimeText安装目录下新建Data目录,必须是Data,否则识别不到
+  * 关闭Sublime Text,打开之后的缓存和插件都将安装在Data中
 
 
 
@@ -27,10 +31,6 @@
 
 
 # 快捷键
-
-
-
-
 
 
 

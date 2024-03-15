@@ -580,7 +580,7 @@ ${imp:import(java.util.stream.Collectors)}
 
 
 * Line Width:120
-* Split multiple attributes each on anew line:勾选
+* Split multiple attributes each on a new line:勾选
 
 
 
@@ -742,14 +742,6 @@ ${imp:import(java.util.stream.Collectors)}
 
 
 * Eclipse多种主题切换
-
-
-
-## Bytecode Outline
-
-
-
-* 显示Java文件编译后的指令文件,即JVM真正运行时的指令文件
 
 
 

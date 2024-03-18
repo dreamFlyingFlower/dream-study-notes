@@ -195,6 +195,10 @@ ${type_declaration}
 
 
 * Class overrides 'equals()' but not 'hashCode()':改为Warning
+* Potential resource leak:检查流资源的关闭与否,来源,需要配合@Owning和@NotOwning使用,可打开,但该功能暂时不能使用
+  * Enable annotation based ...:勾选
+  * Use default annotation...:勾选
+
 
 
 

@@ -341,6 +341,7 @@ events {
   
   # 在location中设置限流.burst排队大小,nodelay不限制单个请求间的时间
   localtion / {
+      # limit_req可以配置多个,但是会执行更严格的那个限流规则
   	limit_req zone=mylit burst=20 nodelay;
   }
   ```

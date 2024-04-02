@@ -1222,3 +1222,112 @@ location /{
 }
 ```
 
+
+
+# 传输速率限制
+
+
+
+## limit_rate
+
+
+
+* `limit_rate`主要用于限制用户和服务器之间传输的字节数,最常用的场景可能就是下载/上传限速
+
+* `limit_rate`没有单独的一个模块,而是在`ngx_http_core_module`中,同时它的相关指令也比较少,只有`limit_rate`和`limit_rate_after`
+
+* limit_rate后面跟随的数值就是具体限速的阈值.默认单位是bytes/s,也就是每秒传输的字节数Bytes而不是比特数bits
+
+* rate可以设置为变量,从而可以实现动态限速.限速指令的生效范围是根据每个连接确定的,例如限定每个连接的速率为4k,当客户端发起两个连接时,速率就可以变为8k
+
+  ```nginx
+  server {
+      location / {
+          limit_rate 4k;
+      }
+  }
+  ```
+
+
+
+### 基于时间动态限速
+
+
+
+* 这里引入了nginx内置的一个ssi模块,这个模块有两个时间变量:`$date_local`和`$date_gmt`,分别对应当前时间和GMT时间
+
+* 使用变量和map指令组合的方式,利用正则表达式匹配不同的时间段,再结合map变量将不同时间段和不同的限速对应起来
+
+  ```nginx
+  map $date_local $limit_rate_time {
+       default 4K;
+       ~(00:|01:|02:|03:|04:|05:|06:|07:).*:.* 16K;
+       ~(08:|12:|13:|18:).*:.* 8K;
+       ~(19:|20:|21:|22:|23:).*:.* 16K;
+   }
+   
+   limit_rate $limit_rate_time
+  ```
+
+
+
+### 基于变量动态限速
+
+
+
+* 有些服务可能会对不用的用户进行不同的限速,例如VIP用户的速度要更快一些等,例如下面可以针对不同的cookie进行限速
+
+  ```nginx
+   map $cookie_User $limit_rate_cookie {
+       gold 64K;
+       silver 32K;
+       copper 16K;
+       iron 8K;
+   }
+   
+   limit_rate $limit_rate_cookie
+  ```
+
+  
+
+
+
+## limit_rate_after
+
+
+
+* `limit_rate_after`允许在传输了一部分数据之后再进行限速,例如下面的配置中就是传输的前500k数据不限速,500k之后再进行限速.比较常见的应用场景如分段下载限速,超过指定大小的部分再进行限速;又或者是流媒体视频网站一般为了保证用户体验而不会对第一个画面进行限速,确保其能够尽快加载出来,等用户开始观看视频之后,再把带宽限制在合理的范围内,从而降低因客户端网速过快导致提前加载过多内容带来的额外成本
+
+  ```nginx
+  server {
+      location / {
+       limit_rate_after 500k;
+          limit_rate 4k;
+      }
+  }
+  ```
+
+
+
+## proxy_limit_rate
+
+
+
+* `proxy_limit_rate`的基本原理和用法与`limit_rate`几乎一样,唯一不同的是`proxy_limit_rate`是限制nginx和后端upstream服务器之间的连接速率
+* `proxy_limit_rate`需要开启了`proxy_buffering`这个指令才会生效,可以在http, server, location模块中使用
+* 语法:`proxy_limit_rate 0;`.默认为0,不限速
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

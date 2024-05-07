@@ -709,6 +709,23 @@ ${imp:import(java.util.stream.Collectors)}
 
 
 
+## Copilot4Eclipse
+
+
+
+* 一款替代Github Copilot的免费插件,需要科学上网
+* 安装后在菜单栏出现新的菜单,配置里出现专属配置
+
+
+
+## Codeium
+
+
+
+* 免费的代码提示插件,需要科学上网
+
+
+
 ## CallGraph Viewer
 
 

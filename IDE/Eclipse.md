@@ -70,6 +70,10 @@
 
 
 
+* Clear all 'do not show again' settings...: 将所有隐藏不再显示的对话框重新显示
+
+
+
 ### Appearance
 
 
@@ -679,11 +683,15 @@ ${imp:import(java.util.stream.Collectors)}
 
 ## SpringTool4
 
+
+
 * 生成SpringBoot和SpringCloud项目
 
 
 
 ## Lombok
+
+
 
 * `java -jar lombok.jar`:找到Eclipse安装地址,安装即可
 

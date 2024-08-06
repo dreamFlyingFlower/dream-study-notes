@@ -693,4 +693,16 @@ git push --force
   bundle exec ‘rake cache:clear RAILS_ENV=production’
   ```
 
-  
+
+
+
+# 常见问题
+
+
+
+* auto-detection of host provider took too long (>2000ms):超时时间,单位2秒,可设置更长,-1不超时
+
+> git config --global credential.autoDetectTimeout -1
+
+
+

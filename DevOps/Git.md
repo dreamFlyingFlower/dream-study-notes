@@ -695,6 +695,42 @@ git push --force
 
 
 
+# Access_token
+
+
+
+## 生成token
+
+
+
+* 进入个人账户,进入设置,选择个人访问令牌或其他类似目录
+* 填写令牌名称,到期时间,选择权限
+* 如果三方平台为自建的 Gitlab 进行导入,token 至少需要具备以下权限:`api,read_user,read_repository`
+
+
+
+## 上传代码
+
+
+
+* 利用`access_token`上传代码到指定仓库
+
+* 确保已经在GitLab上创建了一个项目,并获取了`access_token`
+
+* 在本地创建一个新的git仓库或者导航到已存在的git仓库
+
+* 使用命令将GitLab仓库添加为远程仓库(用自己的GitLab用户名、项目名和`access_token`替换相应的占位符)
+
+  ```shell
+  git remote add origin https://oauth2:ACCESS_TOKEN@gitlab.com/username/project-name.git
+  ```
+
+* 添加文件到本地仓库,并进行提交,和普通仓库一样
+
+* 确保有足够的权限来推送代码到GitLab上的指定仓库,如果是私有仓库,确保`access_token`具有相应的权限
+
+
+
 
 # 常见问题
 

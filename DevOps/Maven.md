@@ -186,6 +186,8 @@
 
 
 
+* `${project.xxx}`: 可以使用的Project标签里的属性
+
 * `${project.basedir}`:当前目录地址
 
 

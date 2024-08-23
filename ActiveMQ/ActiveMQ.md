@@ -329,7 +329,7 @@ limitations under the License.
                         topic:表示topic模式,>表示所有的topic请求都验证.admins是用户组,在login.conf中配置
                         <authorizationEntry topic=">" read="admins" write="admins" admin="admins" />
                         <authorizationEntry queue=">" read="admins" write="admins" admin="admins" />
-                        active内部自用
+                        active内自用
                         <authorizationEntry topic="ActiveMQ.Advisory.>" read="admins" write="admins" admin="admins"/>
                         <authorizationEntry queue="ActiveMQ.Advisory.>" read="admins" write="admins" admin="admins"/>
                     </authorizationEntries>

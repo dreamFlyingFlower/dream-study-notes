@@ -1753,6 +1753,24 @@ ssh admin
 
 
 
+# CSR
+
+
+
+* 生成CSR证书
+
+  ```shell
+  # 生成key文件,其中servername参数为域名的完整地址,如果有www,也要带上,文件结尾为key
+  sudo openssl genrsa -des3 -out servername.key 2048
+  # 使用上一步的key生成csr文件,csr文件的名称同key一样,以csr结尾.证书密码要记住
+  # 在生成csr文件过程中需要填写相关信息,根据实际填写,也可不写,但是Common Name必须填写为完整的域名地址
+  sudo openssl req -new -key servername.key -out servername.csr
+  # 再加密
+  sudo openssl rsa -in servername.key -out servername.key
+  ```
+
+
+
 # 网络
 
 

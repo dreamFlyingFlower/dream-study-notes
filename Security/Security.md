@@ -1,0 +1,12 @@
+# Security
+
+
+
+# 安全检查
+
+
+
+* AES/DES等对称加密类型,不要使用ECB,CCB加密模式,使用CCM或GCM模式,效率更高,更安全
+* RSA不要使用默认的Cipher模式,使用`RSA/ECB/OAEPWithSHA-256AndMGF1Padding`加密和填充模式
+* 不要直接使用`Method/Field/Constructor.setAccessible(true)`,会报安全漏洞,使用`org.springframework.util.ReflectionUtils#makeAccessible()`或参照该方法自己写
+* 不要使用Random进行随机数的生产,不安全,使用SecureRandom

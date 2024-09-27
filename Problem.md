@@ -55,7 +55,14 @@
   base.url=https://abc.com/preview
   ```
 
-  
+
+
+
+# Feign
+
+
+
+* 当A服务调用另外的B,C服务时,如果B服务使用了https,而C使用http,可能会找不到C服务,此时需要指定A服务中调用C服务的@FeignClient中的url为http
 
 
 

@@ -6,11 +6,40 @@
 
 
 
-* OAuth2可以提供一个统一的认证服务,主要模块如下:
+* OAuth2.0可以提供一个统一的认证服务,主要模块如下:
   * Resource Owner(RO):资源拥有者.拥有该资源的服务或用户,如我们自己或者资源网站
   * Authorization Server(AS):认证服务器.即用来认证与颁发令牌(如token)的服务
   * Resource Server(RS):资源服务器.拥有资源的服务,如我们要访问的网站
   * Client:客户端.即访问的客户端,如我们自己用的访问网站
+  
+* OIDC:OpenID Connect,Identity + Authentication + OAuth 2.0,它在OAuth2.0的基础上构建了一个身份层,其实就是客户端向认证服务器请求认证授权时多返回一个
+  id_token,该 id_token 是一串使用 jwt 加密过的字符串
+
+  ![](img/006.png)
+
+  * OAuth2是一个授权协议,它无法提供完善的身份认证功能
+  * OIDC使用OAuth2的授权服务器来为第三方客户端提供用户的身份认证,并把对应的身份认证信息通过一个叫id_token的东西传递给客户端
+  * id_token使用JWT格式包装,使得id_token可以安全的传递给第三方客户端程序并且容易被验证
+  * 如果id_token返回的内容不够,授权服务器还提供一个UserInfo接口,可以获取用户更完整的信息
+  * 如果认证服务器开启了OIDC,可调用`http://ip:port/.well-known/openid-configuration`查询认证服务器信息
+
+  ![](img/007.png)
+
+* OAuth2.1:去掉了OAuth 2.0中的密码模式、简化模式,增加了设备授权码模式,同时也对授权码模式增加了 PKCE 扩展
+
+* PKCE:Proof Key for Code Exchange,代码交换验证密钥.在授权码模式的交互工程中,有一个环节比较薄弱,这个环节就是用户在代理页面确认授权的时候,容易受到恶意程序的攻击,从而导致授权码被恶意程序窃取,进而通过授权码窃取令牌,当然这个前提也需要恶意程序已经植入到你的PC 或手机当中
+
+  ![](img/005.png)
+
+  * 为了减轻这种攻击,官方增加 PKCE 扩展
+  * 客户端通过“/oauth2/authorize”地址向认证服务器发起获取授权码请求的时候增加两个参数，即 code_challenge 和code_challenge_method，其中，code_challenge_method 是加密方法（例如：S256 或plain），code_challenge 是使用 code_challenge_method 加密方法加密后的值
+  * 认证服务器给客户端返回授权码，同时记录下 code_challenge、code_challenge_method 的值
+  * 客户端使用 code 向认证服务器获取 Access Token 的时候，带上 code_verifier 参数，其值为步骤 A 加密前的初始值
+  * 认证服务器收到步骤 C 的请求时，将 code_verifier 的值使用 code_challenge_method的方法进行加密，然后将加密后的值与步骤 A 中的 code_challenge 进行比较，看看是否一致。
+  * 上面交互过程中,恶意程序如果在 B 处截获授权码后，使用授权码向认证服务器换取 Access Token，但由于恶意程序没有 code_verifier的值，因此在认证服务器无法校验通过，从而获取 Access Token 失败
+  * 对于如何创建 code_challenge 的值，官网给出了如下方法:S256 code_challenge = BASE64URL-ENCODE(SHA256(ASCII(code_verifier)))
+
+* 
 
 
 
@@ -130,12 +159,12 @@
   * token_type:token类型
   * expires_in:token有效时长,单位为秒
 
-* eg
+* eg:OAuth2.0
 
   ```
   Request：
   
-       POST /token HTTP/1.1
+       POST oauth/token HTTP/1.1
        Host: server.example.com
        Authorization: Basic czZCaGRSa3F0MzpnWDFmQmF0M2JW
        Content-Type: application/x-www-form-urlencoded
@@ -155,6 +184,34 @@
          "expires_in":3600
        }
   ```
+
+* eg:OAuth2.1
+
+  ```
+  Request：
+  
+       POST /oauth2/token HTTP/1.1
+       Host: server.example.com
+       Authorization: Basic czZCaGRSa3F0MzpnWDFmQmF0M2JW
+       Content-Type: application/x-www-form-urlencoded
+  
+       grant_type=client_credentials
+       
+  Response：
+  
+       HTTP/1.1 200 OK
+       Content-Type: application/json;charset=UTF-8
+       Cache-Control: no-store
+       Pragma: no-cache
+  
+       {
+         "access_token":"2YotnFZFEjr1zCsicMWpAA",
+         "token_type":"example",
+         "expires_in":3600
+       }
+  ```
+
+  
 
 
 
@@ -265,6 +322,33 @@
   ```
 
 
+
+## 设备授权码
+
+
+
+* 是为解决不便在当前设备上进行文本输入而提供的一种认证授权模式.例如:智能电视、媒体控制台、数字相框、打印机等.使用设备授权码模式,有以下要求:
+  * 该设备已连接到互联网
+  * 设备能够支持发出 HTTPS 请求
+  * 设备能够显示或以其他通信方式将 URI 和 Code 发给用户
+  * 用户有辅助设备（如个人电脑或智能手机），他们可以从中处理请求
+* 设备授权码登录官网交互图如下:
+  * 客户端带上包含客户端信息的参数向认证服务器（地址：/oauth2/device_authorization）发起授权访问
+  * 认证服务器给客户端返回设备码、用户码及需要用户验证用户码的 URI
+  * 客户端指示用户需要在另一设备进行访问授权的 URI 和用户码
+  * 用户根据 URI 打开页面，输入用户码和确认授权，向认证服务器发起认证请求
+  * 客户端在完成步骤（C）之后就开始带上客户端信息和设备码向认证服务器轮询获取令牌信息
+  * 认证服务器收到客户端使用设备码获取令牌信息的请求后，检查用户是否已提交授权确认，如果用户已提交授权确认，则返回令牌信息
+
+
+
+## 拓展授权
+
+
+
+* OAuth2.1 也提供拓展授权模式的操作实现。虽然 OAuth2.1移除了密码模式,但是通过拓展授权模式可以实现密码模式
+* 在实际应用中，客户端、授权服务器、资源服务器往往都是同一家公司的产品，那么这个时候，使用账号、密码进行登录的情形也比较常见，此时就需要通过拓展授权模式来实现账号、密码登录了
+* [官网文档](https://docs.spring.io/spring-authorization-server/docs/current/reference/html/guides/how-to-ext-grant-type.html)
 
 
 

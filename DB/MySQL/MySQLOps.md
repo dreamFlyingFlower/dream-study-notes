@@ -2424,14 +2424,24 @@ mysql> alter table city_new rename city;
 
 
 ```mysql
--- 当前运行的所有事务,重点关注trx_state为lock_wait的,查看trx_mysql_thread_id字段的值,之后使用kill杀掉线程
+-- 先查看表状态,可以看到是否有锁定或者表的一些状态信息
+SHOW TABLE STATUS LIKE 'your_table_name';
+-- 查看当前运行的所有事务,重点关注trx_state为lock_wait的,查看trx_mysql_thread_id字段的值,之后使用kill杀掉线程
 -- 例如查看 trx_mysql_thread_id 的值为 123456789,kill 123456789 可杀掉线程
 select * from information_schema.innodb_trx;
 -- 注意,这不是linux线程,是mysql线程
 kill 123456789;
+-- 查看表锁定状态,为1表示锁定
+SHOW OPEN TABLES WHERE In_use > 0;
+-- 解锁
+UNLOCK TABLES;
 -- 如果以上方法杀掉线程,但还是不能解决,可以查找执行线程用时比较久的用户,然后直接干掉
 SELECT * from information_schema.`PROCESSLIST` WHERE Time > 1000 AND USER = 'root' ORDER BY TIME desc;
 kill 123456789;
+-- 检查表是否正常
+check table tablename;
+-- 如果不正常
+repair table tablename;
 ```
 
 

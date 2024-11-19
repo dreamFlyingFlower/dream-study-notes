@@ -339,7 +339,17 @@
 
 ### Declarataion redundancy
 
+
+
 * Declaration access can be weaker:不勾选,将不会提示方法访问符可变
+
+
+
+### Javadoc
+
+
+
+* Javadoc declaration problems:当有文档标签不在标准标签中时,会提示将标签添加到`custom tags`,该tag会设置在Additional Javadoc tags里
 
 
 

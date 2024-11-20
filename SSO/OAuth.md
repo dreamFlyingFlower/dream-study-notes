@@ -369,7 +369,36 @@
 
 
 
+# 资源服务器
 
+
+
+## 未携带Bearer
+
+
+
+![](img/009.png)
+
+* 用户访问未经授权的资源,拦截器经过验证,抛出`AccessDeniedException`异常,再由`ExceptionTranslationFilter`统一进行处理
+* 配置的 [`AuthenticationEntryPoint`](https://docs.spring.io/spring-security/reference/6.3/servlet/authentication/architecture.html#servlet-authentication-authenticationentrypoint) 是 [`BearerTokenAuthenticationEntryPoint`](https://docs.spring.io/spring-security/site/docs/6.3.5/api/org/springframework/security/oauth2/server/resource/authentication/BearerTokenAuthenticationEntryPoint.html) 的实例,异常被封装到请求头`WWW-Authenticate`中返回
+* 未经授权的请求不保存
+
+
+
+## 携带Bearer
+
+
+
+![](img/010.png)
+
+* 当用户提交其持有者令牌(Bearer)时,`BearerTokenAuthenticationFilter`从`HttpServletRequest`中提取令牌来创建`BearerTokenAuthenticationToken`
+* `AuthenticationManagerResolver`根据`HttpServletRequest`选择`AuthenticationManager`,并根据配置来决定使用JWT或opaque进行身份验证
+* 如果身份验证失败:
+  - `SecurityContextHolder`被清除
+  - 调用`AuthenticationEntryPoint`再次发送`WWW-Authenticate`标头
+* 如果身份验证成功:
+  - `Authentication`存储到`SecurityContextHolder`
+  - 继续走剩下的拦截器
 
 
 

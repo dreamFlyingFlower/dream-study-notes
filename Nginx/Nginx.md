@@ -295,7 +295,9 @@ events {
 }
 ```
 
+* events块用于设置服务器与客户端连接的相关属性配置,这些配置主要涉及网络连接和事件处理
 * accept_mutex:设置Nginx网络连接序列化.这个配置主要可以用来解决惊群问题.大致意思是在某个时刻,客户端发来一个请求连接,Nginx后台会有多个worker进程会被同时唤醒,但是最终只会有一个进程可以获取到连接,如果每次唤醒的进程数太多,就会影响Nginx的整体性能.将上述值设置为on,将会对多个Nginx进程接收连接进行序列号,一个个唤醒接收,防止多个进程对连接的争抢
+* accept_mutex_delay: 当 `accept_mutex` 被启用时,该指令可以设置尝试获取互斥锁的延迟时间
 * multi_accept: 设置是否允许同时接收多个网络连接.如果multi_accept被禁止了,nginx一个工作进程只能同时接受一个新的连接,否则一个工作进程可以同时接受所有的新连接
 * worker_connections: 配置单个worker进程最大的连接数.这里的连接数不仅仅包括和前端用户建立的连接数,而是包括所有可能的连接数.连接数不能大于操作系统支持打开的最大文件句柄数量
   * 发送1个请求,会占用 woker 的2个或4个连接数
@@ -335,14 +337,16 @@ events {
 * limit_req_zone:限流,定义在http块中
   * zone:定义IP状态及URL访问频率的共享内存区域.zone=keyword标识区域的名字,以及冒号后面跟区域大小.16000个IP地址的状态信息约1MB,所以示例中区域可以存储160000个IP地址
   * rate:定义最大请求速率.示例中速率不能超过每秒100个请求
+  * burst:缓冲区,当有大量请求过来时,超过了访问频次限制的请求可以先放到这个缓冲区内
+  * nodelay:如果设置,超过访问频次而且缓冲区也满了的时候就会直接返回 503;如果没有设置,则所有请求会等待排队
   ```nginx
   # 定义限流.:$binary_remote_addr表示保存客户端IP地址的二进制形式
   limit_req_zone $binary_remote_addr zone=mylimit:10m rate=100r/s
   
-  # 在location中设置限流.burst排队大小,nodelay不限制单个请求间的时间
+  # 在location中设置限流.nodelay不限制单个请求间的时间
   localtion / {
-      # limit_req可以配置多个,但是会执行更严格的那个限流规则
-  	limit_req zone=mylit burst=20 nodelay;
+      # limit_req可以配置多个,相同zone只会执行更严格的那个限流规则
+  	limit_req zone=mylimit burst=20 nodelay;
   }
   ```
 
@@ -751,6 +755,15 @@ location /{ # 请求URI
 
 * expires:缓存
 
+  * proxy_cache_path:定义缓存路径,目录结构,缓存区名称和大小,最大缓存大小,非活动数据清理时间,以及是否使用临时路径
+    * `/data/nginx/cache`:缓存文件地址
+    * `levels=1:2`: 定义缓存路径的目录层级,默认所有缓存文件都放在上面指定的根路径中,最多三级,每层目录长度为1或2字节
+    * `keys_zone=my_cache:10m`: 共享内存名称,用于在共享内存中定义一块存储区域来存放缓存的key和metadata(类似于使用次数),便于nginx快速判断一个request是否命中缓存.由proxy_cache指令使用;10M表示共享内存大小,1M 大约可以存放 8000 个 key
+    * `inactive=60m`: 在inactive时间内没有被访问的缓存会被淘汰掉,默认10分钟
+    * `max_size=8g`: 设置缓存大小的上限,不指定值则表示允许缓存增长以使用所有可用磁盘空间.当缓存大小达到限制时,缓存管理器进程将依据 LRU 进行删除
+    * `use_temp_path=off`: off表示nginx会将缓存文件直接写入指定的cache文件中,而不使用temp_path指定的临时存储路径
+  
+  
   ```nginx
   # 浏览器缓存,静态资源存用expires
   location ~ .*\.(?:jpg|jpeg|png|gif|ico|cur|gz|svg|svgz|mp4|ogg|ogv|webm)${
@@ -760,17 +773,24 @@ location /{ # 请求URI
       expires 7d;
   }
   # 代理层缓存
-  proxy_cache_path /data/cache/nginx/ levels=1:2 keys_zone=cache:512m inactive=1d max_size=8g;
+  proxy_cache_path /data/nginx/cache levels=1:2 keys_zone=my_cache:10m inactive=1d max_size=8g use_temp_path=off;
   location / {
       location ~ \.(htm|html)?$ {
+          # 启用名为cache的缓存
           proxy_cache cache;
-          // 以此变量值为HASH作为KEY
+          # 以此变量值为HASH作为KEY
           proxy_cache_key $uri$is_args$args;
-          add_header X-Cache $upstream_cache_status;
-          proxy_cache_valid 200 10m;
+          # 对HTTP 200和302响应缓存10分钟
+          proxy_cache_valid 200 302 10m;
+          # 对HTTP 404响应缓存1分钟
+          proxy_cache_valid 404 1m;
+          # 对其他响应缓存1分钟
           proxy_cache_valid any 1m;
+          # 对哪些方法进行缓存
+          proxy_cache_methods GET HEAD;
           proxy_pass http://ip:port;
           proxy_redirect off;
+          add_header X-Cache $upstream_cache_status;
       }
       location ~ .*\.(jpg|jpeg|png|gif|ico|txt|js|css)${
           root /data/html;
@@ -779,7 +799,7 @@ location /{ # 请求URI
       }
   }
   ```
-
+  
   
 
 
@@ -853,6 +873,35 @@ location / {
 	allow 10.1.1.0/16;
 	aLlow 1001:0db8::/32;
 	deny all
+}
+```
+
+
+
+## Websocket
+
+
+
+```nginx
+server {
+    # 监听端口
+    listen 80;
+
+    # 匹配以/ws开头的请求
+    location /ws {
+        # 转发请求到WebSocket后端服务器
+        proxy_pass http://websocket_backend;
+        # 代理时使用的HTTP版本
+        proxy_http_version 1.1;
+        # 传递Upgrade头部以支持WebSocket
+        proxy_set_header Upgrade $http_upgrade;
+        # 设置Connection头部为upgrade以支持WebSocket
+        proxy_set_header Connection "upgrade";
+        # 传递Host头部
+        proxy_set_header Host $host;
+
+        # 其他可能的配置,如处理WebSocket特有的超时、缓冲等
+    }
 }
 ```
 
@@ -1501,13 +1550,24 @@ openssl x509 -req -days 365 -in server.csr -signkey server.key -out server.crt
 ```nginx
 server {
     listen       443 ssl;
-    server_name  localhost;
-
+    # 域名
+    server_name  mydomain.com www.mydomain.com;
+	# 证书地址
     ssl_certificate      server.cert;
+    # 证书密钥地址
     ssl_certificate_key  server.key;
-
+	# SSL会话缓存设置
     ssl_session_cache    shared:SSL:1m;
-    ssl_session_timeout  5m;
+    # SSL会话超时时间
+    ssl_session_timeout  1d;
+    # 禁用SSL会话票证
+    #ssl_session_tickets off;
+    # 启用的SSL/TLS协议版本
+    #ssl_protocols TLSv1.2 TLSv1.3;
+    # 偏好使用服务器端的密码套件配置
+    #ssl_prefer_server_ciphers on;
+  	# 使用的密码套件列表,这里省略了具体值
+    #ssl_ciphers '...';
 
     ssl_ciphers  HIGH:!aNULL:!MD5;
     ssl_prefer_server_ciphers  on;

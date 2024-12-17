@@ -104,3 +104,43 @@
 
 
 ![](img/003.png)
+
+
+
+# 白名单
+
+
+
+* Nginx实现白名单,配置完需要重启
+  * allow: 允许访问,即白名单.allow必须放在deny前面,否则会无效
+  * deny: 禁止访问,即黑名单
+
+```nginx
+http{
+    # http模块
+    allow 192.168.1.11;
+    allow 192.168.1.12;
+    deny all;
+
+    server {
+        # server模块
+        allow 192.168.1.11
+        allow 192.168.1.12;
+        deny all;
+
+        location /api {
+            # location模块
+            allow 192.168.1.13;
+            deny all;
+        }
+
+        location /manage {
+            allow 192.168.183.89;
+            deny all;
+        }
+    }
+}
+```
+
+
+

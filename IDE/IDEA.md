@@ -69,7 +69,10 @@
 
 ### Java
 
-* Add unambigous...,Optimize imports...:勾选,自动导包,快捷键ALT+ENTER
+
+
+* Add unambigous...:勾选,自动导包,快捷键ALT+ENTER
+* Optimize imports...:勾选,自动删除无用的包
 
 
 
@@ -94,7 +97,7 @@
 
 
 
-* show tabs in one row:不勾选
+* show tabs in one row:不勾选,Tab可多行显示
 
 
 
@@ -433,7 +436,13 @@
 
 
 
+* 自定义代码提示
+
+
+
 ## iterrations
+
+
 
 * iter:修改为foreach
 
@@ -441,7 +450,9 @@
 
 ## Java
 
-* serr:修改为syses:输出一个error的String
+
+
+* serr:修改为syser:输出一个error的String
 * serrc:修改为Eclipse快捷键:syse
 * souf:修改为sysf,输出一个formatted string
 * sout:修改为syss,输出一个String
@@ -451,6 +462,8 @@
 
 ## 自定义注释时间
 
+
+
 * 新建一个变量名dateFormat,不能和系统已经设置好的重名,Abbreviation设置为dateFormat,template text输入{$dateFormat$}
 * 点击右边的Edit variables,在弹出框中Name设置为dateFormat,Expression设置为date("自定义的格式,与Java时间格式相同")
 * default value不填,skip if defined勾选,在Live Templates和File and code template中可以使用${dateFormat}链接当前自定义的表达式
@@ -458,6 +471,8 @@
 
 
 ## 自定义类注释模板
+
+
 
 * 新建一个变量名`/**`,Abbreviation设置为`/**`,template text输入如下
 
@@ -608,6 +623,14 @@
 
 
 
+## Arthas idea
+
+
+
+* Java在线诊断工具,每次使用需要输入很长一段命令,而这款插件可以直接进入代码片段,选择要诊断的类或方法,右击打开Arthas命令,选择一项,即可自动生成命令
+
+
+
 ## code iris
 
 
@@ -621,6 +644,46 @@
 
 
 * 帮助我们提前找到潜在的问题bug
+
+
+
+## Search In Repository
+
+
+
+* 这款插件直接把Maven中央仓库的查找集成到了Idea,只需要打开插件,输入jar包的名字或者gav关键字,就能查到到这个jar包所有的版本
+
+
+
+## VisualGC
+
+
+
+* 堆栈可视化工具,直接显示所有进程,双击即可打开JVM的堆栈可视化界面
+
+
+
+## Atom Material ICons
+
+
+
+* icon图标插件,据说可以优化idea流畅度
+
+
+
+## File Expander
+
+
+
+* 在Idea里直接打开Jar包
+
+
+
+## GitToolBox
+
+
+
+* 在项目上提示还有多少文件没提交,远程还有多少文件没更新,还能在每一行代码上提示上次提交的时间
 
 
 
@@ -761,6 +824,14 @@
 
 
 
+## 通义灵码
+
+
+
+* 代码助手
+
+
+
 ## Codota
 
 
@@ -841,6 +912,22 @@
 
 
 * 缩略图.可以向查看缩略图一样,帮助我们快速切换到所要的代码区域,而不用疯狂地拖拽一遍去找
+
+
+
+## SonarLint
+
+
+
+* 代码质量检查插件
+
+
+
+## CheckStyle
+
+
+
+* 功能跟Alibaba Java Coding Guidelines类似
 
 
 

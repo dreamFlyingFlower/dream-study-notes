@@ -4,6 +4,8 @@
 
 # 安装
 
+
+
 * 安装完成后不要第一时间打开,配置idea.properties,将源文件地址和缓存地址修改成其他盘
 
 
@@ -663,6 +665,14 @@
 
 
 
+## GsonFormatPlus
+
+
+
+* 根据JSON字符串自动生成实体类代码
+
+
+
 ## Atom Material ICons
 
 
@@ -765,6 +775,14 @@
 
 
 * 调用链路自动生成时序图,右键->Sequence Diagaram 即可调出
+
+
+
+## JavaDoc
+
+
+
+* 一键给所有类和方法生成注释
 
 
 
@@ -928,6 +946,22 @@
 
 
 * 功能跟Alibaba Java Coding Guidelines类似
+
+
+
+## JRebel
+
+
+
+* 本地热部署插件,收费
+
+
+
+## FastHotSwapper
+
+
+
+* 本地热部署插件,JRebel的免费平替
 
 
 

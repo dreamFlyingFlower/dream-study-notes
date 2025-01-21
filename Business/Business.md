@@ -144,3 +144,22 @@ http{
 
 
 
+# MySQL与ES同步
+
+
+
+## Canel
+
+
+
+
+
+* 原理是伪装成 MySQL 的从节点,从而订阅 master 节点的 Binlog 日志,主要流程为
+* Canal 服务端向 MySQL 的 master 节点传输 dump 协议
+* MySQL 的 master 节点接收到 dump 请求后推送 Binlog 日志给 Canal 服务端,解析 Binlog 对象(原始为 byte 流)转成 Json 格式
+* Canal 客户端通过 TCP 协议或 MQ 形式监听 Canal 服务端,同步数据到 ES
+
+
+
+
+

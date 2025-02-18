@@ -189,6 +189,13 @@ init num:控制台中直接修改运行级别
   * -h:显示文件占用数据块大小,非字节单位
   * -c:列出明细的同时增加汇总值
   * --max-depth=1:子目录深度
+* `cat /proc/cpuinfo`:显示CPU info的信息
+* `cat /proc/interrupts`:显示中断
+* `cat /proc/meminfo`:显示内存使用信息
+* `cat /proc/swaps`:显示哪些swap被使用
+* `cat /proc/version`:显示内核的版本
+* `cat /proc/net/dev`:显示网络适配器及统计
+* `cat /proc/mounts`:显示已加载的文件系统
 
 
 
@@ -254,12 +261,6 @@ init num:控制台中直接修改运行级别
     * TIME+:进程使用的CPU时间总计,单位1/100秒
     * COMMAND:命令名/命令行
   
-* cat /proc/meminfo:查看内存等系统信息
-
-  * cat /proc/meminfo|grep MemTotal:查看内存,以kb显示
-
-* cat /proc/cpuinfo:查看cpu信息
-
 * bg:将当前脚本转换为后台运行
 
 * fg:挂起程序
@@ -959,7 +960,8 @@ init num:控制台中直接修改运行级别
 * date +%W:一年中的第几周 (00-53) (以 Monday 为一周的第一天的情形)
 * date +%x:直接显示日期 (mm/dd/yy)
 * cal:显示当前月的日历
-* cal year:year表示一个完整的年份,显示整年的日历
+* cal year:year表示一个完整的年份,如2007,显示整年的日历
+* `clock -w`:将时间修改保存到BIOS
 
 
 

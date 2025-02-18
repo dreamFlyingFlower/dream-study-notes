@@ -38,5 +38,15 @@ Expression #1 of SELECT list is not in GROUP BY clause and contains nonaggregate
   sql_mode='STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
   ```
 
-  
+
+
+
+# 磁盘释放
+
+
+
+* 使用TRUNCATE直接删除数据比较多的表,然后重建
+* 使用delete删除表数据,如果没有全部删除,表空间并不会释放,需要使用`op`,只有表数据全删除了才会释放表空间
+
+
 

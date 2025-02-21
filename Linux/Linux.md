@@ -425,6 +425,8 @@ init num:控制台中直接修改运行级别
 * yum remove xxx:卸载软件
 * yum search xxx:搜索软件
 * yum clean packages:清理软件缓存
+* `yum clean headers`:删除所有头文件
+* `yum clean all`:删除所有缓存的包和头文件
 * yum localinstall package_name.rpm:安装一个rpm包,使用自己的软件仓库解决所有依赖关系
 * rpm -qa | grep jdk: 检查已安装软件版本
 
@@ -495,7 +497,7 @@ init num:控制台中直接修改运行级别
 
 
 
-* rpm [] 软件包名:查看软件包信息
+* rpm [] package_name:查看软件包信息
   * -a:所有的
   * -q:查看指定的软件包是否安装
   * -q --scripts:查询安装包中包含的脚本
@@ -511,16 +513,19 @@ init num:控制台中直接修改运行级别
   * -v:提示
   * -V:检查文件尺寸,许可,类型,所有者,群组,MD5检查以及最后修改时间
   * -h:进度条
-  * -U:更新软件
+  * -U:更新软件,但不改变配置文件
   * -e:删除软件包
   * -e --nodeps:强制删除,可能会对其他软件造成影响
   * --nodeps:忽略警告
-
 * `rpm -ivh 软件包名`:安装软件
+* `rpm -ivh --nodeeps package.rpm`:安装一个rpm包而忽略依赖关系警告
 * `rpm -Uvh 软件包名`:升级软件
 * `rpm -qa`:查看已经安装的rpm包列表
+* `rpm -qc package_name`:显示一个已经安装的rpm包提供的配置文件列表
+* `rpm -qi package_name`:获取一个已安装包的特殊信息
 * `rpm -qg "System Environment/Daemons"`:显示一个组件的rpm包
 * `rpm -qf /etc/httpd/conf/httpd.conf`:确认所给的文件由哪个rpm包所提供
+* `rpm -ql package_name`:显示一个已经安装的rpm包提供的文件列表
 * `rpm -qp package.rpm -l`:显示由一个尚未安装的rpm包提供的文件列表
 * `rpm --import /media/cdrom/RPM-GPG-KEY`:导入公钥数字证书
 * `rpm --checksig package.rpm`:确认一个rpm包的完整性
@@ -790,7 +795,7 @@ init num:控制台中直接修改运行级别
 ## 文件查看
 
 * file filename:查看文件类型,例如文本文件,目录等
-* cat|tac [] filename:显示文本文件的内容
+* cat|tac [] filename:从第一行/最后一行开始显示文本的内容
   * -n:显示行号
   * -A:查看隐藏内容,如换行符
   * eg:
@@ -1412,8 +1417,14 @@ sort -t " " -k2.1,2.3 # 按空格分隔文件行,用第2列的第一个字符到
   * 2:只对目录设置,使用户在该目录下创建的文件和该目录的所属用户组是同一个组,权限如下2777->rwxrwsrwt
   * 1:防删除位,删除权限由该用户所在组决定,权限如下1777->rwxrwxrwt
 * chattr [] filename:给文件加上特殊权限
-  * +i:防止系统中某个关键文件被修改
+  * +i:设置成不可变的文件,不能被删除、修改、重命名或者链接
   * +a:只能往文件中追加,不能删除
+  * +c:允许这个文件能被内核自动压缩/解压
+  * +d:在进行文件系统备份时，dump程序将忽略这个文件
+  * +s:允许一个文件被安全地删除
+  * +S:一旦应用程序对这个文件执行了写操作,使系统立刻把修改的结果写到磁盘
+  * +u:若文件被删除系统会允许你在以后恢复这个被删除的文件
+* `lsattr`:显示特殊的属性
 
 
 

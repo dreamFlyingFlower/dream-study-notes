@@ -793,6 +793,8 @@ init num:控制台中直接修改运行级别
 * cat|tac [] filename:显示文本文件的内容
   * -n:显示行号
   * -A:查看隐藏内容,如换行符
+  * eg:
+    * `cat file | awk 'NR%2==1'`:删除文件中的所有偶数行
 * more filename:分页显示文本文件内容,适合查看大文件,读一点看一点.按空格或enter查看下一页内容,但是只能向下翻页
 * less [] filename:分页显示文本文件内容,比more好用,可上下翻页
   * -i:忽略大小写
@@ -801,7 +803,6 @@ init num:控制台中直接修改运行级别
   * ?字符串:向下搜索字符串的内容
   * n:重复前一个搜索,与/ 或?相关
   * N:返向重复前一个搜索,与/ 或?相关
-
 * head [] filename:显示文本文件的开头内容, 默认显示10行
 
   * -c num:查看开头前num个字符
@@ -842,7 +843,6 @@ init num:控制台中直接修改运行级别
     * `-exec cmd ;`:执行命令,分号必须带上
     * `-exec cmd {} +`:类似于上一个命令,但是会从子文件目录执行
     * `-exec cmd {} \;`:将find查找的结果用command命令再执行一次,{}表示find命令结果.不要忘记写分号
-  
 * `locate filename`:快速定位查找文件,类似于数据库索引,查找前需要手动执行命令`updatedb`.可能需要安装
   * `/etc/cron.daily/mlocate.cron`:计划任务每天更新索引库
   * `var/lib/mlocate/mlocate.db`:查询的数据库地址
@@ -856,6 +856,67 @@ init num:控制台中直接修改运行级别
   * -v:输出不匹配的行
   * -l:显示匹配的文件名
   * -color:以彩色输出结果
+  * `^content`:以content开头的内容
+  * `[0-9]`:包含数字的内容
+
+
+
+## 文件换行符
+
+
+
+> linux和windows的换行符不一样,可以用-A参数查看,从windows上的文件拿到linux上时需要将换行符进行转换,可以使用dos2linux.该依赖若没有,可以先安装
+
+* `dos2unix filedos.txt fileunix.txt`:将一个文本文件的格式从MSDOS(windows)转换成UNIX
+* `unix2dos fileunix.txt filedos.txt` 将一个文本文件的格式从UNIX转换成MSDOS(windows)
+
+
+
+## 文件字符
+
+
+
+- `recode ..HTML < page.txt > page.html`:将一个文本文件转换成html
+- `recode -l | more`:显示所有允许的转换格式
+
+
+
+## 文件系统分析
+
+
+
+- `badblocks -v /dev/hda1`:检查磁盘hda1上的坏磁块
+- `fsck /dev/hda1`:修复/检查hda1磁盘上linux文件系统的完整性
+- `fsck.ext2 /dev/hda1`:修复/检查hda1磁盘上ext2文件系统的完整性
+- `e2fsck /dev/hda1`:修复/检查hda1磁盘上ext2文件系统的完整性
+- `e2fsck -j /dev/hda1`:修复/检查hda1磁盘上ext3文件系统的完整性
+- `fsck.ext3 /dev/hda1`:修复/检查hda1磁盘上ext3文件系统的完整性
+- `fsck.vfat /dev/hda1`:修复/检查hda1磁盘上fat文件系统的完整性
+- `fsck.msdos /dev/hda1`:修复/检查hda1磁盘上dos文件系统的完整性
+- `dosfsck /dev/hda1`:修复/检查hda1磁盘上dos文件系统的完整性
+
+
+
+## 初始化文件
+
+
+
+- `mkfs /dev/hda1`:在hda1分区创建一个文件系统
+- `mke2fs /dev/hda1`:在hda1分区创建一个linux ext2的文件系统
+- `mke2fs -j /dev/hda1`:在hda1分区创建一个linux ext3(日志型)的文件系统
+- `mkfs -t vfat 32 -F /dev/hda1`:创建一个 FAT32 文件系统
+- `fdformat -n /dev/fd0`:格式化一个软盘
+- `mkswap /dev/hda3`:创建一个swap文件系统
+
+
+
+## SWAP文件系统
+
+
+
+- `mkswap /dev/hda3`:创建一个swap文件系统
+- `swapon /dev/hda3`:启用一个新的swap文件系统
+- `swapon /dev/hda2 /dev/hdb3`:启用两个swap分区
 
 
 
@@ -1021,25 +1082,38 @@ sed "2,$d;s#11#22#" file # 先删除第2行后的内容,得到的结果再将11�
   sed "2,/abc/d" file # 删除从第2行开始到第一个包含abc的行
   # 删除符合条件的行,并将处理后的结果保存到指定文件中
   sed -e "/abc/d" file > file1
+  # 删除file中所有空白行
+  sed '/^$/d' file
+  # 删除每一行最后的空白字符
+  sed -e 's/ *$//' file
+  # 删除file中所有注释和空白行
+  sed '/ *#/d; /^$/d' file
   ```
-
+  
   * p:输出指定内容,需要和-n一起使用,否则会同不符合的行一起输出,造成复制的效果.语法同d
 
   ```shell
-  sed "p" file # 重复输出所有的行
-  sed "2p" file # 将第2行输出,若不配置-n参数,会将第2行输出2次
-  sed -n "2p" file # 只输出符合条件的行
+  # 重复输出所有的行
+  sed "p" file
+  # 将第2行输出,若不配置-n参数,会将第2行输出2次
+  sed "2p" file
+  # 只输出符合条件的行
+  sed -n "2p" file
+  # 查看从第一行到第5行内容
+  sed -n '1,5p;5q' file
+  # 查看第5行
+  sed -n '5p;5q' file
   ```
-
+  
   * a\content:在符合条件的行后面添加新行,content为内容,\也可以换成空格,\n用于换行,语法同d
-
+  
   ```shell
   # 语法和删除的基本一样,可以用数字,也可以用正则
   sed "2a qwerty" file # 在第2行后面添加qwerty
   sed "2a\qwerty" file # 在第2行后面添加qwerty
   sed "2a qwerty\nasdfgh" file # 在第2行后面添加qwerty,换行再添加asdfgh
   ```
-
+  
   * i\content:同a命令,但是是在指定行之前插入新的行
   * c\content:替换符合条件的行,语法同a
   * r file:将指定的文件的内容添加到符合条件的行处
@@ -1050,28 +1124,28 @@ sed "2,$d;s#11#22#" file # 先删除第2行后的内容,得到的结果再将11�
   sed "2,5w output.txt" file # 将2到5行的内容复制到output.txt中
   sed "s###g w output.txt" file # 将符合条件的行复制到output.txt中
   ```
-
+  
   * e:将最终输出的内容作为bash命令执行
   * \l:将紧随其后的第一个字符转成小写处理
   * \L:将后面所有的字符全部小写处理
   * \u:将紧随其后的第一个字符转成大写处理
   * \U:将后面所有的字符全部大写处理
   * \E:和\U,\L一起使用,关闭\U,\L的功能
-
+  
   ```shell
   sed -n "s#tfdsfds#ss\lAEWR#p" # 输出ssaEWR,a小写
   sed -n "s#tfdsfds#ss\LAEWR#p" # 输出ssaewr
   sed -n "s#tfdsfds#ss\Laewr#p" # 输出ssAewr
   sed -n "s#tfdsfds#ss\LAEWR#p" # 输出ssAEWR
   ```
-
+  
   * N:不清除当前模式空间,然后读入下一行,以\n分隔两行,默认是第下一行就清除上一行,N相当于同时读2行
 
   ```shell
   # file中有2行ddddd,eeeeee
   sed "N;s#\n#=#" file # ddddd\neeeeee->ddddd=eeeeee
   ```
-
+  
   * \[n\]s/pattern/content/\[m\][gi]:查找并替换,默认只替换第一个被匹配的内容,可以指定行列
     * n:从第n行开始查找,默认从第一行,最大只能为512
     * g:行内全局替换
@@ -1079,7 +1153,7 @@ sed "2,$d;s#11#22#" file # 先删除第2行后的内容,得到的结果再将11�
     * i:忽略大小写
     * /,#,@:当被查找或替换的内容中有/时,可以将/替换成#或@
     * 在pattern中的(),{}需要用\进行转义,[]不需要,每一对()都是一个分组,可以在替换中使用\1...对应
-
+  
   ```shell
   # 文件中有一行:id:100:qwerty,将数字替换成555
   # 将其他不需要替换的也要写进去,很鸡肋
@@ -1098,7 +1172,7 @@ sed "2,$d;s#11#22#" file # 先删除第2行后的内容,得到的结果再将11�
   # 去重计数uniq -c
   sed 's/abc/d/g' file|sort|uniq -c
   ```
-
+  
 * sed -f test.sed file:将多条符合sed语法的表达式写到test.sed文件中,sed命令会依次执行其中的命令
 
 ```shell
@@ -1340,16 +1414,6 @@ sort -t " " -k2.1,2.3 # 按空格分隔文件行,用第2列的第一个字符到
 * chattr [] filename:给文件加上特殊权限
   * +i:防止系统中某个关键文件被修改
   * +a:只能往文件中追加,不能删除
-
-
-
-## 换行符
-
-
-
-> linux和windows的换行符不一样,可以用-A参数查看,从windows上的文件拿到linux上时需要将换行符进行转换,可以使用dos2linux.该依赖若没有,可以先安装
-
-* dos2linux file:将从windows转到linux上换行符发生了改变的文件换行符转为linux
 
 
 

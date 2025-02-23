@@ -997,11 +997,11 @@ init num:控制台中直接修改运行级别
 * `date +%F`:按yyyy-mm-dd格式输出当前日期
 * `date +%D`:直接显示日期 (mm/dd/yy)
 * `date -s "yyyy-mm-dd HH:mm:ss"`:将系统时间改为指定的时间,双引号必须有
-* hwclock -w:强制将硬件时间和系统时间同步
-* date +%Y:显示当前年份(0000-9999),注意+和date之间有空格
-* date +%y:年份的最后两位数字(00-99)
-* date +%m:显示当前月份(01-12).注意,和java中的不一样
-* date +%d:显示当前是月中的那一天(01-31)
+* `hwclock -w`:强制将硬件时间和系统时间同步
+* `date +%Y`:显示当前年份(0000-9999),注意+和date之间有空格
+* `date +%y`:年份的最后两位数字(00-99)
+* `date +%m`:显示当前月份(01-12).注意,和java中的不一样
+* `date +%d`:显示当前是月中的那一天(01-31)
 * date +%H:小时(00-23)
 * date +%I:小时(01-12)
 * date +%k:小时(0-23)
@@ -1019,14 +1019,14 @@ init num:控制台中直接修改运行级别
 * date +%b:月份 (Jan-Dec)
 * date +%B:月份 (January-December)
 * date +%c:直接显示日期与时间
-* date +%h:同 %b
-* date +%j:一年中的第几天 (001-366)
-* date +%U:一年中的第几周 (00-53) (以 Sunday 为一周的第一天的情形)
-* date +%w:一周中的第几天 (0-6)
-* date +%W:一年中的第几周 (00-53) (以 Monday 为一周的第一天的情形)
-* date +%x:直接显示日期 (mm/dd/yy)
-* cal:显示当前月的日历
-* cal year:year表示一个完整的年份,如2007,显示整年的日历
+* `date +%h`:同 %b
+* `date +%j`:一年中的第几天 (001-366)
+* `date +%U`:一年中的第几周 (00-53) (以 Sunday 为一周的第一天的情形)
+* `date +%w`:一周中的第几天 (0-6)
+* `date +%W`:一年中的第几周 (00-53) (以 Monday 为一周的第一天的情形)
+* `date +%x`:直接显示日期 (mm/dd/yy)
+* `cal`:显示当前月的日历
+* `cal year`:year表示一个完整的年份,如2007,显示整年的日历
 * `clock -w`:将时间修改保存到BIOS
 
 
@@ -1428,14 +1428,27 @@ sort -t " " -k2.1,2.3 # 按空格分隔文件行,用第2列的第一个字符到
 
 
 
-## 快捷键
+## 备份
 
 
 
-* ctrl+a:光标移动到开头
-* ctrl+e:光标移动到末尾
-* ctrl+u:删除整行
-* ctrl+w:删除整行
+- `dump -0aj -f /tmp/home0.bak /home`:制作一个 '/home' 目录的完整备份
+- `dump -1aj -f /tmp/home0.bak /home`:制作一个 '/home' 目录的交互式备份
+- `restore -if /tmp/home0.bak`:还原一个交互式备份
+- `rsync -rogpav --delete /home /tmp`:同步两边的目录
+- `rsync -rogpav -e ssh --delete /home ip_address:/tmp`:通过SSH通道rsync
+- `rsync -az -e ssh --delete ip_addr:/home/public /home/local`:通过ssh和压缩将一个远程目录同步到本地目录
+- `rsync -az -e ssh --delete /home/local ip_addr:/home/public`:通过ssh和压缩将本地目录同步到远程目录
+- `tar -Puf backup.tar /home/user`:执行一次对 '/home/user' 目录的交互式备份操作
+- `( cd /tmp/local/ && tar c . ) | ssh -C user@ip_addr 'cd /home/share/ && tar x -p'`:通过ssh在远程目录中复制一个目录内容
+- `( tar c /home ) | ssh -C user@ip_addr 'cd /home/backup-home && tar x -p'`:通过ssh在远程目录中复制一个本地目录
+- `tar cf - . | (cd /tmp/backup ; tar xf - )`:本地将一个目录复制到另一个地方,保留原有权限及链接
+- `find /home/user1 -name '*.txt' | xargs cp -av --target-directory=/home/backup/ --parents`:从一个目录查找并复制所有以'.txt'结尾的文件到另一个目录
+- `find /var/log -name '*.log' | tar cv --files-from=- | bzip2 > log.tar.bz2`:查找所有以 '.log' 结尾的文件并做成一个bzip包
+- `dd bs=1M if=/dev/hda | gzip | ssh user@ip_addr 'dd of=hda.gz'`:通过ssh在远程主机上执行一次备份本地磁盘的操作
+- `dd if=/dev/sda of=/tmp/file1`:备份磁盘内容到一个文件
+- `dd if=/dev/hda of=/dev/fd0 bs=512 count=1`:做一个将 MBR (Master Boot Record)内容复制到软盘的动作
+- `dd if=/dev/fd0 of=/dev/hda bs=512 count=1`:从已经保存到软盘的备份中恢复MBR内容
 
 
 
@@ -1595,6 +1608,17 @@ sort -t " " -k2.1,2.3 # 按空格分隔文件行,用第2列的第一个字符到
 
 
 
+# 快捷键
+
+
+
+* ctrl+a:光标移动到开头
+* ctrl+e:光标移动到末尾
+* ctrl+u:删除整行
+* ctrl+w:删除整行
+
+
+
 # 数组
 
 * 数组定义:arr=(1 3 5),中间是空格,数组索引从0开始
@@ -1644,6 +1668,8 @@ sort -t " " -k2.1,2.3 # 按空格分隔文件行,用第2列的第一个字符到
 
 
 ## Ipset
+
+
 
 * 利用ipset封禁ip,更好的管理封禁的ip
 * --permanent --zone=public --new-ipset=blacklist --type=hash:net:创建一个名为blacklist的库,成功后会在/etc/firewalld/ipsets下生成blacklist.xml文件
@@ -1721,6 +1747,8 @@ sort -t " " -k2.1,2.3 # 按空格分隔文件行,用第2列的第一个字符到
 
 
 # SSH
+
+
 
 ## 安装使用
 
@@ -1894,7 +1922,10 @@ ssh admin
 * systemctl restart network:重启网络
 * service network start:启动网络
 * systemctl start network:启动网络
-* ifconfig eth0 up/down:启用/禁用指定网卡
+* `ifconfig`:查看网络信息
+* `ifconfig eth0`:查看网卡的配置
+* `ifconfig eth0 up/down`:启用/禁用指定网卡
+* `ip addr`:查看网络配置
 * ping [] xx.xx.xx.xx:ping某个ip是否正常,ping可能被禁
   * -W n:等待超过某个时间中断,n单位为秒
   * -c n:只ping多少次,n表示次数

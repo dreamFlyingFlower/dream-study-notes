@@ -244,6 +244,12 @@
 * mvn site:生成项目的站点文档
 * mvn versions:set -DnewVersion=0.0.2:设置父子模块的新版本号,修改后父子模块都会改版本号
 * mvn versions:update-child-modules:根据父模块版本号更新子模块版本号
+* `mvn dependency:analyze`:依赖分析
+  * `Used undeclared dependencies found`:指项目中实际使用了某个依赖包,但并未在pom.xml文件中显式声明,这些依赖包可能是通过其他依赖间接引入的
+  * `Unused declared dependencies found`:指项目的`pom.xml`中声明了某个依赖,但实际并未使用,可以考虑从`pom.xml`中移除.在删除这些依赖之前,请注意:
+    - `未使用`的定义仅限于`main/java`和test源代码目录,不包括配置文件或其他可能的扩展点
+    - Maven的依赖分析工具有时可能会产生误报,在删除任何依赖后,都应进行充分的测试以验证项目的稳定性
+
 
 
 

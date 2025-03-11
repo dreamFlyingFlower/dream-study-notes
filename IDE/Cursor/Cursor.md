@@ -2,7 +2,9 @@
 
 
 
-> 如果你是 Cursor v0.44.11 及以下版本，可以跳过步骤一，否则请重新安装旧版本
+> 如果你是 Cursor v0.44.11 及以下版本,可以跳过步骤一,否则请重新安装旧版本
+
+
 
 ## 卸载0.45及以上版本cursor
 
@@ -46,7 +48,7 @@ C:\Users\{你的用户名}\AppData\Roaming\Cursor
 
 ![img](https://pic3.zhimg.com/v2-1a0a59231b5c85308b181aa481a5379e_1440w.jpg)
 
-在Settings中Account -> Advanced -> Delete Account，点击删除账户
+在Settings中Account -> Advanced -> Delete Account,点击删除账户
 
 ![img](https://pic3.zhimg.com/v2-0d75622706591f35734d931350140304_1440w.jpg)
 
@@ -74,17 +76,19 @@ irm https://aizaozao.com/accelerate.php/https://raw.githubusercontent.com/yuaoti
 
 *来源：[GitHub](https://zhida.zhihu.com/search?content_id=254170561&content_type=Article&match_order=1&q=GitHub&zhida_source=entity) yuaotian大佬开源 [yuaotian/go-cursor-help](https://link.zhihu.com/?target=https%3A//github.com/yuaotian/go-cursor-help)*
 
+或者将该脚本下载到本地,右键使用管理员权限执行该脚本
+
 
 
 ## 禁用Cursor自动更新
 
 
 
-运行重置脚本时，最后会询问是否禁用自动更新，输入1
+运行重置脚本时,最后会询问是否禁用自动更新,输入1
 
 ![img](https://pic2.zhimg.com/v2-4977b39ecf126eb02600e94779686971_1440w.jpg)
 
-> upd：**增加了2.1“运行脚本前要先删除账户”，执行完脚本我的试用期和使用次数都重置了，如果你没有成功可以继续执行步骤三**
+> upd：**增加了2.1“运行脚本前要先删除账户”,执行完脚本我的试用期和使用次数都重置了,如果你没有成功可以继续执行步骤三**
 
 
 
@@ -110,7 +114,7 @@ irm https://aizaozao.com/accelerate.php/https://raw.githubusercontent.com/yuaoti
 
 
 
-复制下载的文件，打开Cursor的扩展并粘贴
+复制下载的文件,打开Cursor的扩展并粘贴
 
 ![img](https://picx.zhimg.com/v2-63fa4db2f1ee0ee0682b16c1a0b13595_1440w.jpg)
 
@@ -128,7 +132,7 @@ irm https://aizaozao.com/accelerate.php/https://raw.githubusercontent.com/yuaoti
 
 ![img](https://pic3.zhimg.com/v2-1a0a59231b5c85308b181aa481a5379e_1440w.jpg)
 
-在Settings中Account -> Advanced -> Delete Account，点击删除账户
+在Settings中Account -> Advanced -> Delete Account,点击删除账户
 
 ![img](https://pic3.zhimg.com/v2-0d75622706591f35734d931350140304_1440w.jpg)
 
@@ -138,7 +142,7 @@ irm https://aizaozao.com/accelerate.php/https://raw.githubusercontent.com/yuaoti
 
 
 
-返回Cursor，Ctrl + shift + P打开输入框 -> 输入fake，点击运行Fake Cursor: Fake Machine
+返回Cursor,Ctrl + shift + P打开输入框 -> 输入fake,点击运行Fake Cursor: Fake Machine
 
 ![img](https://pic1.zhimg.com/v2-97b2d48f1c5c0bca5652c180f5291a1c_1440w.jpg)
 
@@ -150,7 +154,7 @@ irm https://aizaozao.com/accelerate.php/https://raw.githubusercontent.com/yuaoti
 
 
 
-如果一天使用premium模型50次达到上限了，可以重复 步骤3.3~3.4 重置模型使用次数
+如果一天使用premium模型50次达到上限了,可以重复 步骤3.3~3.4 重置模型使用次数
 
 
 
@@ -158,10 +162,10 @@ irm https://aizaozao.com/accelerate.php/https://raw.githubusercontent.com/yuaoti
 
 
 
-打开步骤3.3的Manage，或者直接点击 [https://www.cursor.com/cn/settings](https://link.zhihu.com/?target=https%3A//www.cursor.com/cn/settings)
+打开步骤3.3的Manage,或者直接点击 [https://www.cursor.com/cn/settings](https://link.zhihu.com/?target=https%3A//www.cursor.com/cn/settings)
 
 ![img](https://pic1.zhimg.com/v2-9694a965b4859fec47c5a8bc193ba786_1440w.jpg)
 
-登录自己的Cursor账号，可以看到**试用时间和模型使用次数**都被重置了
+登录自己的Cursor账号,可以看到**试用时间和模型使用次数**都被重置了
 
-> 如果没有重置成功，可以调换顺序试一下，先执行步骤三再执行步骤二
+> 如果没有重置成功,可以调换顺序试一下,先执行步骤三再执行步骤二

@@ -169,3 +169,14 @@ irm https://aizaozao.com/accelerate.php/https://raw.githubusercontent.com/yuaoti
 登录自己的Cursor账号,可以看到**试用时间和模型使用次数**都被重置了
 
 > 如果没有重置成功,可以调换顺序试一下,先执行步骤三再执行步骤二
+
+
+
+# MCP
+
+
+
+* 进入Cursor Settings->MCP
+* [MCP工具大全](http://smithery.ai)
+* 命令见VsCode的MCP部分
+

@@ -23,6 +23,10 @@
 
 * 密码加密:使用`jasypt-spring-boot-starter`
 
+  ```shell
+  java -cp jasypt-1.9.3.jar org.jasypt.intf.cli.JasyptPBEStringEncryptionCLI input="需要加密的密码" password=密钥 algorithm=PBEWithMD5AndDES
+  ```
+
 * 密码安全策略
   * 密码长度: 至少8个字符
   * 密码重复使用: 12个(用户不能使用最近使用过的12个密码中的任何一个)

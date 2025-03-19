@@ -8,10 +8,43 @@
 
 * 安装相关依赖:`yum install -y gcc-c++`
 * 下载或上传redis压缩包到linux服务上,解压:`tar zxvf redis-5.0.14.tar.gz`
+* 如果已经安装过,需要执行:`make distclean`
 * 编译,设置安装路径为/app/software/redis下:`make install PREFIX=/app/software/redis`
 * 修改配置文件:vi redis.conf,将daemonize修改成yes,守护进程启动
 * 启动:`./redis-server redis.conf`
 * `./redis-cli`:进入Redis自带客户端中
+
+
+
+# TLS使用
+
+
+
+* 需要安装编译的时候添加TLS的支持
+
+  ```shell
+  # 指定redis-cli可使用--tls参数
+  make redis-cli BUILD_TLS=yes
+  # 指定安装前缀
+  make install PREFIX=/app/software/redis
+  # 检查tls安装是否成功
+  /app/software/redis/bin/redis-cli --tls --help
+  ```
+
+* 如果已经安装过,需要执行命令替换原先的redis-cli:`install -m 755 src/redis-cli /usr/local/bin`
+
+* 在使用需要tls访问的地址时,在命令后添加`--tls`参数
+
+* 如果本地Redis服务需要使用tls连接,需要在redis安装目录执行相关命令:
+
+  ```shell
+  # 生成TLS证书,生成的文件位于 tests/tls 目录下,包括 ca.crt、redis.crt 和 redis.key
+  ./utils/gen-test-certs.sh
+  # 启动 Redis 服务器并启用 TLS
+  /app/software/redis/bin/redis-server --tls-port 6379 --port 0 --tls-cert-file ./tests/tls/redis.crt  --tls-key-file ./tests/tls/redis.key  --tls-ca-cert-file ./tests/tls/ca.crt
+  # 使用 redis-cli 连接 Redis 服务器
+  /app/software/redis/bin/redis-cli --tls --cert ./tests/tls/redis.crt --key ./tests/tls/redis.key --cacert ./tests/tls/ca.crt
+  ```
 
 
 

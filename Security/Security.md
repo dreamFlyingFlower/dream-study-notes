@@ -24,7 +24,19 @@
 * 密码加密:使用`jasypt-spring-boot-starter`
 
   ```shell
-  java -cp jasypt-1.9.3.jar org.jasypt.intf.cli.JasyptPBEStringEncryptionCLI input="需要加密的密码" password=密钥 algorithm=PBEWithMD5AndDES
+  # 控制台使用以下命令加密
+  java -cp jasypt-1.9.3.jar org.jasypt.intf.cli.JasyptPBEStringEncryptionCLI input="需要加密的密码" password=加密密钥 algorithm=PBEWithMD5AndDES
+  ```
+
+  
+
+  ```yaml
+  # springboot的yml配置
+  jasypt:
+    encryptor:
+      password: 加密密钥
+      algorithm: PBEWithMD5AndDES
+      iv-generator-classname: org.jasypt.iv.NoIvGenerator
   ```
 
 * 密码安全策略

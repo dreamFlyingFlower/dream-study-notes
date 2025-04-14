@@ -158,6 +158,15 @@ irm https://aizaozao.com/accelerate.php/https://raw.githubusercontent.com/yuaoti
 
 
 
+# CurosrHelper
+
+
+
+* [文档](https://docs.qq.com/doc/DWkx2bXV5eUtvaUdP)
+* 先从网页上删账号,然后在Cursor中登出
+
+
+
 # 查看结果
 
 

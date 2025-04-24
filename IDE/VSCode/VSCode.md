@@ -80,6 +80,14 @@
 
 
 
+## CodeBuddy
+
+
+
+* 腾讯AI代码插件
+
+
+
 ## BlackBoxAI
 
 

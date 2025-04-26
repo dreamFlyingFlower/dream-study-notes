@@ -1,9 +1,11 @@
 #!/bin/bash
 
-#####################################################################
-########       生成后端服务目录,deploy.sh,stop.sh配置文件,上传本脚本到服务器任意目录,赋权后执行即可      ########
-########         赋权命令为chmod 755 server_back.sh,执行命令./server_back.sh或sh server_back.sh         ########
-#####################################################################
+#########################################################################################################
+######## 	生成后端服务目录,startup.sh脚本,配置文件
+########	1.上传本脚本到服务器任意目录,赋权后执行即可
+########	2.赋权:chmod 755 server_back.sh 或 chmod +x server_back.sh
+######## 	3.执行命令./server_back.sh 或 sh server_back.sh
+#########################################################################################################
 
 read -p "请输入服务名称和Jar包名称(不用带后缀),若相同,可只输入一个:" PROJECT_NAME JAR_NAME
 
@@ -19,82 +21,168 @@ if [ ! -n "$JAR_NAME" ];then
 	JAR_NAME=$PROJECT_NAME
 fi
 
+echo -e 服务名:$PROJECT_NAME
+
+echo -e JAR名:$JAR_NAME.jar
+
 # 后端文件存放根目录
-DIR_ROOT=/data
+DIR_ROOT=/app
 # 后端所有服务存放根目录
-DIR_SERVER=$DIR_ROOT/server
-# 后端单个服务项目根目录
+DIR_SERVER=$DIR_ROOT/backend
+# 后端单个服务项目根目录,JAR包存放在根目录下
 DIR_SERVER_PROJECT=$DIR_SERVER/$PROJECT_NAME
-# 后端单个服务JAR包存放目录
-DIR_SERVER_JAR=$DIR_SERVER_PROJECT/app
 # 后端单个服务配置文件目录
-DIR_SERVER_CONFIG=$DIR_SERVER_JAR/config
+DIR_SERVER_CONFIG=$DIR_SERVER_PROJECT/config
 # 自启动目录
 DIR_OPEN_RUN=/etc/rc.d/rc.local
 
-# 生成MINIO所有层级目录
+# 生成所有层级目录
 if [ ! -d "$DIR_SERVER_CONFIG" ];then
 	mkdir -p $DIR_SERVER_CONFIG
 fi
 
-# 生成deploy.sh脚本
-cat>$DIR_SERVER_PROJECT/deploy.sh<<EOF
+# 生成startup.sh脚本
+cat>$DIR_SERVER_PROJECT/startup.sh<<EOF
 #!/bin/bash
-# 自启动需要环境变量
-source /etc/profile
-#	jar包文件路径及名称(目录按照各自配置)
-APP_NAME=${DIR_SERVER_JAR}/$JAR_NAME.jar
+#####################################################################
+########      Java程序启动脚本.若不输入任何参数,默认调用start方法,直接启动程序
+########      1.上传脚本到服务器执行目录
+########      2.赋权:chmod 755 startup.sh或chmod +x startup.sh
+########      3.若APP_NAME为相对路径,脚本需要根据路径移动当前脚本
+########      4.若APP_NAME为绝对路径,脚本可放在任意目录
+########      5.启动./startup.sh 或 ./startup.sh start
+#####################################################################
 
-# 日志文件路径及名称(目录按照各自配置)
-LOG_FILE=app.log
+# 遇到错误立即退出
+set -e
 
-# 查询进程,并杀掉当前jar/java程序
-kill -9 \`ps -ef|grep \$APP_NAME | grep -v grep | awk '{print \$2}'\`
-echo "\$pid进程终止成功"
-sleep 2
+# JDK执行程序
+JDK_HOME=\$(readlink -f \$(which java 2>/dev/null))
+# vm options虚拟机选项,可根据实际情况修改
+VM_OPTS=" -Xms256m -Xmx512m "
+# 运行程序名称.若需要开机自启,建议修改为绝对路径
+APP_NAME=${DIR_SERVER_PROJECT}/$JAR_NAME.jar
+# program arguments,程序参数,如--spring.profiles.active=dev.若需要开机自启,建议修改为绝对路径
+SPB_OPTS=" -Dspring.config.additional-location=$DIR_SERVER_CONFIG "
+# 当前程序运行进程PID
+PID_CMD="ps -ef |grep \$APP_NAME |grep -v grep |awk '{print \$2}'"
 
-# 判断jar包文件是否存在,如果存在启动jar包,并时时查看启动日志
-if test -e \$APP_NAME
-then
-	echo '文件存在,开始启动此程序...'
+start() {
+ echo "=============================start=============================="
+ PID=\$(eval \$PID_CMD)
+ if [[ -n \$PID ]]; then
+    echo "\$APP_NAME is already running, PID is \$PID"
+ else
+    if [[ -e \$APP_NAME ]]; then
+       echo "The \$APP_NAME is exit !"
+    else
+       echo "The \$APP_NAME is not exit !!!"
+       exit 1
+    fi
+    nohup \$JDK_HOME \$VM_OPTS -jar \$APP_NAME \$SPB_OPTS >/dev/null 2>&1 &
+    echo "nohup \$JDK_HOME \$VM_OPTS -jar \$APP_NAME \$SPB_OPTS >/dev/null 2>&1 & echo \$! > cmd.pid"
+    PID=\$(eval \$PID_CMD)
+    if [[ -n \$PID ]]; then
+       echo "Start \$APP_NAME successfully, PID is \$PID"
+    else
+       echo "Failed to start \$APP_NAME !!!"
+    fi
+ fi  
+ echo "=============================start=============================="
+}
 
-	# 启动jar包,指向日志文件,2>&1 & 表示打开或指向同一个日志文件
-	nohup java -Xms512m -Xmx512m \\
-		-jar \$APP_NAME \\
-		--spring.config.additional-location=${DIR_SERVER_CONFIG}/ > /dev/null 2>&1 & 
+stop() {
+ echo "=============================stop=============================="
+ PID=\$(eval \$PID_CMD)
+ if [[ -n \$PID ]]; then
+    # 发送信号优雅关闭
+    kill -15 \$PID
+    sleep 5
+    PID=\$(eval \$PID_CMD)
+    if [[ -n \$PID ]]; then
+      echo "Stop \$APP_NAME failed by kill -15 \$PID, begin to kill -9 \$PID"
+      # 暴力停止程序
+      kill -9 \$PID
+      sleep 2
+      echo "Stop \$APP_NAME successfully by kill -9 \$PID"
+    else 
+      echo "Stop \$APP_NAME successfully by kill -15 \$PID"
+    fi 
+ else
+    echo "\$APP_NAME is not running!!!"
+ fi
+ echo "=============================stop=============================="
+}
 
-	# 实时查看启动日志(此处正在想办法启动成功后退出)
-	#tail -f \$LOG_FILE
-	# 输出启动成功(上面的查看日志没有退出,所以执行不了,可以去掉)
-	echo \$APP_NAME '启动成功...'
+restart() {
+  echo "=============================restart=============================="
+  stop
+  start
+  echo "=============================restart=============================="
+}
+
+status() {
+  echo "=============================status==============================" 
+  PID=\$(eval \$PID_CMD)
+  if [[ -n \$PID ]]; then
+       echo "\$APP_NAME is running,PID is \$PID"
+  else
+       echo "\$APP_NAME is not running!!!"
+  fi
+  echo "=============================status=============================="
+}
+
+info() {
+  echo "=============================info=============================="
+  echo "APP_NAME: \$APP_NAME"
+  echo "JDK_HOME: \$JDK_HOME"
+  echo "VM_OPTS: \$VM_OPTS"
+  echo "SPB_OPTS: \$SPB_OPTS"
+  echo "=============================info=============================="
+}
+
+help() {
+   echo "start: start server"
+   echo "stop: shutdown server"
+   echo "restart: restart server"
+   echo "status: display status of server"
+   echo "info: display info of server"
+   echo "help: help info"
+}
+
+if [[ \$# -eq 0 ]]; then
+    start
 else
-	echo \$APP_NAME '文件不存在,请检查...'
+    case \$1 in
+        start)
+            start
+            ;;
+        stop)
+            stop
+            ;;
+        restart)
+            restart
+            ;;
+        status)
+            status
+            ;;
+        info)
+            info
+            ;;
+        help)
+            help
+            ;;
+        *)
+            help
+            ;;
+    esac
 fi
+# exit \$?
 EOF
 
-chmod 755 $DIR_SERVER_PROJECT/deploy.sh
+chmod 755 $DIR_SERVER_PROJECT/start.sh
 
-# 生成stop.sh
-cat>$DIR_SERVER_PROJECT/stop.sh<<EOF
-#!/bin/bash
-
-# jar包文件路径及名称(目录按照各自配置)
-APP_NAME=${DIR_SERVER_JAR}/$JAR_NAME.jar
-
-# 查询进程,并强制杀掉当前jar/java程序
-PID=\`ps -ef|grep \$APP_NAME | grep -v grep | awk '{print \$2}'\`
-
-if [[ ! \$PID ]]; then
-	echo -e "\\e[33m \$APP_NAME未运行 \\e[0m"
-else
-	echo -e "\\e[32m----- \$APP_NAME进程PID为\$PID -----\\e[0m"
-	kill -9 \$PID
-	echo -e "\\e[32m----- \$APP_NAME进程终止成功 -----\\e[0m"
-fi
-EOF
-
-
-chmod 755 $DIR_SERVER_PROJECT/stop.sh
+echo "当前脚本可移动到专门的脚本目录中,以便管理"
 
 # 生成application.yml
 cat>$DIR_SERVER_CONFIG/application.yml<<EOF
@@ -105,6 +193,7 @@ EOF
 
 # 生成bootstrap.properties
 cat>$DIR_SERVER_CONFIG/bootstrap.properties<<EOF
+spring.cloud.nacos.config.enabled=true
 spring.cloud.nacos.config.server-addr=localhost:8848
 spring.cloud.nacos.config.namespace=c2a120e8-5c92-4cd5-905d-1c2ffc14d763
 spring.cloud.nacos.config.name=$PROJECT_NAME.yml
@@ -117,35 +206,33 @@ spring.cloud.nacos.config.shared-configs[0].data-id=$PROJECT_NAME-secret.yml
 spring.cloud.nacos.config.shared-configs[0].group=$PROJECT_NAME
 spring.cloud.nacos.config.shared-configs[0].refresh=true
 
+spring.cloud.nacos.discovery.enabled=true
+spring.cloud.nacos.discovery.register-enabled=true
 spring.cloud.nacos.discovery.server-addr=localhost:8848
 spring.cloud.nacos.discovery.namespace=c2a120e8-5c92-4cd5-905d-1c2ffc14d763
 spring.cloud.nacos.discovery.group=bjdv_service
 spring.cloud.nacos.discovery.username=dev
 spring.cloud.nacos.discovery.password=123456
-
-spring.cloud.nacos.discovery.enabled=true
-spring.cloud.nacos.discovery.register-enabled=true
-spring.cloud.nacos.config.enabled=true
 EOF
 
 # 添加自启动
 chmod +x $DIR_OPEN_RUN
 
-EXIST_NUM=`cat $DIR_OPEN_RUN | grep ${DIR_SERVER_PROJECT}/deploy.sh | wc -l`
+EXIST_NUM=`cat $DIR_OPEN_RUN | grep ${DIR_SERVER_PROJECT}/start.sh | wc -l`
 if [[ $EXIST_NUM -ge 1 ]]; then
-	echo -e "\e[33m----- ${DIR_SERVER_PROJECT}/deploy.sh已经添加到开机自启任务,无需重复添加 -----\e[0m"
+	echo -e "\e[33m----- ${DIR_SERVER_PROJECT}/start.sh已经添加到开机自启任务,无需重复添加 -----\e[0m"
 else
-	echo sh ${DIR_SERVER_PROJECT}/deploy.sh >> $DIR_OPEN_RUN
-	echo -e "\e[32m----- ${DIR_SERVER_PROJECT}/deploy.sh添加开机自启成功 -----\e[0m"
+	echo sh ${DIR_SERVER_PROJECT}/start.sh >> $DIR_OPEN_RUN
+	echo -e "\e[32m----- ${DIR_SERVER_PROJECT}/start.sh添加开机自启成功 -----\e[0m"
 fi
 
 echo ""
 
-echo -e "\e[32m----- deploy.sh为启动和重启脚本,stop.sh为停止脚本,在$DIR_SERVER_PROJECT目录下 -----\e[0m"
+echo -e "\e[32m----- start.sh为启动,停止,重启脚本,在$DIR_SERVER_PROJECT目录下 -----\e[0m"
 echo ""
-echo -e "\e[33m----- 请注意修改deploy.sh中JVM使用内存范围,默认为512M-512M...... -----\e[0m"
+echo -e "\e[33m----- 请注意修改start.sh中JVM使用内存范围,默认为512M-512M -----\e[0m"
 echo ""
-echo -e "\e[33m----- 请将服务启动JAR包放入$DIR_SERVER_JAR下 -----\e[0m"
+echo -e "\e[33m----- 请将服务启动JAR包放入$DIR_SERVER_PROJECT下 -----\e[0m"
 echo ""
 echo -e "\e[33m----- 请注意修改$DIR_SERVER_CONFIG/bootstrap.properties中相关属性 -----\e[0m"
 echo ""

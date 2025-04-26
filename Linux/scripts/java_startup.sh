@@ -1,13 +1,12 @@
 #!/bin/bash
 
-### 启动程序.若不输入任何参数,默认调用start方法,直接启动程序
 #####################################################################
-########                Java程序启动脚本
-########                1.上传脚本到服务器执行目录
-########                2.赋权:chmod 755 startup.sh或chmod +x startup.sh
-########                3.若APP_NAME为相对路径,需要根据路径移动当前脚本
-########                4.若APP_NAME为绝对路径,可放在任意目录
-########                5.启动./startup.sh 或 ./startup.sh start 或 sh startup.sh 或 sh startup.sh start
+########      Java程序启动脚本.若不输入任何参数,默认调用start方法,直接启动程序
+########      1.上传脚本到服务器执行目录
+########      2.赋权:chmod 755 startup.sh或chmod +x startup.sh
+########      3.若APP_NAME为相对路径,脚本需要根据路径移动当前脚本
+########      4.若APP_NAME为绝对路径,脚本可放在任意目录
+########      5.启动./startup.sh 或 ./startup.sh start
 #####################################################################
 
 # 遇到错误立即退出
@@ -18,9 +17,9 @@ JDK_HOME=$(readlink -f $(which java 2>/dev/null))
 # vm options虚拟机选项,可根据实际情况修改
 VM_OPTS=" -Xms256m -Xmx512m "
 # 运行程序名称.若需要开机自启,建议修改为绝对路径
-APP_NAME="./app/emes-web-dev-1.0.0.jar"
+APP_NAME="/app/backend/dream-auth/dream-auth-dev-1.0.0.jar"
 # program arguments,程序参数,如--spring.profiles.active=dev.若需要开机自启,建议修改为绝对路径
-SPB_OPTS=" -Dspring.config.additional-location=./app/config/ "
+SPB_OPTS=" -Dspring.config.additional-location=/app/backend/dream-auth/config/ "
 # 当前程序运行进程PID
 PID_CMD="ps -ef |grep $APP_NAME |grep -v grep |awk '{print \$2}'"
 
@@ -28,10 +27,10 @@ start() {
  echo "=============================start=============================="
  PID=$(eval $PID_CMD)
  if [[ -n $PID ]]; then
-    echo "$APP_NAME is already running,PID is $PID"
+    echo "$APP_NAME is already running, PID is $PID"
  else
     if [[ -e $APP_NAME ]]; then
-       echo "The $APP_NAME is exit"
+       echo "The $APP_NAME is exit !"
     else
        echo "The $APP_NAME is not exit !!!"
        exit 1
@@ -40,7 +39,7 @@ start() {
     echo "nohup $JDK_HOME $VM_OPTS -jar $APP_NAME $SPB_OPTS >/dev/null 2>&1 & echo $! > cmd.pid"
     PID=$(eval $PID_CMD)
     if [[ -n $PID ]]; then
-       echo "Start $APP_NAME successfully,PID is $PID"
+       echo "Start $APP_NAME successfully, PID is $PID"
     else
        echo "Failed to start $APP_NAME !!!"
     fi
@@ -52,11 +51,13 @@ stop() {
  echo "=============================stop=============================="
  PID=$(eval $PID_CMD)
  if [[ -n $PID ]]; then
+    # 发送信号优雅关闭
     kill -15 $PID
     sleep 5
     PID=$(eval $PID_CMD)
     if [[ -n $PID ]]; then
-      echo "Stop $APP_NAME failed by kill -15 $PID,begin to kill -9 $PID"
+      echo "Stop $APP_NAME failed by kill -15 $PID, begin to kill -9 $PID"
+      # 暴力停止程序
       kill -9 $PID
       sleep 2
       echo "Stop $APP_NAME successfully by kill -9 $PID"

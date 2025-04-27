@@ -236,15 +236,28 @@
 
 ## 组件
 
+
+
 ![](SpringCloud01.png)
 
 
 
 ## 注册中心
 
+
+
 ![](SpringCloud02.png)
 
 
+
+## 配置中心
+
+
+
+* nacos: 国内,有控制面板
+* apollo: 国内,有控制面板
+* consul: 国外,有控制面板
+* zookeeper: 国外,无控制面板
 
 
 

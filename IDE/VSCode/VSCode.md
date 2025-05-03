@@ -527,11 +527,32 @@
 
 
 
+* 在引入Vue组件时,最好加上`.vue`后缀,文件使用时会有自动提示,不加可能没有自动提示
+
+
+
+### Vue 3 Pack
+
+
+
+* 一系列Vue3插件,包含Vetur,Gitlen等
+
+
+
 ### Vetur
 
 
 
 * Vue 开发必备插件,它为 Vue.js 提供了实用的工具,例如调试、错误检查、语法高亮、片段等
+* `Auto Import`: 默认勾选,可自动导入依赖,组件等,可在配置中查看使用规则
+
+
+
+### Volar
+
+
+
+* 类似于Vetur,但可能没Vetur好用
 
 
 
@@ -548,3 +569,18 @@
 
 
 * Vue3代码片段
+
+
+
+### Vue VSCode Snippets
+
+
+
+* Vue代码片段,和Vue 3 Snippets差不多,但可能更好用
+
+
+
+# Bottom
+
+
+

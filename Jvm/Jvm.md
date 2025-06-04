@@ -757,5 +757,34 @@ public class Sample{
 
 
 
+# GraalVM代替Jvm
+
+
+
+* 从GraalVM官网下载安装包安装
+* 将原先JAVA_HOME配置到GraalVM的安装目录
+* 控制台安装`native-image`:`gu install native-image`.也可以在官网上下载安装包,再次使用命令安装:`gu install -L native-image的本地目录`
+* `gu list`:查看已安装插件列表
+* 用`Visual Studio`安装`C++`依赖,只需要安装`C++`的`MSVC`,`Windows 11 SDK`即可
+* `mvn -Pnative native:compile`:进入到需要打包的目录,使用`x64 native tools command prompt for vs 2022`输入命令打包,会得到一个`.exe`文件
+* 也可以在项目中使用graalvm的插件打包
+* 注意:当前打包方式是AOT方式,AOT是静态打包,无法使用切面,AOP等代理功能
+
+
+
+# JIT问题
+
+
+
+* 热点应用重启之后出现业务超时,几分钟之后恢复正常
+* 问题分析:启动后大量请求进来,触发JIT热点编译,线程池堆积,导致超时,CPU升高,性能下降
+* 解决方案:
+  * 预热:停掉服务器的流量,在启动时,自动让程序运行热点代码几百次
+  * 流量控制:启动时下流量,几分钟后放到正常流量
+
+
+
+# End
+
 
 

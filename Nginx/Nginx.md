@@ -81,25 +81,32 @@
   * --http-scgi-temp-path=/var/temp/nginx/scgi:scgi访问临时目录  
 
   ```shell
-  ./configure --prifix=/app/software/nginx \ # 根目录
-  --with-http_ssl_module # 安装指定模块,可根据情况自定义安装
+  ./configure 
+  # 安装https模块,可根据情况自定义安装
+  --with-http_stub_status_module --with-http_ssl_module
   ```
 
-* make && make install
+* 如果是首次安装,则直接运行:`make && make install`
 
-* nginx -V:查看nginx版本等相关信息
+* nginx -V:查看nginx版本,已安装模块等相关信息
 
 
 
-## 配置到环境变量
+## 全局命令
 
 
 
 ```nginx
-vim /etc/profile
-# 在最后一行添加nginx安装目录到sbin的路径
-export PATH=$PATH:/usr/local/nginx/sbin
+# 方法1:直接将nginx加入到环境变量中,不推荐
+# 编辑/etc/profile,在最后一行添加nginx安装目录到sbin的路径
+vi /etc/profile
+export NGINX_HOME=/usr/local/nginx
+export PATH=$PATH:${NGINX_PATH}/sbin
+# 退出编辑,刷新环境变量
 source /etc/profile
+
+# 方法2:直接将nginx命令软连接加入到/usr/bin中,推荐
+sudo ln -s /usr/local/nginx/sbin/nginx /usr/bin/nginx
 ```
 
 
@@ -108,12 +115,32 @@ source /etc/profile
 
 
 
-* 脚本在Linux目录下scripts/nginx_start.sh
+* 脚本在Linux目录下scripts/nginx.sh
 * 将该脚本复制到/etc/init.d/目录下,修改为nginx
 * 赋权:`chmod 755 nginx`
 * 将nginx加入开机项目:`chkconfig --add /etc/init.d/nginx`
 * 开启启动:`chkconfig nginx on`
 * 查看开机启动项:`chkconfig --list`
+
+
+
+## 添加常用模块
+
+
+
+* 安装包安装添加模块,以安装https模块为例,根据情况自定义安装
+
+```nginx
+# 进入到nginx压缩包解压后的目录,使用configure命令安装其他模块
+./configure --with-http_stub_status_module --with-http_ssl_module
+# 如果已经安装过nginx,不要make install,会重新安装nginx.直接make编译即可,会在当前目录下生成objs目录
+make
+# 停止nginx,将objs目录下的nginx复制到nginx编译完成后的目录下
+nginx -s stop
+cp objs/nginx /usr/local/nginx/sbin
+# 赋权
+chmod 755 /usr/local/nginx/sbin/nginx
+```
 
 
 

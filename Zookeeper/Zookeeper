@@ -4,6 +4,8 @@
 
 # 概述
 
+
+
 * 一个高可用分布式管理和协调框架,基于ZAB算法(原子消息广播协议)的实现,可以很好的保证分布式中数据的一致性
 * 全局数据一致,每个节点保存一份相同的数据副本,客户端无论连接到那给节点,数据都是相同的
 * zk包括文件系统+监听系统;其目录结构类似linux文件树,每一个节点(znode)都可以存数据,其默认的根节点是/,但是每个节点存储的数据比较小,通常不超过1M
@@ -17,6 +19,8 @@
 
 
 # 应用场景
+
+
 
 * 集群管理:对集群中的机器进行管理,并监控.选出leader,实现集群的容错管理
 * 配置管理:数据量最好小点,这样同步会快些.若数据是动态改变的,可以用zk
@@ -49,12 +53,14 @@
 
 ## 工作流程
 
-* zk集群启动后,Client连接到其中的一个节点,这个节点可以leader,也可以follower
+
+
+* zk集群启动后,Client连接到其中的一个节点,这个节点可以是leader,也可以是follower
 * 连通后,节点分配一个id给Client,发送Ack信息给Client
 * 如果客户端没有收到Ack,连接到另一个节点
 * Client周期性发送心跳信息给节点保证连接不会丢失
-* 如果Client读取数据,发送请求给节点,节点读取自己的数据,返回节点数据给Client
-* 如果Client存储数据,将路径和数据发送给Server,Server转发给leader,leader再补发请求给所有的follower,只有半数以上节点成功响应,数据才算写入成功
+* Client读数据,发请求给节点,节点读取自己的数据,返回数据给Client
+* Client写数据,将数据发送给Server,Server转发给leader,leader再转发请求给所有follower,只有半数以上节点成功响应,数据才算写入成功
 
 
 
@@ -91,7 +97,7 @@
 * 选举的因素有4个
   * serverid:就是myid的大小,这是不变的,值越大权重越大
   * zxid:服务器中存放的最大数据id,值越大说明数据越新,在选举中权重越大
-  * epoch:逻辑时钟,即投票次数.每一轮开始投票时都是相同的,每投一次票就增加1,然后与接收到的其他server返回的投票信息中的数值相比,值越大权重越大
+  * epoch:逻辑时钟,即投票次数.每一轮开始投票时都是相同的,每投一次票就加1,值越大权重越大
   * server状态:
     * LOOKING:选举状态
     * FOLLOWING:随从状态,同步leader状态,参与投票
@@ -102,11 +108,19 @@
   * zxid,数据id
   * epoch
   * 选举状态
-* server1启动,第一轮投票都会投给自己,由于其他服务还没启动,得不到反馈,一直处于LOOKING状态
-* server2启动,给自己投票,与server1进行比较,由于server2的编号大于server1,server2胜出.若此时启动的服务数大于集群服务的一半,server2就是leader
-* server3启动,给自己投票,同时与server1,server2交换信息,尽管server3大,但leader已经选出,server3仍然是follower
-* 若leader挂了,此时不单单要比较myid的编号大小,还需要比较节点的zxid大小,2者比较的结果都胜出的才是新的leader
-* 投票数大于半数即为leader
+* 启动时的选举机制,以3台服务器选举为例:
+  * server1启动,第一轮投票都会投给自己,由于其他服务还没启动,得不到反馈,一直处于LOOKING状态
+  * server2启动,给自己投票,与server1比较,由于server2的编号大于server1,server2胜出,server1会将票投给server2.若此时启动的服务数大于集群服务的一半,server2就是leader.如果没有到集群的一半,则server2仍为LOOKING
+  * server3启动,给自己投票,同时与server1,server2交换信息,尽管server3大,但leader已经选出,server3仍然是follower
+  * 若leader挂了,此时不单单要比较myid的编号大小,还需要比较节点的zxid大小,2者比较的结果都胜出的才是新的leader
+  * 投票数大于半数即为leader
+
+* 运行中,且已经有leader时,只要是leader没挂,则不会重新选举
+* 运行中,leader挂了,以3台服务器选举为例:
+  * 先比较epoch,值大的胜出
+  * epoch相同,则比较zxid,值大的胜出
+  * epoch和zxid相同,比较myid,值大的胜出
+
 
 
 
@@ -114,9 +128,10 @@
 
 
 
-* 所有follower节点写的请求统一交个leader实现,并且创建一个全局zxid(事务id)
-* Leader节点在第一阶段通知阶段,会带上zxid向每位follower节点发出确认同步通知
-* 只要有过半数的follower节点确认同步ack,这时候leader就会向所有的follower发出commit事务数据提交
+* 所有follower的写请求统一交个leader实现,并且创建一个全局zxid(事务id)
+* Leader带上zxid向每位follower节点发出数据同步请求
+* 只要有过半数的follower数据ack,leader就会向所有的follower发出commit事务数据提交
+* 事务提交后,如果客户端请求的是leader,则leader将会ACK给客户端.如果是follower,则由follower进行ACK
 
 
 
@@ -216,13 +231,15 @@
 
 # 配置
 
+
+
 * tickTime:作为zk服务器之间或客户端与服务器之间保持心跳的时间间隔,单位毫秒
-* dataDir:zk保存数据的目录,默认情况下,zk将写数据的日志文件也保存在这个目录里
-* dataLogDir:zk保存日志文件的目录
-* clientPort:客户端连接zk服务器的端口,与集群中配置的2个端口要不一样
+* dataDir:数据目录,默认日志文件也保存在这个目录里
+* dataLogDir:日志目录
+* clientPort:客户端连接zk服务器的端口,默认2181
 * initLimit:集群启动时leader和follower之间心跳检查的最大次数,若超过则集群启动失败
-* syncLimit:leader和follower之间发送消息,检查心跳的最大次数
-* server.myid=ip:port1:port2:集群模式下才有这个参数,且是多个.myid是数据.ip是各个集群节点的ip,port1是节点交换信息的端口,port2是用来选举leader的端口
+* syncLimit:leader和follower通信时间如果超过`syncLimit * tickTime`,leader认为follwer挂了
+* server.myid=ip:port1:port2:集群参数配置,且是多个.myid:数字标识;ip:集群节点的ip;port1:节点交换信息端口;port2:leader选举端口
 * globalOutstandingLimit:zk服务器最大请求线程数
 * preAllocSize:zk事务日志文件大小,默认64M
 * snapCount:相邻2次数据快照之间的事务操作的次数

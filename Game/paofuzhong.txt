@@ -1,0 +1,136 @@
+# 安装相关依赖
+# pip install pyautogui opencv-python pillow numpy
+
+import pyautogui
+import cv2
+import numpy as np
+import time
+
+# 安全设置：鼠标移动到屏幕角落会触发中断（防止失控）
+pyautogui.FAILSAFE = True
+
+# 根据图片查找并点击
+def findImageAndClick(imagePath, confidence=0.8):
+    """ 全屏截图并识别图像,点击中心位置"""
+    screenshot = pyautogui.screenshot()
+    screenshot = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
+
+    # 读取目标图像
+    template = cv2.imread(imagePath)
+    if template is None:
+        print(f"错误：无法读取图像文件 {imagePath}")
+        return False
+    h, w = template.shape[:-1]
+
+    # 模板匹配.如果匹配度超过阈值,则点击中心位置
+    res = cv2.matchTemplate(screenshot, template, cv2.TM_CCOEFF_NORMED)
+    _, max_val, _, max_loc = cv2.minMaxLoc(res)
+    if max_val >= confidence:
+        center_x = max_loc[0] + w // 2
+        center_y = max_loc[1] + h // 2
+        # 随机延迟0.1~0.3秒
+        time.sleep(0.2 + random.uniform(-0.1, 0.1))
+        pyautogui.click(center_x, center_y)
+        print(f"点击图像位置：({center_x}, {center_y})")
+        return True
+    else:
+        print("未找到目标图像")
+        return False
+
+# 先根据坐标查找,再根据图片查找并点击
+def findAndClick(x=None, y=None, imagePath=None,confidence=0.8,waitTime=0):
+    if x is not None and y is not None:
+        # 直接点击固定坐标
+        time.sleep(0.2 + random.uniform(-0.1, 0.1))
+        pyautogui.click(x, y)
+        print(f"点击坐标：({x}, {y})")
+        time.sleep(waitTime)
+    elif imagePath:
+        # 通过图像识别传送并点击
+        findImageAndClick(imagePath, confidence=0.8)
+        time.sleep(waitTime)
+    else:
+        print("错误：未指定点击目标")
+
+# 按下tab并点击指定图片
+def pressTabAndClick(x=None, y=None, imagePath=None,waitTime=0):
+    """
+    参数：
+        x, y: 直接指定点击坐标
+        imagePath: 通过图像识别定位点击位置:小地图上的10，12
+        waitTime:等待时长
+    """
+    # 按下Tab键
+    pyautogui.keyDown('tab')
+    # 短暂按下
+    time.sleep(0.05)
+    pyautogui.keyUp('tab')
+    print("已按下Tab键")
+
+    # 执行点击操作
+    if x is not None and y is not None:
+        # 直接点击固定坐标
+        time.sleep(0.2 + random.uniform(-0.1, 0.1))
+        pyautogui.click(x, y)
+        print(f"点击坐标：({x}, {y})")
+        time.sleep(waitTime)
+    elif imagePath:
+        # 通过图像识别传送并点击
+        findImageAndClick(imagePath)
+        time.sleep(waitTime)
+    else:
+        print("错误：未指定点击目标")
+
+
+# 开始循环执行
+if __name__ == "__main__":
+    for _ in range(100000):
+        time.sleep(0.2 + random.uniform(-0.1, 0.1))
+
+        # 1.识别击粮店伙计并点击(匹配度阈值0.8)
+		findAndClick("粮店伙计图片")
+
+		# 2.弹出对话框,点击对话框接任务
+
+
+		# 3.按tab打开地图,点击小地图上10，12,再按tab关闭地图,等待35秒
+		pressTabAndClick(35)
+
+		# 4.等待35秒后跑到指定地点,根据图片从截图中寻找传送并进行点击,等待1秒切图
+		findAndClick("传送图片",1)
+
+		# 5.新地图中,打开tab,寻找30，222,点击后按tab关闭,等待32秒
+		pressTabAndClick(32)
+
+		# 6.到达地点,根据图片寻找粮袋并进行点击,等待1秒
+		findAndClick("粮袋图片",1)
+
+		# 7.打开tab,寻找243，216,点击后按tab关闭,等待32秒
+		pressTabAndClick(32)
+
+		# 8.等待32秒后跑到指定地点,根据图片从截图中寻找传送并进行点击,等待1秒切图
+		findAndClick("传送图片",1)
+
+		# 9.新地图中,打开tab,寻找91，165,点击后按tab关闭,等待35秒
+		pressTabAndClick(35)
+
+		# 10.根据图片寻找伙计,点击人物
+		findAndClick("粮店伙计图片")
+
+		# 11.弹出对话框,点击对话框还任务,间隔1秒,再同一个地方点击一次
+
+
+		# 12.弹出对话框,点击对话框接任务
+
+
+        time.sleep(0.2 + random.uniform(-0.1, 0.1))
+
+
+# 确保游戏窗口处于激活状态（需安装 pygetwindow）：
+import pygetwindow as gw
+game_window = gw.getWindowsWithTitle("游戏窗口标题")[0]
+# 前置窗口
+game_window.activate()
+
+# 图像匹配精度：确保目标图像与屏幕截图一致
+# 可先用 pyautogui.displayMousePosition() 实时核对坐标

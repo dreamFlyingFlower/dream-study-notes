@@ -1,24 +1,7 @@
 #!/bin/bash
-# Nginx安装包安装,使用默认安装路径,默认配置文件.并将Nginx设置为系统服务
 
-# nginx压缩包上传目录
-NGINX_PACKAGE=/data/software
+### CentOS安装完Nginx之后将Nginx注册为系统服务
 
-cd $NGINX_PACKAGE
-# 复制改名
-cp nginx-*.tar.gz nginx.tar.gz
-# 解压缩
-tar -zxvf nginx.tar.gz
-rm -rf nginx.tar.gz
-cd nginx/
-
-# 安装依赖
-yum install -y readline-devel pcre-devel openssl-devel zlib-devel gcc-c++ gcc
-# 编译安装,并添加https模块.安装完成,默认目录为/usr/local/nginx
-./configure --with-http_stub_status_module --with-http_ssl_module
-make && make install
-
-# 添加到全局服务
 vi /usr/lib/systemd/system/nginx.service<<EOF
 [Unit]
 # 描述服务

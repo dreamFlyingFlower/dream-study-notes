@@ -1,11 +1,11 @@
 #!/bin/bash
 
-#########################################################################################################
-######## 	生成后端服务目录,startup.sh脚本,配置文件
+#####################################################
+######## 	生成后端服务目录,deploy.sh脚本,配置文件
 ########	1.上传本脚本到服务器任意目录,赋权后执行即可
 ########	2.赋权:chmod 755 server_back.sh 或 chmod +x server_back.sh
 ######## 	3.执行命令./server_back.sh 或 sh server_back.sh
-#########################################################################################################
+#####################################################
 
 read -p "请输入服务名称和Jar包名称(不用带后缀),若相同,可只输入一个:" PROJECT_NAME JAR_NAME
 
@@ -27,6 +27,8 @@ echo -e JAR名:$JAR_NAME.jar
 
 # 后端文件存放根目录
 DIR_ROOT=/app
+# 所有脚本存放目录
+DIR_SCRIPT=$DIR_ROOT/script
 # 后端所有服务存放根目录
 DIR_SERVER=$DIR_ROOT/backend
 # 后端单个服务项目根目录,JAR包存放在根目录下
@@ -36,21 +38,32 @@ DIR_SERVER_CONFIG=$DIR_SERVER_PROJECT/config
 # 自启动目录
 DIR_OPEN_RUN=/etc/rc.d/rc.local
 
+# 生成脚本目录
+if [ ! -d "$DIR_SCRIPT" ];then
+    mkdir -p $DIR_SCRIPT
+fi
+
 # 生成所有层级目录
 if [ ! -d "$DIR_SERVER_CONFIG" ];then
 	mkdir -p $DIR_SERVER_CONFIG
 fi
 
-# 生成startup.sh脚本
-cat>$DIR_SERVER_PROJECT/startup.sh<<EOF
+# 移动当前脚本到新目录
+mv "$0" $DIR_SCRIPT
+echo ""
+echo -e "\e[33m----- 当前脚本已经移动到 $DIR_SCRIPT -----\e[0m"
+
+# 生成deploy.sh脚本
+cat>$DIR_SERVER_PROJECT/deploy.sh<<EOF
 #!/bin/bash
+
 #####################################################################
 ########      Java程序启动脚本.若不输入任何参数,默认调用start方法,直接启动程序
 ########      1.上传脚本到服务器执行目录
-########      2.赋权:chmod 755 startup.sh或chmod +x startup.sh
+########      2.赋权:chmod 755 deploy.sh或chmod +x deploy.sh
 ########      3.若APP_NAME为相对路径,脚本需要根据路径移动当前脚本
 ########      4.若APP_NAME为绝对路径,脚本可放在任意目录
-########      5.启动./startup.sh 或 ./startup.sh start
+########      5.启动./deploy.sh 或 ./deploy.sh start
 #####################################################################
 
 # 遇到错误立即退出
@@ -59,7 +72,7 @@ set -e
 # JDK执行程序
 JDK_HOME=\$(readlink -f \$(which java 2>/dev/null))
 # vm options虚拟机选项,可根据实际情况修改
-VM_OPTS=" -Xms256m -Xmx512m "
+VM_OPTS=" -Xms512m -Xmx512m "
 # 运行程序名称.若需要开机自启,建议修改为绝对路径
 APP_NAME=${DIR_SERVER_PROJECT}/$JAR_NAME.jar
 # program arguments,程序参数,如--spring.profiles.active=dev.若需要开机自启,建议修改为绝对路径
@@ -177,12 +190,11 @@ else
             ;;
     esac
 fi
-# exit \$?
 EOF
 
-chmod 755 $DIR_SERVER_PROJECT/start.sh
+chmod 755 $DIR_SERVER_PROJECT/deploy.sh
 
-echo "当前脚本可移动到专门的脚本目录中,以便管理"
+echo "当前脚本可移动到专门的脚本目录$DATA_SCRIPT中,以便管理"
 
 # 生成application.yml
 cat>$DIR_SERVER_CONFIG/application.yml<<EOF
@@ -218,19 +230,19 @@ EOF
 # 添加自启动
 chmod +x $DIR_OPEN_RUN
 
-EXIST_NUM=`cat $DIR_OPEN_RUN | grep ${DIR_SERVER_PROJECT}/start.sh | wc -l`
+EXIST_NUM=`cat $DIR_OPEN_RUN | grep ${DIR_SERVER_PROJECT}/deploy.sh | wc -l`
 if [[ $EXIST_NUM -ge 1 ]]; then
-	echo -e "\e[33m----- ${DIR_SERVER_PROJECT}/start.sh已经添加到开机自启任务,无需重复添加 -----\e[0m"
+	echo -e "\e[33m----- ${DIR_SERVER_PROJECT}/deploy.sh已经添加到开机自启任务,无需重复添加 -----\e[0m"
 else
-	echo sh ${DIR_SERVER_PROJECT}/start.sh >> $DIR_OPEN_RUN
-	echo -e "\e[32m----- ${DIR_SERVER_PROJECT}/start.sh添加开机自启成功 -----\e[0m"
+	echo sh ${DIR_SERVER_PROJECT}/deploy.sh >> $DIR_OPEN_RUN
+	echo -e "\e[32m----- ${DIR_SERVER_PROJECT}/deploy.sh添加开机自启成功 -----\e[0m"
 fi
 
 echo ""
 
-echo -e "\e[32m----- start.sh为启动,停止,重启脚本,在$DIR_SERVER_PROJECT目录下 -----\e[0m"
+echo -e "\e[32m----- deploy.sh为启动,停止,重启脚本,在$DIR_SERVER_PROJECT目录下 -----\e[0m"
 echo ""
-echo -e "\e[33m----- 请注意修改start.sh中JVM使用内存范围,默认为512M-512M -----\e[0m"
+echo -e "\e[33m----- 请注意修改deploy.sh中JVM使用内存范围,默认为512M-512M -----\e[0m"
 echo ""
 echo -e "\e[33m----- 请将服务启动JAR包放入$DIR_SERVER_PROJECT下 -----\e[0m"
 echo ""

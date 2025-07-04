@@ -66,9 +66,6 @@ cat>$DIR_SERVER_PROJECT/deploy.sh<<EOF
 ########      5.启动./deploy.sh 或 ./deploy.sh start
 #####################################################################
 
-# 遇到错误立即退出
-set -e
-
 # JDK执行程序
 JDK_HOME=\$(readlink -f \$(which java 2>/dev/null))
 # vm options虚拟机选项,可根据实际情况修改
@@ -78,11 +75,11 @@ APP_NAME=${DIR_SERVER_PROJECT}/$JAR_NAME.jar
 # program arguments,程序参数,如--spring.profiles.active=dev.若需要开机自启,建议修改为绝对路径
 SPB_OPTS=" -Dspring.config.additional-location=$DIR_SERVER_CONFIG "
 # 当前程序运行进程PID
-PID_CMD="ps -ef |grep \$APP_NAME |grep -v grep |awk '{print \$2}'"
+PID_CMD="pgrep -f \$APP_NAME"
 
 start() {
  echo "=============================start=============================="
- PID=\$(eval \$PID_CMD)
+ PID=\$(\$PID_CMD)
  if [[ -n \$PID ]]; then
     echo "\$APP_NAME is already running, PID is \$PID"
  else
@@ -92,9 +89,9 @@ start() {
        echo "The \$APP_NAME is not exit !!!"
        exit 1
     fi
-    nohup \$JDK_HOME \$VM_OPTS -jar \$APP_NAME \$SPB_OPTS >/dev/null 2>&1 &
-    echo "nohup \$JDK_HOME \$VM_OPTS -jar \$APP_NAME \$SPB_OPTS >/dev/null 2>&1 & echo \$! > cmd.pid"
-    PID=\$(eval \$PID_CMD)
+    nohup \$JDK_HOME \$VM_OPTS \$SPB_OPTS -jar \$APP_NAME >/dev/null 2>&1 &
+    echo "nohup \$JDK_HOME \$VM_OPTS \$SPB_OPTS -jar \$APP_NAME >/dev/null 2>&1 & echo \$! > cmd.pid"
+    PID=\$(\$PID_CMD)
     if [[ -n \$PID ]]; then
        echo "Start \$APP_NAME successfully, PID is \$PID"
     else
@@ -106,12 +103,12 @@ start() {
 
 stop() {
  echo "=============================stop=============================="
- PID=\$(eval \$PID_CMD)
+ PID=\$(\$PID_CMD)
  if [[ -n \$PID ]]; then
     # 发送信号优雅关闭
     kill -15 \$PID
     sleep 5
-    PID=\$(eval \$PID_CMD)
+    PID=\$(\$PID_CMD)
     if [[ -n \$PID ]]; then
       echo "Stop \$APP_NAME failed by kill -15 \$PID, begin to kill -9 \$PID"
       # 暴力停止程序
@@ -136,7 +133,7 @@ restart() {
 
 status() {
   echo "=============================status==============================" 
-  PID=\$(eval \$PID_CMD)
+  PID=\$(\$PID_CMD)
   if [[ -n \$PID ]]; then
        echo "\$APP_NAME is running,PID is \$PID"
   else

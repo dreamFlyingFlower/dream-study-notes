@@ -19,7 +19,7 @@
 
 
 
-* 修改字体和大小:首选项->设置
+* Preferences->Settings
 
   ```json
   {
@@ -31,6 +31,19 @@
 
 
 # 快捷键
+
+
+
+* Preferences->Key Bindings
+
+  ```json
+  [
+      // 删除改为ctrl+d.复制到文件中时注释要删除
+  	{ "keys": ["ctrl+d"], "command": "run_macro_file", "args": {"file": "res://Packages/Default/Delete Line.sublime-macro"} },
+  	{ "keys": ["ctrl+shift+k"], "command": "find_under_expand" },
+  ]
+  ```
+  
 
 
 

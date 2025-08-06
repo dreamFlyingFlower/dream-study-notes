@@ -10,11 +10,15 @@
 
 
 
-# Appearace->System Settings
+# File-Settings
 
 
 
-## Updates
+## Appearace->System Settings
+
+
+
+### Updates
 
 
 
@@ -23,11 +27,11 @@
 
 
 
-# Keymap
+## Keymap
 
 
 
-## Editor Actions
+### Editor Actions
 
 
 
@@ -36,7 +40,7 @@
 
 
 
-## Main menu
+### Main menu
 
 
 
@@ -47,7 +51,7 @@
 
 
 
-## Other
+### Other
 
 
 
@@ -55,7 +59,7 @@
 
 
 
-# Editor->General
+## Editor->General
 
 
 
@@ -65,11 +69,11 @@
 
 
 
-## Auto Import
+### Auto Import
 
 
 
-### Java
+#### Java
 
 
 
@@ -78,7 +82,7 @@
 
 
 
-## Appearance
+### Appearance
 
 
 
@@ -87,7 +91,7 @@
 
 
 
-## Code Completion
+### Code Completion
 
 
 
@@ -95,7 +99,7 @@
 
 
 
-## Editor Tabs
+### Editor Tabs
 
 
 
@@ -103,7 +107,7 @@
 
 
 
-## Postfix Completion
+### Postfix Completion
 
 
 
@@ -114,7 +118,7 @@
 
 
 
-# Editor->Code Editing
+## Editor->Code Editing
 
 
 
@@ -123,11 +127,11 @@
 
 
 
-# Editor->Color Scheme
+## Editor->Color Scheme
 
 
 
-## General
+### General
 
 * Code
   * Identifier under caret:修改选中字符其他相同字符的背景色
@@ -149,7 +153,7 @@
 
 
 
-## Language Defaults
+### Language Defaults
 
 * Comments
   * Block comment:Foreground->C87737,调整注释字体颜色
@@ -160,7 +164,7 @@
 
 
 
-## Console Font
+### Console Font
 
 
 
@@ -168,7 +172,7 @@
 
 
 
-# Editor->Code Style
+## Editor->Code Style
 
 
 
@@ -176,11 +180,11 @@
 
 
 
-## Java
+### Java
 
 
 
-### Tabs and Indents
+#### Tabs and Indents
 
 
 
@@ -188,7 +192,7 @@
 
 
 
-### Spaces
+#### Spaces
 
 * Before Left Brace
   * Array initializer left brace:勾选
@@ -197,7 +201,7 @@
 
 
 
-### Wrappging and Braces
+#### Wrappging and Braces
 
 
 
@@ -233,7 +237,7 @@
 
 
 
-### Blank Lines
+#### Blank Lines
 
 * Minimum blank lines
   * Before package statement:0
@@ -253,7 +257,7 @@
 
 
 
-### JavaDoc
+#### JavaDoc
 
 * Alignment
   * Align parameter description:不勾选
@@ -273,7 +277,7 @@
 
 
 
-### Imports
+#### Imports
 
 
 
@@ -284,11 +288,11 @@
 
 
 
-### Code Generation
+#### Code Generation
 
 
 
-#### Comment Code:
+##### Comment Code:
 
 
 
@@ -296,23 +300,11 @@
 
 
 
-## HTML
+### HTML
 
 
 
-### Tabs and Indents
-
-
-
-* Use tab character,Smart tabs:使用制表符代替空格进行格式化,勾选
-
-
-
-## XML
-
-
-
-### Tabs and Indents
+#### Tabs and Indents
 
 
 
@@ -320,11 +312,23 @@
 
 
 
-# Editor->Inspections
+### XML
 
 
 
-## General
+#### Tabs and Indents
+
+
+
+* Use tab character,Smart tabs:使用制表符代替空格进行格式化,勾选
+
+
+
+## Editor->Inspections
+
+
+
+### General
 
 
 
@@ -332,17 +336,17 @@
 
 
 
-## Java
+### Java
 
 
 
-### Class structure
+#### Class structure
 
 * parameter/field can be local:不勾选,将不会提示变量声明成local,不同版本第一个关键字不一样
 
 
 
-### Declarataion redundancy
+#### Declarataion redundancy
 
 
 
@@ -350,7 +354,7 @@
 
 
 
-### Javadoc
+#### Javadoc
 
 
 
@@ -358,7 +362,7 @@
 
 
 
-### Java language level migration aids
+#### Java language level migration aids
 
 * Java 5:
   * Raw use of parameterized class:勾选,将提示缺少泛型
@@ -367,21 +371,21 @@
 
 
 
-### Serialization issues
+#### Serialization issues
 
 * Serializable class without serialVersionUID:勾选,右键菜单生成序列号
 
 
 
-## Spring
+### Spring
 
 
 
-### Spring Core
+#### Spring Core
 
 
 
-#### Code
+##### Code
 
 
 
@@ -389,7 +393,7 @@
 
 
 
-### Proofreading
+#### Proofreading
 
 
 
@@ -397,11 +401,11 @@
 
 
 
-# Editor->File and Code templates
+## Editor->File and Code templates
 
 
 
-## Includes
+### Includes
 
 
 
@@ -426,7 +430,7 @@
 
 
 
-# Editor->File Encodings
+## Editor->File Encodings
 
 
 
@@ -434,7 +438,7 @@
 
 
 
-# Editor->Live Templates
+## Editor->Live Templates
 
 
 
@@ -442,7 +446,7 @@
 
 
 
-## iterrations
+### iterrations
 
 
 
@@ -450,7 +454,7 @@
 
 
 
-## Java
+### Java
 
 
 
@@ -462,7 +466,7 @@
 
 
 
-## 自定义注释时间
+### 自定义注释时间
 
 
 
@@ -472,7 +476,7 @@
 
 
 
-## 自定义类注释模板
+### 自定义类注释模板
 
 
 
@@ -500,11 +504,11 @@
 
 
 
-# Editor->File Types
+## Editor->File Types
 
 
 
-## 隐藏文件
+### 隐藏文件
 
 
 
@@ -512,11 +516,11 @@
 
 
 
-# Build->Build Tools
+## Build->Build Tools
 
 
 
-## Maven
+### Maven
 
 
 
@@ -526,7 +530,7 @@
 
 
 
-### Importing
+#### Importing
 
 
 
@@ -535,7 +539,7 @@
 
 
 
-### Runner
+#### Runner
 
 
 
@@ -543,11 +547,11 @@
 
 
 
-# Build->Complier
+## Build->Complier
 
 
 
-## 自动编译
+### 自动编译
 
 * Build project automatically,Compile independent modules in parallel:勾选
 * 不能对SpringBoot项目进行热部署开发,需要其他配置,且自动编译极慢极耗资源
@@ -556,31 +560,35 @@
 
 
 
-# File->Project Structure
+## File->Project Structure
 
 
 
-## Project Settings
+### Project Settings
 
 
 
-### Libraries
+#### Libraries
 
 * 添加额外的包到项目中
 
 
 
-# 双击SHIFT设置
+## 双击SHIFT设置
 
 
 
-## 显示内存使用
+### 显示内存使用
+
+
 
 * show Memory indicator:设置为on
 
 
 
-## Spring项目自动编译
+### Spring项目自动编译
+
+
 
 * 需要先启用devtools依赖
 * 运行一次项目后,修改configerations,勾选spring boot->running application update policies
@@ -591,16 +599,16 @@
 
 
 
-# Plugins
+## Plugins
 
 
 
-## Adapter Eclipse Code Formatter
+### Adapter Eclipse Code Formatter
 
 
 
 * 让IDEA使用Eclipse的格式化
-* 打开File->Settings->Other Settings->Eclipse Code Formatter
+* 打开File->Settings->Adapter for Eclipse Code Formatter
 * Use the Eclipse Code Formatter:勾选
 * Eclipse Java Formatter config file:选择从Eclipse导出来的格式化文件,OK
 * Import order的From File也为Eclipse用的code-style.xml文件
@@ -608,7 +616,7 @@
 
 
 
-## Background Image Plus +
+### Background Image Plus +
 
 
 
@@ -616,7 +624,15 @@
 
 
 
-## Jclasslib
+### Gemini Code Assist
+
+
+
+* Google Gemini AI编程助手,需科学上网登录
+
+
+
+### Jclasslib
 
 
 
@@ -625,7 +641,7 @@
 
 
 
-## Arthas idea
+### Arthas idea
 
 
 
@@ -633,7 +649,7 @@
 
 
 
-## code iris
+### code iris
 
 
 
@@ -641,7 +657,7 @@
 
 
 
-## IDEA QAPlug
+### IDEA QAPlug
 
 
 
@@ -649,15 +665,15 @@
 
 
 
-## Search In Repository
+### Search In Repository
 
 
 
-* 这款插件直接把Maven中央仓库的查找集成到了Idea,只需要打开插件,输入jar包的名字或者gav关键字,就能查到到这个jar包所有的版本
+* 直接集成了Maven中央仓库的查找功能,打开插件输入jar包的名字或者关键字搜索即可
 
 
 
-## VisualGC
+### VisualGC
 
 
 
@@ -665,7 +681,7 @@
 
 
 
-## GsonFormatPlus
+### GsonFormatPlus
 
 
 
@@ -673,7 +689,7 @@
 
 
 
-## Atom Material ICons
+### Atom Material ICons
 
 
 
@@ -681,7 +697,7 @@
 
 
 
-## File Expander
+### File Expander
 
 
 
@@ -689,7 +705,7 @@
 
 
 
-## GitToolBox
+### GitToolBox
 
 
 
@@ -697,7 +713,7 @@
 
 
 
-## Save Actions
+### Save Actions
 
 
 
@@ -705,7 +721,7 @@
 
 
 
-## Translation
+### Translation
 
 
 
@@ -713,7 +729,7 @@
 
 
 
-## HighlightBracketPair
+### HighlightBracketPair
 
 
 
@@ -721,7 +737,7 @@
 
 
 
-## Rainbow Brackets
+### Rainbow Brackets
 
 
 
@@ -729,7 +745,7 @@
 
 
 
-## Stack trace to UML
+### Stack trace to UML
 
 
 
@@ -738,7 +754,7 @@
 
 
 
-## Xcode-Dark Theme
+### Xcode-Dark Theme
 
 
 
@@ -746,7 +762,7 @@
 
 
 
-## Json Assistant
+### Json Assistant
 
 
 
@@ -754,7 +770,7 @@
 
 
 
-## GsonFormat
+### GsonFormat
 
 
 
@@ -762,7 +778,7 @@
 
 
 
-## google-java-format
+### google-java-format
 
 
 
@@ -770,15 +786,7 @@
 
 
 
-## Search In Repository
-
-
-
-* 搜索maven/gradle的第三方坐标地址
-
-
-
-## SequenceDiagram
+### SequenceDiagram
 
 
 
@@ -786,7 +794,7 @@
 
 
 
-## JavaDoc
+### JavaDoc
 
 
 
@@ -794,7 +802,7 @@
 
 
 
-## Easy_Javadoc
+### Easy_Javadoc
 
 
 
@@ -803,7 +811,7 @@
 
 
 
-## Easy Code
+### Easy Code
 
 
 
@@ -815,7 +823,7 @@
 
 
 
-## Lombok
+### Lombok
 
 
 
@@ -823,16 +831,7 @@
 
 
 
-## RestfulTool
-
-
-
-* 维护项目中所有请求以及对应的类,主要是Controller中的值,快捷键`CTRL+ALT+N`
-* IDEA右侧会出现一栏RestServices,这里有整个项目的http请求,可以简单的进行测试
-
-
-
-## CamelCase
+### CamelCase
 
 
 
@@ -841,7 +840,7 @@
 
 
 
-## String Manipulation
+### String Manipulation
 
 
 
@@ -850,7 +849,7 @@
 
 
 
-## 通义灵码
+### 通义灵码
 
 
 
@@ -858,7 +857,7 @@
 
 
 
-## Codota
+### Codota
 
 
 
@@ -866,7 +865,7 @@
 
 
 
-## aiXcoder
+### aiXcoder
 
 
 
@@ -874,7 +873,7 @@
 
 
 
-## Java Stream Debugger
+### Java Stream Debugger
 
 
 
@@ -882,7 +881,7 @@
 
 
 
-## MyBatisX
+### MyBatisX
 
 
 
@@ -891,7 +890,7 @@
 
 
 
-## MyBatisCodeHelperPro
+### MyBatisCodeHelperPro
 
 
 
@@ -917,7 +916,7 @@
 
 
 
-## Alibaba Java Coding Guidelines
+### Alibaba Java Coding Guidelines
 
 
 
@@ -925,7 +924,7 @@
 
 
 
-## Presentation Assistant
+### Presentation Assistant
 
 
 
@@ -933,7 +932,7 @@
 
 
 
-## CodeGlance
+### CodeGlance
 
 
 
@@ -941,7 +940,7 @@
 
 
 
-## SonarLint
+### SonarLint
 
 
 
@@ -949,7 +948,7 @@
 
 
 
-## CheckStyle
+### CheckStyle
 
 
 
@@ -957,7 +956,7 @@
 
 
 
-## JRebel
+### JRebel
 
 
 
@@ -965,7 +964,7 @@
 
 
 
-## FastHotSwapper
+### FastHotSwapper
 
 
 
@@ -973,13 +972,25 @@
 
 
 
-# Version
+## Version
 
 
 
-## File Status Colors
+### File Status Colors
+
+
 
 * 修改Git以及其他类型版本控制工具不同文件的颜色显示
 
 
+
+# View->Tool Windows
+
+
+
+* Endpoints: 可以搜索所有的端点请求地址
+
+
+
+# End
 

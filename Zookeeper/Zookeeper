@@ -187,6 +187,8 @@
 
 # 安装
 
+
+
 * 下载压缩包,解压,修改解压后的文件名为zookeeper
 
 * 新增zk的环境变量
@@ -199,7 +201,7 @@
   source /etc/profile
   ```
 
-* 在zookeeper中新建data目录,进入zookeeper/conf,复制zoo_sample.cfg,并改名为zoo.cfg.修改zoo.cfg中的dataDir为刚才新建的data目录
+* 配置文件在zookeeper安装目录的conf下,复制zoo_sample.cfg,并改名为zoo.cfg.修改zoo.cfg中的dataDir为刚才新建的data目录
 
 * 若是搭建集群,则进入data,创建一个myid的文件,在文件里写入一个1,不同的zk要写不同的值,不能重复.集群中myid越大优先级越高,投票时得到的票数越多
 
@@ -227,12 +229,46 @@
   zkCli.sh # 进入zk客户端
   ```
 
+
+* 开机启动
+
+  ```shell
+  [Unit]
+  Description=Zookeeper Service
+  After=network.target
   
+  [Service]
+  Type=forking
+  # Java环境
+  Environment=JAVA_HOME=/usr/local/java/jdk1.8.0_192-amd64
+  # ZK启动命令,指定具体的配置文件地址
+  ExecStart=/usr/local/zookeeper/bin/zkServer.sh start /usr/local/zookeeper/conf/zoo.cfg
+  # ZK重启,停止命令
+  ExecStop=/usr/local/zookeeper/bin/zkServer.sh restart
+  ExecStop=/usr/local/zookeeper/bin/zkServer.sh stop
+  # ZK的运行时的PID文件
+  PIDFile=/usr/local/zookeeper/data/zookeeper_server.pid
+  KillMode=none
+  User=root
+  Group=root
+  Restart=on-failure
+  [Install]
+  WantedBy=multi-user.target
+  ```
+
+  * 在`/lib/systemd/system/`下新建一个`zookeeper.service`,输入上述内容,注意修改Java和Zookeeper的安装目录地址
+  * 编写保存完之后依次运行如下命令
+  * `systemctl daemon-reload`
+  * `systemctl enable zookeeper.service`
+  * `systemctl start/restart/stop/status zookeeper`: 启动,重启,停止,查看状态
+
+
 
 # 配置
 
 
 
+* 配置文件在zookeeper安装目录的conf下,复制zoo_sample.cfg,并改名为zoo.cfg,修改zoo.cfg即可
 * tickTime:作为zk服务器之间或客户端与服务器之间保持心跳的时间间隔,单位毫秒
 * dataDir:数据目录,默认日志文件也保存在这个目录里
 * dataLogDir:日志目录

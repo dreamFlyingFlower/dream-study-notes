@@ -144,6 +144,43 @@ chmod 755 /usr/local/nginx/sbin/nginx
 
 
 
+## 消除Banner
+
+
+
+* 在Web页面请求时,在请求头中会显示当前使用的服务器名以及版本,eg:`Server nginx/1.26.2`,可使用如下方法消除
+
+* 编译安装完之后,进入编译的目录的`src/http`目录,修改`ngx_http_header_filter_module.c`文件中的如下三行:
+
+  ```c
+  # 源代码
+  static u_char ngx_http_server_string[] = "Server: nginx" CRLF;
+  static u_char ngx_http_server_full_string[] = "Server: " NGINX_VER CRLF;
+  static u_char ngx http_server build_string[] = "Server: " NGINX_VER_BUILD CRLF;
+  # 修改为如下代码:注意Server的冒号后面有2个空格,不能少.这个页面会显示为Server: 如果要改成显示指定名称,可将空格改成指定名字
+  static u_char ngx_http_server_string[] = "Server:  " CRLF;
+  static u_char ngx_http_server_full_string[] = "Server:  " CRLF;
+  static u_char ngx http_server build_string[] = "Server:  " CRLF;
+  ```
+
+* 修改完之后需要重新编译安装:`configure --prefix.....`, `make && make install`
+
+
+
+## 消除版本
+
+
+
+* 同消除Banner,但是只需要在nginx的配置文件中设置即可
+
+```nginx
+http{
+	server_tokens off;
+}
+```
+
+
+
 # 目录
 
 

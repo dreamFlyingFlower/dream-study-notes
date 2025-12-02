@@ -2118,11 +2118,11 @@ ssh admin
 
 
 
-## 系统任务
+## 系统服务
 
 
 
-* 进入/etc/systemd/system(用户级别)或/usr/lib/systemd/system(系统级别)目录中,新建一个以.service为后缀的文件,该文件名为服务名
+* 进入/etc/systemd/system(用户级别)或/usr/lib/systemd/system(系统级别)目录中,新建一个以`服务名.service`的文件
 
   ```shell
   [Unit]
@@ -2140,14 +2140,46 @@ ssh admin
   ExecStop=/data/server/hello-service/stop.sh
   PrivateTmp=true
   Restart=on-failure
+  KillMode=none
   
   [Install]
   WantedBy=multi-user.target
   ```
 
+* Type: 程序启动类型
+
+  * simple: 默认值.ExecStart字段启动的进程为主进程
+  
+  * forking：ExecStart字段将以fork()方式启动,此时父进程将会退出,子进程将成为主进程
+  
+  * oneshot: 类似于simple,但只执行一次,Systemd 会等它执行完,才启动其他服务
+  
+  * dbus: 类似于simple,但会等待 D-Bus 信号后启动
+  
+  * notify: 类似于simple,启动结束后会发出通知信号,然后 Systemd 再启动其他服务
+  
+  * idle: 类似于simple,但是要等到其他任务都执行完,才会启动该服务.使用场景:为让该服务的输出,不与其他服务的输出相混合
+  
+* Environment: 指定环境变量
+
+* ExecStart: 启动命令
+
+* ExecStop: 停止命令
+
+* ExecReload: 重启命令
+
+* KillMode: 停止服务时的操作
+
+  * control-group: 默认值.当前控制组里面的所有子进程,都会被杀掉
+  * process: 只杀主进程
+  * mixed: 主进程将收到 SIGTERM 信号,子进程收到 SIGKILL 信号
+  * none: 没有进程会被杀掉,只是执行服务的 stop 命令
+
+* Restart: 重启自动恢复.如果是通过systemctl停止的,不会自动恢复
+
 * 可使用以下命令对服务进行操作
 
-  * `systemctl daemon-reload`:重新加载某个服务的配置文件,如果新安装了一个服务,归属于 systemctl 管理,要是新服务的服务程序配置文件生效,需重新加载
+  * `systemctl daemon-reload`:重新加载配置文件.如果新安装/修改了 systemctl 管理的服务,要使配置文件生效,要执行该命令
   * `systemctl enable hello-service.service`:添加开机启动服务
   * `systemctl start hello-service.service`:启动服务
   * `systemctl stop hello-service.service`:关闭服务

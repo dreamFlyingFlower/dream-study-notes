@@ -827,3 +827,27 @@ ${imp:import(java.util.stream.Collectors)}
 
 
 * 检查代码样式
+
+
+
+# 问题
+
+
+
+* 使用`git pull`出现错误:`该项不适于在指定状态下使用`相关信息,查看控制台`Error Log`具体错误信息,如下:
+
+  ```
+  com.sun.jna.platform.win32.Win32Exception: 该项不适于在指定状态下使用。
+  	at com.sun.jna.platform.win32.Crypt32Util.cryptUnprotectData(Crypt32Util.java:172)
+  	at com.sun.jna.platform.win32.Crypt32Util.cryptUnprotectData(Crypt32Util.java:146)
+  	at com.sun.jna.platform.win32.Crypt32Util.cryptUnprotectData(Crypt32Util.java:133)
+  	at org.eclipse.equinox.internal.security.win32.WindowsPasswordProvider.windecrypt(WindowsPasswordProvider.java:41)
+  	...
+  ```
+
+  * 只需要删除`%USERPROFILE%\.eclipse\org.eclipse.equinox.security`下的全部文件,然后重启Eclipse
+
+
+
+## End
+

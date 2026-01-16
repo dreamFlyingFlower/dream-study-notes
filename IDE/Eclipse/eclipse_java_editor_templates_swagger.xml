@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><templates><template autoinsert="true" context="java" deleted="false" description="add a @Api to a class controller" enabled="true" name="apic">/**&#13;
+ * ${comment} API&#13;
+ * &#13;
+ * @auther 飞花梦影&#13;
+ * @date ${currentDate:date('yyyy-MM-dd HH:mm:ss')}&#13;
+ * @git {@link https://github.com/dreamFlyingFlower}&#13;
+ */&#13;
+@Api(tags = "${comment} API")${imp:import(io.swagger.annotations.Api)}</template><template autoinsert="true" context="java" deleted="false" description="add a @ApiModel to a class po,dto,vo,do" enabled="true" name="apim">/**&#13;
+ * ${comment}&#13;
+ * &#13;
+ * @auther 飞花梦影&#13;
+ * @date ${currentDate:date('yyyy-MM-dd HH:mm:ss')}&#13;
+ * @git {@link https://github.com/dreamFlyingFlower}&#13;
+ */&#13;
+@ApiModel(description = "${comment}")${imp:import(io.swagger.annotations.ApiModel)}</template><template autoinsert="true" context="java-members" deleted="false" description="add a @ApiModelProperty to a field" enabled="true" name="apimp">/**&#13;
+ * ${comment}&#13;
+ */&#13;
+@ApiModelProperty("${comment}")${cursor}${imp:import(io.swagger.annotations.ApiModelProperty)}</template><template autoinsert="true" context="java" deleted="false" description="add a @ApiOperation to a controller method" enabled="true" name="apio">/**&#13;
+ * ${comment}&#13;
+ */&#13;
+@ApiOperation(value = "${comment}")${imp:import(io.swagger.annotations.ApiOperation)}</template><template autoinsert="true" context="java" deleted="false" description="add a @Tag to a controller class" enabled="true" name="api3tag">/**&#13;
+ * ${comment} API&#13;
+ * &#13;
+ * @auther 飞花梦影&#13;
+ * @date ${currentDate:date('yyyy-MM-dd HH:mm:ss')}&#13;
+ * @git {@link https://github.com/dreamFlyingFlower}&#13;
+ */&#13;
+@Tag(name = "${comment} API", description = "${comment} API")${imp:import(io.swagger.v3.oas.annotations.tags.Tag)}</template></templates>

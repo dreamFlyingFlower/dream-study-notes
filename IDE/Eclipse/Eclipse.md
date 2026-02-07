@@ -40,6 +40,7 @@
 * `Close Project`:SHIFT+`,关闭项目
 * `Multi caret down`:`CTRL+SHIFT+Q`,从鼠标选中的当前行一直往下选择多行进行编辑
 * `Add all matches to multi-selection`:CTRL+SHIFT+`,先选一个字符串,按快捷键后选中所有相同字符串,可进行同时编辑
+* `CTRL+SHIFT+C`: 如果安装了`Mybatipse`插件,插件的快捷键会和当前快捷键冲突,导致XML文件不能注释,需要将其删除
 
 
 
@@ -714,6 +715,7 @@ ${imp:import(java.util.stream.Collectors)}
 
 
 * 配合MyBatis,鼠标左键+CTRL可直接选择跳到相应的XML文件的相应方法中
+* 该插件的快捷键和注释的快捷键`CTRL+SHIFT+C`冲突,需要将其删除
 
 
 

@@ -13,13 +13,13 @@ After=network.target
 [Service]
 # 后台运行的形式
 Type=forking
-# 服务具体运行的命令
+# 服务具体运行的命令,需要根据实际情况修改
 ExecStart=/usr/local/nginx/sbin/nginx -c /usr/local/nginx/conf/nginx.conf
-# 重启命令
+# 重启命令,需要根据实际情况修改
 ExecReload=/usr/local/nginx/sbin/nginx -s reload
-# 停止命令
+# 停止命令,需要根据实际情况修改
 ExecStop=/usr/local/nginx/sbin/nginx -s quit
-# 表示给服务分配独立的临时空间
+# 表示给服务分配独立的临时空间,提升系统安全性,需要将存放在/tmp目录下的文件切换位置
 PrivateTmp=true
 
 # 运行级别下服务安装的相关设置,可设置为多用户,即系统运行级别为3
@@ -27,4 +27,6 @@ PrivateTmp=true
 WantedBy=multi-user.target
 EOF
 
+systemctl daemon-reload
 systemctl enable nginx.service
+systemctl restart nginx

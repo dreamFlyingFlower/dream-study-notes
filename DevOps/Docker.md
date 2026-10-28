@@ -40,7 +40,11 @@
 
   ```json
   {
-      "registry-mirrors":["新的远程仓库地址"]
+    "registry-mirrors": [
+      "https://docker.m.daocloud.io",
+      "https://docker.1ms.run",
+      "https://docker.1panel.live"
+    ]
   }
   ```
   
@@ -78,13 +82,18 @@
 
 * 主要文件默认在/var/lib/docker目录
 
+* `systemctl daemon-reload`: 重新加载启动文件
+
+* `systemctl enable docker`: docker开机自启
 
 
-# 配置文件
+
+# 相关文件
 
 
 
-* 配置文件:/usr/lib/systemd/system/docker.service  
+* 配置文件:/usr/lib/systemd/system/docker.service
+* 日志文件: /var/lib/docker/
 
 
 
@@ -550,6 +559,44 @@ services:
 
 
 * 对Docker进一步集成的工具,可以更简单的使用Docker
+
+
+
+# Portainer
+
+
+
+* 一款docker管理工具
+
+
+
+## 安装
+
+
+
+* portainer.yml
+
+```yaml
+services:
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    restart: always
+    ports:
+      # 端口映射:  宿主机 : docker
+      - "9443:9443"
+      #- "8000:8000" # 多机远程管理、Edge节点才打开
+    volumes:
+      # 文件映射: 宿主机 : docker
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data/docker/portainer/data
+volumes:
+  portainer_data:
+```
+
+* 使用compose进行管理,上述为yml文件
+* `docker compose -f portainer.yml up -d`: 根据yml文件运行容器
+* admin账号创建的时候需要一个setup_token,需要在服务器运行`docker logs 容器名 |grep setup_token`填入
 
 
 
